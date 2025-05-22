@@ -20,15 +20,13 @@ body {
   border-radius: 8px;
   padding: 12px;
   width: 100%;
-  min-width: 280px;
-  min-height: 200px;
-  max-width: 500px;
-  max-height: 600px;
-  resize: both;
-  overflow: auto;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
   border: 1px solid #e5e7eb;
-  position: relative;
+}
+
+3px rgba(0, 0, 0, 0.1);
+border: 1px solid #e5e7eb;
+position: relative;
 }
 
 .card::after {
@@ -96,8 +94,7 @@ body {
   color: #475569;
 }
 
-textarea,
-input {
+textarea {
   width: 100%;
   padding: 6px 8px;
   border: 1px solid #d1d5db;
@@ -110,6 +107,20 @@ input {
   margin-bottom: 6px;
   transition: border-color 0.15s ease;
   min-height: 32px;
+}
+
+input {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  font-size: 11px;
+  font-family: inherit;
+  background: white;
+  color: #374151;
+  resize: none;
+  margin-bottom: 6px;
+  transition: border-color 0.15s ease;
 }
 
 textarea:focus,
@@ -180,7 +191,7 @@ input::placeholder {
 
 .history-items {
   margin-top: 6px;
-  max-height: 120px;
+  max-height: 80px;
   overflow-y: auto;
 }
 
