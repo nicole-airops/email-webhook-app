@@ -4,23 +4,38 @@ import './App.css';
 
 function App() {
   const context = useFrontContext();
-  const [mode, setMode] = useState('email');
+  const [mode, setMode] = useState('email'); // 'email' or 'task'
   const [comment, setComment] = useState('');
   const [outputFormat, setOutputFormat] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [status, setStatus] = useState('');
   const [commentHistory, setCommentHistory] = useState([]);
   const [showHistory, setShowHistory] = useState(false);
+  const [taskResults, setTaskResults] = useState([]);
+  const [pollingTasks, setPollingTasks] = useState(new Set());
   
   const EMAIL_WEBHOOK_URL = 'https://app.airops.com/public_api/airops_apps/73407/webhook_async_execute?auth_token=pxaMrQO7aOUSOXe6gSiLNz4cF1r-E9fOS4E378ws12BBD8SPt-OIVu500KEh';
   const TASK_WEBHOOK_URL = 'https://app.airops.com/public_api/airops_apps/84946/webhook_async_execute?auth_token=pxaMrQO7aOUSOXe6gSiLNz4cF1r-E9fOS4E378ws12BBD8SPt-OIVu500KEh';
   const AIROPS_LOGO_URL = 'https://app.ashbyhq.com/api/images/org-theme-logo/78d1f89f-3e5a-4a8b-b6b5-a91acb030fed/aba001ed-b5b5-4a1b-8bd6-dfb86392876e/d8e6228c-ea82-4061-b660-d7b6c502f155.png';
-
+  
+  // Load comment history when conversation changes
   useEffect(() => {
     if (context && context.conversation && context.conversation.id) {
       loadCommentHistoryFromStorage(context.conversation.id);
+      loadTaskResultsFromStorage(context.conversation.id);
     }
   }, [context]);
+
+  // Polling effect for active tasks
+  useEffect(() => {
+    if (pollingTasks.size > 0) {
+      const interval = setInterval(() => {
+        pollingTasks.forEach(taskId => checkTaskStatus(taskId));
+      }, 5000); // Poll every 5 seconds
+
+      return () => clearInterval(interval);
+    }
+  }, [pollingTasks]);
 
   const loadCommentHistoryFromStorage = (conversationId) => {
     const storageKey = `airops-history-${conversationId}`;
@@ -46,6 +61,70 @@ function App() {
     }
   };
 
+  const loadTaskResultsFromStorage = (conversationId) => {
+    const storageKey = `airops-tasks-${conversationId}`;
+    try {
+      const savedTasks = localStorage.getItem(storageKey);
+      if (savedTasks) {
+        const tasks = JSON.parse(savedTasks);
+        setTaskResults(tasks);
+        
+        // Resume polling for any pending tasks
+        const pendingTasks = tasks.filter(task => task.status === 'pending').map(task => task.id);
+        if (pendingTasks.length > 0) {
+          setPollingTasks(new Set(pendingTasks));
+        }
+      } else {
+        setTaskResults([]);
+      }
+    } catch (e) {
+      console.error("Error loading task results:", e);
+      setTaskResults([]);
+    }
+  };
+
+  const saveTaskResultsToStorage = (conversationId, tasks) => {
+    const storageKey = `airops-tasks-${conversationId}`;
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(tasks));
+    } catch (e) {
+      console.error("Error saving task results:", e);
+    }
+  };
+
+  const checkTaskStatus = async (taskId) => {
+    try {
+      // This would be your Netlify function endpoint
+      const response = await fetch(`/.netlify/functions/task-status?taskId=${taskId}`);
+      if (response.ok) {
+        const result = await response.json();
+        
+        if (result.status === 'completed') {
+          // Update task results
+          const updatedTasks = taskResults.map(task => 
+            task.id === taskId 
+              ? { ...task, status: 'completed', result: result.data, completedAt: new Date().toISOString() }
+              : task
+          );
+          
+          setTaskResults(updatedTasks);
+          saveTaskResultsToStorage(context.conversation.id, updatedTasks);
+          
+          // Remove from polling
+          setPollingTasks(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(taskId);
+            return newSet;
+          });
+          
+          setStatus('Task completed successfully!');
+        }
+      }
+    } catch (error) {
+      console.error('Error checking task status:', error);
+    }
+  };
+
   const processRequest = async () => {
     if (!comment.trim()) {
       setStatus('Please add some instructions first');
@@ -61,8 +140,10 @@ function App() {
     setStatus(mode === 'email' ? 'Processing your email request...' : 'Creating your task...');
     
     try {
+      // Generate task ID for tracking
       const taskId = mode === 'task' ? `task_${Date.now()}_${Math.random().toString(36).substr(2, 9)}` : null;
       
+      // Get the conversation data
       let conversationData = {};
       
       if (context.conversation) {
@@ -84,6 +165,7 @@ function App() {
           console.error("Couldn't fetch messages:", err);
         }
         
+        // Create history entry
         const newEntry = {
           text: comment,
           mode: mode,
@@ -108,8 +190,10 @@ function App() {
         conversationData.teammate = context.teammate;
       }
       
+      // Choose the correct webhook based on mode
       const webhookUrl = mode === 'email' ? EMAIL_WEBHOOK_URL : TASK_WEBHOOK_URL;
       
+      // Prepare webhook payload
       const payload = {
         frontData: conversationData,
         contextType: context.type,
@@ -134,6 +218,23 @@ function App() {
       if (mode === 'email') {
         setStatus('Email sent to AirOps for processing!');
       } else {
+        // For task mode, create a pending task entry
+        const newTask = {
+          id: taskId,
+          comment: comment,
+          outputFormat: outputFormat,
+          status: 'pending',
+          createdAt: new Date().toISOString(),
+          user: context.teammate ? context.teammate.name : 'Unknown user'
+        };
+        
+        const updatedTasks = [newTask, ...taskResults];
+        setTaskResults(updatedTasks);
+        saveTaskResultsToStorage(context.conversation.id, updatedTasks);
+        
+        // Start polling for this task
+        setPollingTasks(prev => new Set([...prev, taskId]));
+        
         setStatus('Task created! Processing will take ~4 minutes...');
       }
       
@@ -144,6 +245,40 @@ function App() {
       setStatus('Error: ' + error.message);
     } finally {
       setIsSending(false);
+    }
+  };
+
+  const copyToClipboard = async (content, type = 'formatted') => {
+    try {
+      let textToCopy = content;
+      
+      if (type === 'raw' && typeof content === 'string') {
+        // Strip HTML tags for raw text copy
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = content;
+        textToCopy = tempDiv.textContent || tempDiv.innerText || content;
+      }
+      
+      await navigator.clipboard.writeText(textToCopy);
+      setStatus(`${type === 'raw' ? 'Raw text' : 'Content'} copied to clipboard!`);
+      setTimeout(() => setStatus(''), 2000);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+      
+      // Fallback for older browsers
+      try {
+        const textArea = document.createElement('textarea');
+        textArea.value = textToCopy;
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+        setStatus('Copied to clipboard!');
+        setTimeout(() => setStatus(''), 2000);
+      } catch (fallbackErr) {
+        setStatus('Failed to copy to clipboard');
+      }
     }
   };
 
@@ -184,9 +319,10 @@ function App() {
             alt="AirOps Logo" 
             className="sidebar-logo"
           />
-          <span className="sidebar-title">AI Assistant</span>
+          <span className="sidebar-title">Send to AirOps</span>
         </div>
 
+        {/* Mode Toggle */}
         <div className="mode-toggle">
           <button 
             className={`toggle-btn ${mode === 'email' ? 'active' : ''}`}
@@ -217,6 +353,7 @@ function App() {
           />
         </div>
 
+        {/* Output Format Field - Only for Task Mode */}
         {mode === 'task' && (
           <div className="form-group">
             <label htmlFor="output-format">Desired output format:</label>
@@ -225,7 +362,7 @@ function App() {
               type="text"
               value={outputFormat}
               onChange={(e) => setOutputFormat(e.target.value)}
-              placeholder="e.g., Business case document, Contract revision summary..."
+              placeholder="e.g., Business case document, Contract revision summary, Executive brief..."
               className="format-input"
             />
           </div>
@@ -241,6 +378,62 @@ function App() {
         
         {status && <p className="status-message">{status}</p>}
 
+        {/* Task Results */}
+        {taskResults.length > 0 && (
+          <div className="results-section">
+            <h3>Task Results</h3>
+            {taskResults.map((task, index) => (
+              <div key={task.id} className="task-result">
+                <div className="task-header">
+                  <span className="task-format">{task.outputFormat}</span>
+                  <span className={`task-status ${task.status}`}>
+                    {task.status === 'pending' ? '⏳ Processing...' : '✅ Complete'}
+                  </span>
+                </div>
+                <div className="task-meta">
+                  <span>{formatDate(task.createdAt)} • {task.user}</span>
+                </div>
+                {task.status === 'completed' && task.result && (
+                  <div className="task-output">
+                    <div className="output-header">
+                      <h4>Result:</h4>
+                      <div className="copy-buttons">
+                        <button 
+                          className="copy-btn copy-formatted"
+                          onClick={() => copyToClipboard(task.result, 'formatted')}
+                          title="Copy with formatting"
+                        >
+                          📄 Copy HTML
+                        </button>
+                        <button 
+                          className="copy-btn copy-raw"
+                          onClick={() => copyToClipboard(task.result, 'raw')}
+                          title="Copy as plain text"
+                        >
+                          📝 Copy Text
+                        </button>
+                      </div>
+                    </div>
+                    <div className="html-content">
+                      <div 
+                        className="rendered-output"
+                        dangerouslySetInnerHTML={{ __html: task.result }}
+                      />
+                    </div>
+                    <details className="raw-output">
+                      <summary>View Raw HTML</summary>
+                      <pre className="raw-content">
+                        <code>{task.result}</code>
+                      </pre>
+                    </details>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+        
+        {/* History Section */}
         <div className="history-section">
           <button 
             onClick={toggleHistory} 
