@@ -107,6 +107,21 @@ textarea {
   margin-bottom: 6px;
   transition: border-color 0.15s ease;
   min-height: 32px;
+  position: relative;
+}
+
+textarea:hover {
+  border-color: #9ca3af;
+}
+
+/* Make resize handle more visible */
+textarea::-webkit-resizer {
+  background: linear-gradient(-45deg, transparent 40%, #9ca3af 40%, #9ca3af 45%, transparent 45%, transparent 55%, #9ca3af 55%, #9ca3af 60%, transparent 60%);
+  border-radius: 0 0 4px 0;
+}
+
+textarea:hover::-webkit-resizer {
+  background: linear-gradient(-45deg, transparent 40%, #6b7280 40%, #6b7280 45%, transparent 45%, transparent 55%, #6b7280 55%, #6b7280 60%, transparent 60%);
 }
 
 input {
