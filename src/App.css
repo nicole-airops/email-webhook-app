@@ -96,7 +96,7 @@ position: relative;
 
 textarea {
   width: 100%;
-  padding: 6px 8px;
+  padding: 6px 8px 16px 8px;
   border: 1px solid #d1d5db;
   border-radius: 4px;
   font-size: 11px;
@@ -107,21 +107,36 @@ textarea {
   margin-bottom: 6px;
   transition: border-color 0.15s ease;
   min-height: 32px;
-  position: relative;
+  background-image:
+    linear-gradient(135deg, transparent 85%, #cbd5e1 85%),
+    linear-gradient(135deg, transparent 90%, #cbd5e1 90%),
+    linear-gradient(135deg, transparent 95%, #cbd5e1 95%);
+  background-position:
+    bottom 4px right 4px,
+    bottom 2px right 2px,
+    bottom 1px right 1px;
+  background-size:
+    6px 6px,
+    4px 4px,
+    2px 2px;
+  background-repeat: no-repeat;
 }
 
 textarea:hover {
   border-color: #9ca3af;
-}
-
-/* Make resize handle more visible */
-textarea::-webkit-resizer {
-  background: linear-gradient(-45deg, transparent 40%, #9ca3af 40%, #9ca3af 45%, transparent 45%, transparent 55%, #9ca3af 55%, #9ca3af 60%, transparent 60%);
-  border-radius: 0 0 4px 0;
-}
-
-textarea:hover::-webkit-resizer {
-  background: linear-gradient(-45deg, transparent 40%, #6b7280 40%, #6b7280 45%, transparent 45%, transparent 55%, #6b7280 55%, #6b7280 60%, transparent 60%);
+  background-image:
+    linear-gradient(135deg, transparent 85%, #9ca3af 85%),
+    linear-gradient(135deg, transparent 90%, #9ca3af 90%),
+    linear-gradient(135deg, transparent 95%, #9ca3af 95%);
+  background-position:
+    bottom 4px right 4px,
+    bottom 2px right 2px,
+    bottom 1px right 1px;
+  background-size:
+    6px 6px,
+    4px 4px,
+    2px 2px;
+  background-repeat: no-repeat;
 }
 
 input {
