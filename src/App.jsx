@@ -48,12 +48,12 @@ function App() {
 
   const processRequest = async () => {
     if (!comment.trim()) {
-      setStatus('Please add instructions');
+      setStatus('Add instructions');
       return;
     }
 
     if (mode === 'task' && !outputFormat.trim()) {
-      setStatus('Please specify output format');
+      setStatus('Add output format');
       return;
     }
     
@@ -128,7 +128,7 @@ function App() {
         throw new Error(`HTTP error ${response.status}`);
       }
       
-      setStatus('Sent to AirOps!');
+      setStatus('Sent!');
       setComment('');
       setOutputFormat('');
     } catch (error) {
@@ -142,11 +142,9 @@ function App() {
   const formatDate = (isoString) => {
     try {
       const date = new Date(isoString);
-      return date.toLocaleString(undefined, { 
+      return date.toLocaleDateString(undefined, { 
         month: 'short', 
-        day: 'numeric',
-        hour: '2-digit', 
-        minute: '2-digit'
+        day: 'numeric'
       });
     } catch (e) {
       return isoString;
@@ -161,104 +159,82 @@ function App() {
     return (
       <div className="loading">
         <div className="spinner"></div>
-        <span>Loading...</span>
       </div>
     );
   }
 
   return (
     <div className="app">
-      <div className="container">
-        {/* Header */}
+      <div className="card">
         <div className="header">
-          <img src={AIROPS_LOGO_URL} alt="AirOps" className="logo" />
-          <span className="title">Send to AirOps</span>
+          <img src={AIROPS_LOGO_URL} alt="" className="logo" />
+          <span>Send to AirOps</span>
         </div>
 
-        {/* Mode Toggle */}
-        <div className="toggle">
+        <div className="tabs">
           <button 
             className={mode === 'email' ? 'active' : ''}
             onClick={() => setMode('email')}
           >
-            Email Response
+            Email
           </button>
           <button 
             className={mode === 'task' ? 'active' : ''}
             onClick={() => setMode('task')}
           >
-            Custom Task
+            Task
           </button>
         </div>
         
-        {/* Instructions */}
-        <div className="field">
-          <label>Instructions</label>
-          <textarea
-            value={comment}
-            onChange={(e) => setComment(e.target.value)}
-            placeholder={mode === 'email' 
-              ? "How should we respond to this email?"
-              : "What do you need help with?"
-            }
-            rows="3"
-          />
-        </div>
+        <textarea
+          value={comment}
+          onChange={(e) => setComment(e.target.value)}
+          placeholder={mode === 'email' 
+            ? "How should we respond?" 
+            : "What do you need?"
+          }
+          rows="2"
+        />
 
-        {/* Output Format - Task Mode Only */}
         {mode === 'task' && (
-          <div className="field">
-            <label>Output Format</label>
-            <input
-              type="text"
-              value={outputFormat}
-              onChange={(e) => setOutputFormat(e.target.value)}
-              placeholder="e.g., Business case, Contract summary, Brief..."
-            />
-          </div>
+          <input
+            type="text"
+            value={outputFormat}
+            onChange={(e) => setOutputFormat(e.target.value)}
+            placeholder="Output format..."
+          />
         )}
         
-        {/* Submit Button */}
         <button
           onClick={processRequest}
           disabled={isSending}
-          className={`submit ${isSending ? 'loading' : ''}`}
+          className={`btn ${isSending ? 'loading' : ''}`}
         >
-          {isSending ? 'Processing...' : 'Send to AirOps'}
+          {isSending ? '...' : 'Send'}
         </button>
         
-        {/* Status */}
         {status && <div className="status">{status}</div>}
         
-        {/* History */}
-        <div className="history">
-          <button onClick={toggleHistory} className="history-toggle">
-            {showHistory ? '▼' : '▶'} Previous ({commentHistory.length})
-          </button>
-          
-          {showHistory && (
-            <div className="history-list">
-              {commentHistory.length === 0 ? (
-                <div className="empty">No previous instructions</div>
-              ) : (
-                commentHistory.map((entry, index) => (
+        {commentHistory.length > 0 && (
+          <div className="history">
+            <button onClick={toggleHistory} className="history-btn">
+              {showHistory ? '−' : '+'} {commentHistory.length}
+            </button>
+            
+            {showHistory && (
+              <div className="history-items">
+                {commentHistory.slice(0, 3).map((entry, index) => (
                   <div key={index} className="history-item">
-                    <div className="history-meta">
-                      <span className="date">{formatDate(entry.timestamp)}</span>
-                      <span className={`mode ${entry.mode}`}>
-                        {entry.mode === 'email' ? '✉️' : '📋'}
-                      </span>
+                    <div className="history-date">
+                      {formatDate(entry.timestamp)} • {entry.mode === 'email' ? '✉️' : '📋'}
                     </div>
                     <div className="history-text">{entry.text}</div>
-                    {entry.outputFormat && (
-                      <div className="history-format">{entry.outputFormat}</div>
-                    )}
                   </div>
-                ))
-              )}
-            </div>
-          )}
-        </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
