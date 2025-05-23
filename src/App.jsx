@@ -535,7 +535,8 @@ function App() {
 
   const checkTaskStatus = async (taskId) => {
     try {
-      const response = await fetch(`/api/task-status?taskId=${taskId}`);
+      // Fix: Use correct Netlify function URL
+      const response = await fetch(`/.netlify/functions/task-status?taskId=${taskId}`);
       if (response.ok) {
         const result = await response.json();
         
@@ -567,10 +568,24 @@ function App() {
           setStatus('Task completed and saved!');
           addDebugLog(`✅ Task ${taskId} completed`);
         }
+      } else if (response.status === 404) {
+        // Function not found - stop polling this task
+        addDebugLog(`⚠️ Task status function not found for ${taskId}, stopping polling`);
+        setPollingTasks(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(taskId);
+          return newSet;
+        });
       }
     } catch (error) {
       console.error('Error checking task status:', error);
       addDebugLog(`❌ Error checking task status: ${error.message}`);
+      // Stop polling on persistent errors
+      setPollingTasks(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(taskId);
+        return newSet;
+      });
     }
   };
 
@@ -686,7 +701,8 @@ function App() {
           saveTaskResultsToStorage(conversationId, updatedTasks);
           
           try {
-            await fetch('/api/store-task', {
+            // Fix: Use correct Netlify function URL
+            await fetch('/.netlify/functions/store-task', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ taskId, task: newTask })
@@ -711,7 +727,7 @@ function App() {
       const webhookUrl = mode === 'email' ? EMAIL_WEBHOOK_URL : TASK_WEBHOOK_URL;
       addDebugLog(`🎯 Using ${mode} webhook`);
       
-      // Try different payload approaches
+      // Try different payload approaches with better error handling
       const payloadApproaches = [
         // Approach 1: Just the combined instructions (simplest)
         combinedInstructions,
@@ -727,6 +743,7 @@ function App() {
       ];
       
       let successfulResponse = null;
+      let lastError = null;
       
       for (let i = 0; i < payloadApproaches.length; i++) {
         try {
@@ -749,15 +766,30 @@ function App() {
             break;
           } else {
             const errorText = await response.text();
+            lastError = { status: response.status, message: errorText };
             addDebugLog(`❌ Approach ${i + 1} failed: ${response.status} - ${errorText.substring(0, 100)}`);
-            if (i === payloadApproaches.length - 1) {
+            
+            // Special handling for 404 errors
+            if (response.status === 404) {
+              addDebugLog(`🚨 Webhook endpoint not found: ${webhookUrl}`);
+              if (i === payloadApproaches.length - 1) {
+                throw new Error(`Webhook endpoint not found: ${webhookUrl}. Please check your AirOps webhook URL.`);
+              }
+            } else if (i === payloadApproaches.length - 1) {
               throw new Error(`All payload approaches failed. Last error: ${response.status}: ${errorText}`);
             }
           }
-        } catch (error) {
-          addDebugLog(`💥 Approach ${i + 1} error: ${error.message}`);
+        } catch (fetchError) {
+          lastError = { status: 'network', message: fetchError.message };
+          addDebugLog(`💥 Approach ${i + 1} network error: ${fetchError.message}`);
+          
           if (i === payloadApproaches.length - 1) {
-            throw error;
+            // Check if it's a network connectivity issue
+            if (fetchError.message.includes('Failed to fetch') || fetchError.message.includes('Network')) {
+              throw new Error(`Network error: Cannot reach AirOps webhook. Please check your internet connection.`);
+            } else {
+              throw new Error(`Webhook error: ${fetchError.message}`);
+            }
           }
         }
       }
@@ -1113,14 +1145,29 @@ function App() {
             padding: '6px',
             marginBottom: '8px',
             fontSize: textSizes.tiny,
-            maxHeight: '80px',
+            maxHeight: '120px',
             overflowY: 'auto'
           }}>
-            <div style={{ fontWeight: '600', color: '#64748b', marginBottom: '2px' }}>
+            <div style={{ fontWeight: '600', color: '#64748b', marginBottom: '4px' }}>
               🔍 Debug Log:
             </div>
+            <div style={{ 
+              fontSize: textSizes.tiny, 
+              color: '#94a3b8', 
+              marginBottom: '4px',
+              padding: '2px 4px',
+              background: '#f1f5f9',
+              borderRadius: '2px'
+            }}>
+              Webhooks: {mode === 'email' ? '📧 Email' : '📋 Task'} | Functions: /.netlify/functions/*
+            </div>
             {debugLog.map((log, index) => (
-              <div key={index} style={{ color: '#475569', marginBottom: '1px' }}>
+              <div key={index} style={{ 
+                color: log.includes('❌') || log.includes('💥') ? '#dc2626' : 
+                       log.includes('✅') ? '#059669' : '#475569', 
+                marginBottom: '1px',
+                fontFamily: 'monospace'
+              }}>
                 {log}
               </div>
             ))}
@@ -1346,14 +1393,24 @@ function App() {
         {status && (
           <div style={{
             padding: '6px 8px',
-            background: status.includes('Error') ? '#fef2f2' : '#f8fafc',
-            border: `1px solid ${status.includes('Error') ? '#fecaca' : '#e2e8f0'}`,
+            background: status.includes('Error') || status.includes('404') || status.includes('Network') ? '#fef2f2' : '#f8fafc',
+            border: `1px solid ${status.includes('Error') || status.includes('404') || status.includes('Network') ? '#fecaca' : '#e2e8f0'}`,
             borderRadius: '4px',
             fontSize: textSizes.small,
-            color: status.includes('Error') ? '#dc2626' : '#64748b',
+            color: status.includes('Error') || status.includes('404') || status.includes('Network') ? '#dc2626' : '#64748b',
             textAlign: 'center'
           }}>
             {status}
+            {(status.includes('404') || status.includes('Network')) && (
+              <div style={{ 
+                fontSize: textSizes.tiny, 
+                marginTop: '4px', 
+                color: '#7c2d12',
+                fontStyle: 'italic'
+              }}>
+                Check debug log above for details
+              </div>
+            )}
           </div>
         )}
       </div>
