@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useFrontContext } from './providers/frontContext';
+import { Accordion, AccordionSection } from '@frontapp/ui-kit';
 import './App.css';
 
 function App() {
@@ -12,41 +13,56 @@ function App() {
   const [isSending, setIsSending] = useState(false);
   const [status, setStatus] = useState('');
   const [commentHistory, setCommentHistory] = useState([]);
-  const [showHistory, setShowHistory] = useState(false);
   const [taskResults, setTaskResults] = useState([]);
   const [pollingTasks, setPollingTasks] = useState(new Set());
   
   // Resize state
-  const [cardSize, setCardSize] = useState({ width: 320, height: 400 });
+  const [cardSize, setCardSize] = useState({ width: 360, height: 480 });
   const [isResizing, setIsResizing] = useState(false);
+  const [textareaHeight, setTextareaHeight] = useState(60);
   const cardRef = useRef(null);
+  const textareaRef = useRef(null);
   const fileInputRef = useRef(null);
   
   const EMAIL_WEBHOOK_URL = 'https://app.airops.com/public_api/airops_apps/73407/webhook_async_execute?auth_token=pxaMrQO7aOUSOXe6gSiLNz4cF1r-E9fOS4E378ws12BBD8SPt-OIVu500KEh';
   const TASK_WEBHOOK_URL = 'https://app.airops.com/public_api/airops_apps/84946/webhook_async_execute?auth_token=pxaMrQO7aOUSOXe6gSiLNz4cF1r-E9fOS4E378ws12BBD8SPt-OIVu500KEh';
   const AIROPS_LOGO_URL = 'https://app.ashbyhq.com/api/images/org-theme-logo/78d1f89f-3e5a-4a8b-b6b5-a91acb030fed/aba001ed-b5b5-4a1b-8bd6-dfb86392876e/d8e6228c-ea82-4061-b660-d7b6c502f155.png';
   
-  // Compact format options
+  // Format options
   const formatOptions = [
     { value: '', label: 'Select format...' },
-    { value: 'email', label: '📧 Email' },
-    { value: 'bullets', label: '• Bullets' },
-    { value: 'table', label: '📊 Table' },
-    { value: 'document', label: '📄 Doc' },
-    { value: 'json', label: '{ } JSON' },
-    { value: 'summary', label: '📋 Summary' },
-    { value: 'tasks', label: '✅ Tasks' },
-    { value: 'custom', label: '✏️ Custom' }
+    { value: 'email', label: '📧 Email Draft' },
+    { value: 'bullets', label: '• Bullet Points' },
+    { value: 'table', label: '📊 Table/Spreadsheet' },
+    { value: 'document', label: '📄 Document/Report' },
+    { value: 'json', label: '{ } JSON Data' },
+    { value: 'summary', label: '📋 Executive Summary' },
+    { value: 'tasks', label: '✅ Action Items' },
+    { value: 'timeline', label: '📅 Timeline/Schedule' },
+    { value: 'custom', label: '✏️ Custom Format' }
   ];
 
-  // Resize functionality
+  // Adaptive text size based on card size
+  const getAdaptiveTextSize = () => {
+    const baseSize = Math.max(11, Math.min(14, cardSize.width / 30));
+    return {
+      base: `${baseSize}px`,
+      small: `${baseSize - 1}px`,
+      tiny: `${baseSize - 2}px`,
+      header: `${baseSize + 1}px`
+    };
+  };
+
+  const textSizes = getAdaptiveTextSize();
+
+  // Card resize functionality
   useEffect(() => {
     const handleMouseMove = (e) => {
       if (!isResizing) return;
       
       const rect = cardRef.current.getBoundingClientRect();
-      const newWidth = Math.max(280, e.clientX - rect.left);
-      const newHeight = Math.max(300, e.clientY - rect.top);
+      const newWidth = Math.max(320, e.clientX - rect.left);
+      const newHeight = Math.max(400, e.clientY - rect.top);
       
       setCardSize({ width: newWidth, height: newHeight });
     };
@@ -69,6 +85,16 @@ function App() {
       document.removeEventListener('mouseup', handleMouseUp);
     };
   }, [isResizing]);
+
+  // Textarea resize functionality
+  const handleTextareaResize = (direction) => {
+    const increment = 20;
+    if (direction === 'up') {
+      setTextareaHeight(prev => Math.max(40, prev - increment));
+    } else {
+      setTextareaHeight(prev => Math.min(200, prev + increment));
+    }
+  };
 
   const handleResizeStart = (e) => {
     e.preventDefault();
@@ -96,7 +122,7 @@ function App() {
     if (selectedFormat && selectedFormat !== 'custom') {
       const selected = formatOptions.find(opt => opt.value === selectedFormat);
       if (selected) {
-        setOutputFormat(selected.label.replace(/[📧•📊📄✅📋✏️{}]/g, '').trim());
+        setOutputFormat(selected.label.replace(/[📧•📊📄✅📋📅✏️{}]/g, '').trim());
       }
     }
   }, [selectedFormat]);
@@ -141,16 +167,16 @@ function App() {
           const content = e.target.result;
           fileData.preview = content.substring(0, 500) + (content.length > 500 ? '...' : '');
           setUploadedFile(fileData);
-          setStatus('File uploaded');
+          setStatus('File uploaded successfully');
         };
         reader.readAsText(file);
       } else {
         setUploadedFile(fileData);
-        setStatus('File uploaded');
+        setStatus('File uploaded successfully');
       }
     } catch (error) {
       console.error('File upload error:', error);
-      setStatus('Upload failed');
+      setStatus('File upload failed');
     }
   };
 
@@ -246,7 +272,7 @@ function App() {
   const insertIntoDraft = (content) => {
     if (context && context.draft && typeof context.insertTextIntoBody === 'function') {
       context.insertTextIntoBody(content);
-      setStatus('Inserted!');
+      setStatus('Inserted into draft!');
     } else if (context && typeof context.createDraft === 'function') {
       context.createDraft({
         content: {
@@ -257,7 +283,7 @@ function App() {
       setStatus('Draft created!');
     } else {
       navigator.clipboard.writeText(content).then(() => {
-        setStatus('Copied!');
+        setStatus('Copied to clipboard!');
       }).catch(() => {
         setStatus('Copy failed');
       });
@@ -271,7 +297,7 @@ function App() {
     }
 
     if (mode === 'task' && !outputFormat.trim() && !selectedFormat) {
-      setStatus('Select format');
+      setStatus('Select or enter output format');
       return;
     }
     
@@ -396,7 +422,7 @@ function App() {
       if (mode === 'email') {
         setStatus('Sent!');
       } else {
-        setStatus('Task created!');
+        setStatus('Task created! Processing...');
       }
       
       setComment('');
@@ -432,20 +458,20 @@ function App() {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        height: '100px',
-        fontSize: '10px',
+        height: '200px',
+        fontSize: textSizes.base,
         color: '#9ca3af'
       }}>
-        Loading...
-      </div>
+        Loading context...
+      </div> 
     );
   }
 
   if (context.type === 'messageComposer' && !context.conversation) {
     return (
       <div style={{
-        padding: '8px',
-        fontSize: '10px',
+        padding: '16px',
+        fontSize: textSizes.base,
         color: '#64748b',
         textAlign: 'center'
       }}>
@@ -462,52 +488,55 @@ function App() {
         height: `${cardSize.height}px`,
         background: 'white',
         border: '1px solid #e5e7eb',
-        borderRadius: '6px',
-        padding: '8px',
-        fontSize: '10px',
+        borderRadius: '8px',
+        padding: '12px',
+        fontSize: textSizes.base,
         fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
         position: 'relative',
         overflow: 'hidden',
-        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)'
+        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
+        display: 'flex',
+        flexDirection: 'column'
       }}
     >
       {/* Header */}
       <div style={{
         display: 'flex',
         alignItems: 'center',
-        marginBottom: '6px',
-        fontSize: '11px',
+        marginBottom: '12px',
+        fontSize: textSizes.header,
         fontWeight: '600',
         color: '#111827'
       }}>
         <img 
           src={AIROPS_LOGO_URL} 
           alt="" 
-          style={{ width: '12px', height: '12px', marginRight: '4px' }}
+          style={{ width: '16px', height: '16px', marginRight: '8px' }}
         />
-        <span>AirOps</span>
+        <span>Send to AirOps</span>
       </div>
 
       {/* Mode Tabs */}
       <div style={{
         display: 'flex',
-        marginBottom: '6px',
+        marginBottom: '12px',
         background: '#f1f5f9',
-        borderRadius: '3px',
-        padding: '1px'
+        borderRadius: '6px',
+        padding: '2px'
       }}>
         <button 
           onClick={() => setMode('email')}
           style={{
             flex: 1,
-            padding: '2px 6px',
+            padding: '6px 12px',
             border: 'none',
-            borderRadius: '2px',
-            fontSize: '9px',
+            borderRadius: '4px',
+            fontSize: textSizes.base,
             fontWeight: '500',
             cursor: 'pointer',
             background: mode === 'email' ? 'white' : 'transparent',
-            color: mode === 'email' ? '#1e293b' : '#64748b'
+            color: mode === 'email' ? '#1e293b' : '#64748b',
+            boxShadow: mode === 'email' ? '0 1px 2px rgba(0, 0, 0, 0.05)' : 'none'
           }}
         >
           Email
@@ -516,59 +545,108 @@ function App() {
           onClick={() => setMode('task')}
           style={{
             flex: 1,
-            padding: '2px 6px',
+            padding: '6px 12px',
             border: 'none',
-            borderRadius: '2px',
-            fontSize: '9px',
+            borderRadius: '4px',
+            fontSize: textSizes.base,
             fontWeight: '500',
             cursor: 'pointer',
             background: mode === 'task' ? 'white' : 'transparent',
-            color: mode === 'task' ? '#1e293b' : '#64748b'
+            color: mode === 'task' ? '#1e293b' : '#64748b',
+            boxShadow: mode === 'task' ? '0 1px 2px rgba(0, 0, 0, 0.05)' : 'none'
           }}
         >
           Task
         </button>
       </div>
       
-      {/* Scrollable Content */}
+      {/* Scrollable Content Area */}
       <div style={{
-        height: `${cardSize.height - 80}px`,
+        flex: 1,
         overflowY: 'auto',
-        paddingRight: '2px'
+        paddingRight: '4px',
+        marginBottom: '12px'
       }}>
-        {/* Instructions */}
-        <textarea
-          value={comment}
-          onChange={(e) => setComment(e.target.value)}
-          placeholder={mode === 'email' ? "How should we respond?" : "What do you need?"}
-          style={{
-            width: '100%',
-            padding: '4px 6px',
-            border: '1px solid #d1d5db',
-            borderRadius: '3px',
-            fontSize: '10px',
-            fontFamily: 'inherit',
-            resize: 'none',
-            height: '50px',
-            marginBottom: '4px'
-          }}
-        />
+        {/* Instructions Textarea with resize controls */}
+        <div style={{ position: 'relative', marginBottom: '8px' }}>
+          <textarea
+            ref={textareaRef}
+            value={comment}
+            onChange={(e) => setComment(e.target.value)}
+            placeholder={mode === 'email' ? "How should we respond?" : "What do you need?"}
+            style={{
+              width: '100%',
+              height: `${textareaHeight}px`,
+              padding: '8px 12px',
+              border: '1px solid #d1d5db',
+              borderRadius: '6px',
+              fontSize: textSizes.base,
+              fontFamily: 'inherit',
+              resize: 'none',
+              transition: 'border-color 0.15s ease',
+              paddingBottom: '24px' // Make room for resize controls
+            }}
+            onFocus={(e) => e.target.style.borderColor = '#6366f1'}
+            onBlur={(e) => e.target.style.borderColor = '#d1d5db'}
+          />
+          
+          {/* Textarea resize controls */}
+          <div style={{
+            position: 'absolute',
+            bottom: '4px',
+            right: '8px',
+            display: 'flex',
+            gap: '4px'
+          }}>
+            <button
+              onClick={() => handleTextareaResize('up')}
+              style={{
+                background: '#f3f4f6',
+                border: '1px solid #d1d5db',
+                borderRadius: '3px',
+                padding: '2px 6px',
+                fontSize: textSizes.tiny,
+                cursor: 'pointer',
+                color: '#374151'
+              }}
+              title="Make smaller"
+            >
+              ↕−
+            </button>
+            <button
+              onClick={() => handleTextareaResize('down')}
+              style={{
+                background: '#f3f4f6',
+                border: '1px solid #d1d5db',
+                borderRadius: '3px',
+                padding: '2px 6px',
+                fontSize: textSizes.tiny,
+                cursor: 'pointer',
+                color: '#374151'
+              }}
+              title="Make larger"
+            >
+              ↕+
+            </button>
+          </div>
+        </div>
 
         {/* Task Mode Controls */}
         {mode === 'task' && (
-          <>
+          <div style={{ marginBottom: '12px' }}>
             <select
               value={selectedFormat}
               onChange={(e) => setSelectedFormat(e.target.value)}
               style={{
                 width: '100%',
-                padding: '4px 6px',
+                padding: '8px 12px',
                 border: '1px solid #d1d5db',
-                borderRadius: '3px',
-                fontSize: '9px',
+                borderRadius: '6px',
+                fontSize: textSizes.base,
                 fontFamily: 'inherit',
-                marginBottom: '4px',
-                background: 'white'
+                marginBottom: '8px',
+                background: 'white',
+                cursor: 'pointer'
               }}
             >
               {formatOptions.map(option => (
@@ -583,15 +661,15 @@ function App() {
                 type="text"
                 value={outputFormat}
                 onChange={(e) => setOutputFormat(e.target.value)}
-                placeholder="Custom format..."
+                placeholder="Enter custom format description..."
                 style={{
                   width: '100%',
-                  padding: '4px 6px',
+                  padding: '8px 12px',
                   border: '1px solid #d1d5db',
-                  borderRadius: '3px',
-                  fontSize: '9px',
+                  borderRadius: '6px',
+                  fontSize: textSizes.base,
                   fontFamily: 'inherit',
-                  marginBottom: '4px'
+                  marginBottom: '8px'
                 }}
               />
             )}
@@ -599,38 +677,42 @@ function App() {
             {/* File Upload */}
             <div style={{
               border: '1px dashed #d1d5db',
-              borderRadius: '3px',
-              padding: '4px',
+              borderRadius: '6px',
+              padding: '12px',
               textAlign: 'center',
-              background: '#fafafa',
-              marginBottom: '4px'
+              background: '#fafafa'
             }}>
               <input
                 ref={fileInputRef}
                 type="file"
                 onChange={handleFileUpload}
-                accept=".txt,.csv,.json,.doc,.docx,.pdf"
+                accept=".txt,.csv,.json,.doc,.docx,.pdf,.png,.jpg,.jpeg"
                 style={{ display: 'none' }}
               />
               
               {!uploadedFile ? (
-                <button
-                  onClick={() => fileInputRef.current?.click()}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    color: '#6366f1',
-                    fontSize: '8px',
-                    cursor: 'pointer',
-                    textDecoration: 'underline'
-                  }}
-                >
-                  📎 Add file
-                </button>
+                <div>
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: '#6366f1',
+                      fontSize: textSizes.base,
+                      cursor: 'pointer',
+                      textDecoration: 'underline'
+                    }}
+                  >
+                    📎 Upload reference file
+                  </button>
+                  <div style={{ fontSize: textSizes.small, color: '#94a3b8', marginTop: '4px' }}>
+                    CSV, JSON, TXT, DOC, PDF, images (max 2MB)
+                  </div>
+                </div>
               ) : (
                 <div>
-                  <div style={{ fontSize: '8px', color: '#374151', marginBottom: '2px' }}>
-                    📎 {uploadedFile.name.length > 20 ? uploadedFile.name.substring(0, 20) + '...' : uploadedFile.name}
+                  <div style={{ fontSize: textSizes.base, color: '#374151', marginBottom: '6px' }}>
+                    📎 {uploadedFile.name} ({(uploadedFile.size / 1024).toFixed(1)}KB)
                   </div>
                   <button
                     onClick={removeFile}
@@ -638,9 +720,9 @@ function App() {
                       background: '#ef4444',
                       color: 'white',
                       border: 'none',
-                      borderRadius: '2px',
-                      fontSize: '7px',
-                      padding: '1px 4px',
+                      borderRadius: '4px',
+                      fontSize: textSizes.small,
+                      padding: '4px 8px',
                       cursor: 'pointer'
                     }}
                   >
@@ -649,120 +731,131 @@ function App() {
                 </div>
               )}
             </div>
-          </>
+          </div>
         )}
 
-        {/* Task Results */}
-        {taskResults.length > 0 && (
-          <div style={{ marginBottom: '4px' }}>
-            <div style={{ fontSize: '8px', color: '#64748b', fontWeight: '500', marginBottom: '3px' }}>
-              Tasks ({taskResults.length})
-            </div>
-            {taskResults.slice(0, 2).map((task) => (
-              <div key={task.id} style={{
-                background: '#f8fafc',
-                border: '1px solid #f1f5f9',
-                borderRadius: '3px',
-                padding: '3px',
-                marginBottom: '2px',
-                fontSize: '8px'
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '3px', marginBottom: '2px' }}>
-                  <span>{task.status === 'pending' ? '⏳' : '✅'}</span>
-                  <span style={{ flex: 1, color: '#475569' }}>
-                    {task.selectedFormat ? formatOptions.find(f => f.value === task.selectedFormat)?.label?.substring(0, 10) || task.outputFormat : task.outputFormat}
-                  </span>
+        {/* Results using Accordion */}
+        {(taskResults.length > 0 || commentHistory.length > 0) && (
+          <Accordion expandMode="multi">
+            {taskResults.length > 0 && (
+              <AccordionSection
+                id="tasks"
+                title={`Tasks (${taskResults.length})`}
+              >
+                <div>
+                  {taskResults.slice(0, 3).map((task) => (
+                    <div key={task.id} style={{
+                      background: '#f8fafc',
+                      border: '1px solid #f1f5f9',
+                      borderRadius: '6px',
+                      padding: '8px',
+                      marginBottom: '6px',
+                      fontSize: textSizes.small
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+                        <span>{task.status === 'pending' ? '⏳' : '✅'}</span>
+                        <span style={{ flex: 1, color: '#475569', fontWeight: '500' }}>
+                          {task.selectedFormat ? formatOptions.find(f => f.value === task.selectedFormat)?.label || task.outputFormat : task.outputFormat}
+                          {task.hasFile && ' 📎'}
+                        </span>
+                        <span style={{ color: '#94a3b8', fontSize: textSizes.tiny }}>
+                          {formatDate(task.createdAt)}
+                        </span>
+                      </div>
+                      {task.result && (
+                        <div style={{ position: 'relative' }}>
+                          <div 
+                            style={{
+                              fontSize: textSizes.small,
+                              color: '#475569',
+                              background: 'white',
+                              padding: '6px',
+                              borderRadius: '4px',
+                              border: '1px solid #e2e8f0',
+                              maxHeight: '80px',
+                              overflow: 'auto'
+                            }}
+                            dangerouslySetInnerHTML={{ __html: task.result }}
+                          />
+                          <button 
+                            onClick={() => insertIntoDraft(task.result.replace(/<[^>]*>/g, ''))}
+                            style={{
+                              position: 'absolute',
+                              top: '2px',
+                              right: '2px',
+                              background: '#64748b',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '3px',
+                              fontSize: textSizes.tiny,
+                              padding: '2px 6px',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            Insert
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
                 </div>
-                {task.result && (
-                  <div style={{ position: 'relative' }}>
-                    <div 
-                      style={{
-                        fontSize: '8px',
-                        color: '#475569',
-                        background: 'white',
-                        padding: '3px',
-                        borderRadius: '2px',
-                        border: '1px solid #e2e8f0',
-                        maxHeight: '40px',
-                        overflow: 'hidden'
-                      }}
-                      dangerouslySetInnerHTML={{ __html: task.result.substring(0, 100) + '...' }}
-                    />
-                    <button 
-                      onClick={() => insertIntoDraft(task.result.replace(/<[^>]*>/g, ''))}
-                      style={{
-                        position: 'absolute',
-                        top: '1px',
-                        right: '1px',
-                        background: '#64748b',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '2px',
-                        fontSize: '7px',
-                        padding: '1px 3px',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      Insert
-                    </button>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* History */}
-        {commentHistory.length > 0 && (
-          <div>
-            <button 
-              onClick={() => setShowHistory(!showHistory)}
-              style={{
-                background: 'none',
-                border: 'none',
-                fontSize: '8px',
-                color: '#64748b',
-                cursor: 'pointer',
-                padding: '0',
-                fontFamily: 'inherit',
-                fontWeight: '500',
-                marginBottom: '3px'
-              }}
-            >
-              {showHistory ? '−' : '+'} History ({commentHistory.length})
-            </button>
-            
-            {showHistory && (
-              <div style={{ maxHeight: '60px', overflowY: 'auto' }}>
-                {commentHistory.slice(0, 2).map((entry, index) => (
-                  <div key={index} style={{
-                    padding: '3px',
-                    background: '#f8fafc',
-                    border: '1px solid #f1f5f9',
-                    borderRadius: '3px',
-                    marginBottom: '2px',
-                    fontSize: '8px'
-                  }}>
-                    <div style={{ color: '#94a3b8', marginBottom: '1px' }}>
-                      {formatDate(entry.timestamp)} • {entry.mode === 'email' ? '✉️' : '📋'}
-                    </div>
-                    <div style={{ color: '#475569' }}>
-                      {entry.text.substring(0, 50)}...
-                    </div>
-                  </div>
-                ))}
-              </div>
+              </AccordionSection>
             )}
-          </div>
+
+            {commentHistory.length > 0 && (
+              <AccordionSection
+                id="history"
+                title={`History (${commentHistory.length})`}
+              >
+                <div style={{ maxHeight: '120px', overflowY: 'auto' }}>
+                  {commentHistory.slice(0, 3).map((entry, index) => (
+                    <div key={index} style={{
+                      padding: '6px',
+                      background: '#f8fafc',
+                      border: '1px solid #f1f5f9',
+                      borderRadius: '4px',
+                      marginBottom: '4px',
+                      fontSize: textSizes.small
+                    }}>
+                      <div style={{ 
+                        color: '#94a3b8', 
+                        marginBottom: '2px',
+                        fontSize: textSizes.tiny,
+                        fontWeight: '500'
+                      }}>
+                        {formatDate(entry.timestamp)} • {entry.mode === 'email' ? '✉️' : '📋'}
+                        {entry.hasFile && ' 📎'}
+                      </div>
+                      <div style={{ 
+                        color: '#475569', 
+                        lineHeight: 1.3,
+                        fontSize: textSizes.small
+                      }}>
+                        {entry.text}
+                      </div>
+                      {entry.outputFormat && (
+                        <div style={{ 
+                          fontSize: textSizes.tiny,
+                          color: '#94a3b8',
+                          fontStyle: 'italic',
+                          marginTop: '2px'
+                        }}>
+                          Format: {entry.selectedFormat ? formatOptions.find(f => f.value === entry.selectedFormat)?.label || entry.outputFormat : entry.outputFormat}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </AccordionSection>
+            )}
+          </Accordion>
         )}
       </div>
 
-      {/* Bottom Section */}
+      {/* Bottom Section - Send Button and Status */}
       <div style={{
-        position: 'absolute',
-        bottom: '8px',
-        left: '8px',
-        right: '8px'
+        borderTop: '1px solid #f1f5f9',
+        paddingTop: '12px'
       }}>
         <button
           onClick={processRequest}
@@ -772,12 +865,19 @@ function App() {
             background: isSending ? '#9ca3af' : '#1f2937',
             color: 'white',
             border: 'none',
-            borderRadius: '3px',
-            padding: '6px',
-            fontSize: '9px',
+            borderRadius: '6px',
+            padding: '10px',
+            fontSize: textSizes.base,
             fontWeight: '500',
             cursor: isSending ? 'not-allowed' : 'pointer',
-            marginBottom: '3px'
+            marginBottom: '8px',
+            transition: 'background-color 0.15s ease'
+          }}
+          onMouseEnter={(e) => {
+            if (!isSending) e.target.style.background = '#374151';
+          }}
+          onMouseLeave={(e) => {
+            if (!isSending) e.target.style.background = '#1f2937';
           }}
         >
           {isSending ? 'Processing...' : 'Send'}
@@ -785,11 +885,11 @@ function App() {
         
         {status && (
           <div style={{
-            padding: '2px 4px',
+            padding: '6px 8px',
             background: '#f8fafc',
             border: '1px solid #e2e8f0',
-            borderRadius: '2px',
-            fontSize: '7px',
+            borderRadius: '4px',
+            fontSize: textSizes.small,
             color: '#64748b',
             textAlign: 'center'
           }}>
@@ -798,20 +898,24 @@ function App() {
         )}
       </div>
 
-      {/* Resize Handle */}
+      {/* Card Resize Handle */}
       <div
         onMouseDown={handleResizeStart}
         style={{
           position: 'absolute',
           bottom: '2px',
           right: '2px',
-          width: '10px',
-          height: '10px',
+          width: '14px',
+          height: '14px',
           cursor: 'nw-resize',
           background: 'linear-gradient(-45deg, transparent 30%, #9ca3af 30%, #9ca3af 35%, transparent 35%, transparent 65%, #9ca3af 65%, #9ca3af 70%, transparent 70%)',
-          backgroundSize: '3px 3px',
-          opacity: 0.5
+          backgroundSize: '4px 4px',
+          opacity: 0.4,
+          borderRadius: '0 0 6px 0',
+          transition: 'opacity 0.2s ease'
         }}
+        onMouseEnter={(e) => e.target.style.opacity = '0.8'}
+        onMouseLeave={(e) => e.target.style.opacity = '0.4'}
       />
     </div>
   );
