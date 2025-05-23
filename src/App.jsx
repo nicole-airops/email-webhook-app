@@ -56,7 +56,7 @@ function App() {
     setDebugLog(prev => [`${timestamp}: ${message}`, ...prev.slice(0, 4)]);
   };
 
-  // Detect container size changes (sidebar resize)
+  // Detect container size changes and make app fully responsive
   useEffect(() => {
     const observeContainerSize = () => {
       if (!cardRef.current) return;
@@ -66,30 +66,45 @@ function App() {
       
       const updateSize = () => {
         const rect = parent.getBoundingClientRect();
+        
+        // Make card fully responsive - always fit container with small padding
+        const newWidth = Math.max(280, rect.width - 12);
+        const newHeight = Math.max(350, rect.height - 12);
+        
         setContainerSize({ width: rect.width, height: rect.height });
-        
-        // Auto-adjust card size to fit container with padding
-        const maxWidth = Math.max(320, rect.width - 40);
-        const maxHeight = Math.max(400, rect.height - 40);
-        
-        setCardSize(prev => ({
-          width: Math.min(prev.width, maxWidth),
-          height: Math.min(prev.height, maxHeight)
-        }));
+        setCardSize({ width: newWidth, height: newHeight });
       };
       
       // Initial size
       updateSize();
       
-      // Use ResizeObserver if available
+      // Use ResizeObserver for better responsiveness
       if (window.ResizeObserver) {
-        const resizeObserver = new ResizeObserver(updateSize);
+        const resizeObserver = new ResizeObserver((entries) => {
+          updateSize();
+        });
         resizeObserver.observe(parent);
-        return () => resizeObserver.disconnect();
+        
+        // Also observe window for additional responsiveness
+        const handleWindowResize = () => updateSize();
+        window.addEventListener('resize', handleWindowResize);
+        
+        return () => {
+          resizeObserver.disconnect();
+          window.removeEventListener('resize', handleWindowResize);
+        };
       } else {
-        // Fallback to window resize
-        window.addEventListener('resize', updateSize);
-        return () => window.removeEventListener('resize', updateSize);
+        // Fallback with more frequent updates
+        const handleResize = () => updateSize();
+        window.addEventListener('resize', handleResize);
+        
+        // Poll for size changes as fallback
+        const interval = setInterval(updateSize, 200);
+        
+        return () => {
+          window.removeEventListener('resize', handleResize);
+          clearInterval(interval);
+        };
       }
     };
     
@@ -114,13 +129,16 @@ function App() {
 
   const textSizes = getAdaptiveTextSize();
 
-  // Manual resize functionality
+  // Manual resize functionality that respects container bounds
   useEffect(() => {
     const handleMouseMove = (e) => {
       if (isResizing && !isTextareaResizing) {
         const rect = cardRef.current.getBoundingClientRect();
-        const newWidth = Math.max(300, Math.min(containerSize.width - 20, e.clientX - rect.left));
-        const newHeight = Math.max(350, Math.min(containerSize.height - 20, e.clientY - rect.top));
+        // Ensure resize stays within container bounds with better padding
+        const maxWidth = containerSize.width - 12;
+        const maxHeight = containerSize.height - 12;
+        const newWidth = Math.max(280, Math.min(maxWidth, e.clientX - rect.left));
+        const newHeight = Math.max(350, Math.min(maxHeight, e.clientY - rect.top));
         setCardSize({ width: newWidth, height: newHeight });
       }
       
@@ -180,10 +198,10 @@ function App() {
   }, [pollingTasks]);
 
   useEffect(() => {
-    if (selectedFormat && selectedFormat !== 'custom') {
+    if (selectedFormat) {
       const selected = formatOptions.find(opt => opt.value === selectedFormat);
       if (selected) {
-        setOutputFormat(selected.label.replace(/[📧•📊📄✅📋📅✏️{}]/g, '').trim());
+        setOutputFormat(selected.label);
       }
     }
   }, [selectedFormat]);
@@ -282,36 +300,21 @@ function App() {
       timezone: context.teammate.timezone
     } : null;
     
-    // Create the COMPLETE nested payload
+    // Create the COMPLETE nested payload with SEPARATE output_format and attachment
     const completePayload = {
       airops_request: {
         // Primary instruction combining everything
         combined_instructions: combinedInstructions,
         
-        // Request metadata
-        request_info: {
-          mode: mode,
-          timestamp: timestamp,
-          plugin_context: context?.type, // 'messageComposer' or 'singleConversation'
-          task_id: taskId,
-          user_agent: navigator.userAgent,
-          plugin_version: "1.0.0"
-        },
-        
-        // User making the request
-        requesting_user: teammateData,
-        
-        // Output format details
-        output_specification: {
+        // SEPARATE output format specification
+        output_format: {
           selected_format: selectedFormat,
-          custom_format: outputFormat,
           format_label: selectedFormat ? formatOptions.find(f => f.value === selectedFormat)?.label : null,
-          raw_instructions: comment,
-          has_custom_format: selectedFormat === 'custom'
+          raw_instructions: comment
         },
         
-        // File attachment with full context
-        attached_file: uploadedFile ? {
+        // SEPARATE file attachment specification
+        attachment: uploadedFile ? {
           name: uploadedFile.name,
           type: uploadedFile.type,
           size: uploadedFile.size,
@@ -321,6 +324,19 @@ function App() {
           has_preview: !!uploadedFile.preview,
           is_text_file: uploadedFile.type?.startsWith('text/') || uploadedFile.name?.match(/\.(txt|csv|json|md)$/i)
         } : null,
+        
+        // Request metadata
+        request_info: {
+          mode: mode,
+          timestamp: timestamp,
+          plugin_context: context?.type,
+          task_id: taskId,
+          user_agent: navigator.userAgent,
+          plugin_version: "1.0.0"
+        },
+        
+        // User making the request
+        requesting_user: teammateData,
         
         // Complete Front conversation context
         front_conversation: {
@@ -584,8 +600,8 @@ function App() {
       return;
     }
 
-    if (mode === 'task' && !outputFormat.trim() && !selectedFormat) {
-      setStatus('Select or enter output format');
+    if (mode === 'task' && !selectedFormat) {
+      setStatus('Select output format');
       return;
     }
     
@@ -772,14 +788,6 @@ function App() {
           style={{ width: '16px', height: '16px', marginRight: '8px' }}
         />
         <span>Send to AirOps</span>
-        <span style={{ 
-          marginLeft: 'auto', 
-          fontSize: textSizes.tiny, 
-          color: '#94a3b8',
-          fontWeight: 'normal'
-        }}>
-          {containerStyle} {cardSize.width}×{cardSize.height}
-        </span>
       </div>
 
       {/* Mode Tabs */}
@@ -912,24 +920,6 @@ function App() {
                 </option>
               ))}
             </select>
-
-            {selectedFormat === 'custom' && (
-              <input
-                type="text"
-                value={outputFormat}
-                onChange={(e) => setOutputFormat(e.target.value)}
-                placeholder="Enter custom format description..."
-                style={{
-                  width: '100%',
-                  padding: '8px 12px',
-                  border: '1px solid #d1d5db',
-                  borderRadius: '6px',
-                  fontSize: textSizes.base,
-                  fontFamily: 'inherit',
-                  marginBottom: '8px'
-                }}
-              />
-            )}
 
             {/* File Upload */}
             <div style={{
