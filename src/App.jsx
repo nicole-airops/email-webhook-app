@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
 import { useFrontContext } from './providers/frontContext';
-import { Accordion, AccordionSection } from '@frontapp/ui-kit';
 import './App.css';
 
 function App() {
@@ -8,308 +7,196 @@ function App() {
   const [mode, setMode] = useState('email');
   const [comment, setComment] = useState('');
   const [outputFormat, setOutputFormat] = useState('');
-  const [selectedFormat, setSelectedFormat] = useState('');
-  const [uploadedFile, setUploadedFile] = useState(null);
   const [isSending, setIsSending] = useState(false);
   const [status, setStatus] = useState('');
   const [commentHistory, setCommentHistory] = useState([]);
+  const [showHistory, setShowHistory] = useState(false);
   const [taskResults, setTaskResults] = useState([]);
   const [pollingTasks, setPollingTasks] = useState(new Set());
-  const [debugLog, setDebugLog] = useState([]);
   
-  // Prevent multiple calls
-  const isProcessingRef = useRef(false);
-  const lastCallTimeRef = useRef(0);
-  
-  // Auto-resize state
-  const [cardSize, setCardSize] = useState({ width: 340, height: 420 });
+  // UI state for resizing and interactions
+  const [showResizeOptions, setShowResizeOptions] = useState(false);
+  const [textareaHeight, setTextareaHeight] = useState(40);
   const [isResizing, setIsResizing] = useState(false);
-  const [textareaHeight, setTextareaHeight] = useState(60);
-  const [isTextareaResizing, setIsTextareaResizing] = useState(false);
-  const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
+  const [activeTextarea, setActiveTextarea] = useState(null);
   
-  const cardRef = useRef(null);
-  const textareaRef = useRef(null);
-  const textareaContainerRef = useRef(null);
-  const fileInputRef = useRef(null);
-  const containerRef = useRef(null);
+  // Refs for resizing
+  const commentTextareaRef = useRef(null);
+  const outputTextareaRef = useRef(null);
   
   const EMAIL_WEBHOOK_URL = 'https://app.airops.com/public_api/airops_apps/73407/webhook_async_execute?auth_token=pxaMrQO7aOUSOXe6gSiLNz4cF1r-E9fOS4E378ws12BBD8SPt-OIVu500KEh';
   const TASK_WEBHOOK_URL = 'https://app.airops.com/public_api/airops_apps/84946/webhook_async_execute?auth_token=pxaMrQO7aOUSOXe6gSiLNz4cF1r-E9fOS4E378ws12BBD8SPt-OIVu500KEh';
   const AIROPS_LOGO_URL = 'https://app.ashbyhq.com/api/images/org-theme-logo/78d1f89f-3e5a-4a8b-b6b5-a91acb030fed/aba001ed-b5b5-4a1b-8bd6-dfb86392876e/d8e6228c-ea82-4061-b660-d7b6c502f155.png';
   
-  // Format options
-  const formatOptions = [
-    { value: '', label: 'Select format...' },
-    { value: 'email', label: '📧 Email Draft' },
-    { value: 'bullets', label: '• Bullet Points' },
-    { value: 'table', label: '📊 Table/Spreadsheet' },
-    { value: 'document', label: '📄 Document/Report' },
-    { value: 'json', label: '{ } JSON Data' },
-    { value: 'summary', label: '📋 Executive Summary' },
-    { value: 'tasks', label: '✅ Action Items' },
-    { value: 'timeline', label: '📅 Timeline/Schedule' },
-    { value: 'custom', label: '✏️ Custom Format' }
-  ];
-
-  // Add debug logging
-  const addDebugLog = (message) => {
-    const timestamp = new Date().toLocaleTimeString();
-    setDebugLog(prev => [`${timestamp}: ${message}`, ...prev.slice(0, 4)]);
-  };
-
-  // Detect container size changes (sidebar resize)
   useEffect(() => {
-    const observeContainerSize = () => {
-      if (!cardRef.current) return;
-      
-      const parent = cardRef.current.parentElement;
-      if (!parent) return;
-      
-      const updateSize = () => {
-        const rect = parent.getBoundingClientRect();
-        setContainerSize({ width: rect.width, height: rect.height });
-        
-        // Auto-adjust card size to fit container with padding
-        const maxWidth = Math.max(320, rect.width - 40);
-        const maxHeight = Math.max(400, rect.height - 40);
-        
-        setCardSize(prev => ({
-          width: Math.min(prev.width, maxWidth),
-          height: Math.min(prev.height, maxHeight)
-        }));
-      };
-      
-      // Initial size
-      updateSize();
-      
-      // Use ResizeObserver if available
-      if (window.ResizeObserver) {
-        const resizeObserver = new ResizeObserver(updateSize);
-        resizeObserver.observe(parent);
-        return () => resizeObserver.disconnect();
-      } else {
-        // Fallback to window resize
-        window.addEventListener('resize', updateSize);
-        return () => window.removeEventListener('resize', updateSize);
-      }
-    };
-    
-    const cleanup = observeContainerSize();
-    return cleanup;
-  }, []);
+    const conversationId = context?.conversation?.id;
+    if (conversationId) {
+      loadHistoryFromFrontContext();
+      loadTaskResultsFromFrontContext();
+    }
+  }, [context]);
 
-  // Detect if we're in composer or sidebar
-  const isComposer = context?.type === 'messageComposer';
-  const containerStyle = isComposer ? 'composer' : 'sidebar';
+  useEffect(() => {
+    if (pollingTasks.size > 0) {
+      const interval = setInterval(() => {
+        pollingTasks.forEach(taskId => checkTaskStatus(taskId));
+      }, 5000);
+      return () => clearInterval(interval);
+    }
+  }, [pollingTasks]);
 
-  // Adaptive text size based on card size
-  const getAdaptiveTextSize = () => {
-    const baseSize = Math.max(11, Math.min(14, cardSize.width / 28));
-    return {
-      base: `${baseSize}px`,
-      small: `${baseSize - 1}px`,
-      tiny: `${baseSize - 2}px`,
-      header: `${baseSize + 1}px`
-    };
-  };
-
-  const textSizes = getAdaptiveTextSize();
-
-  // Manual resize functionality
+  // Custom resizer functionality
   useEffect(() => {
     const handleMouseMove = (e) => {
-      if (isResizing && !isTextareaResizing) {
-        const rect = cardRef.current.getBoundingClientRect();
-        const newWidth = Math.max(300, Math.min(containerSize.width - 20, e.clientX - rect.left));
-        const newHeight = Math.max(350, Math.min(containerSize.height - 20, e.clientY - rect.top));
-        setCardSize({ width: newWidth, height: newHeight });
-      }
+      if (!isResizing || !activeTextarea) return;
       
-      if (isTextareaResizing) {
-        const rect = textareaContainerRef.current.getBoundingClientRect();
-        const newHeight = Math.max(40, Math.min(200, e.clientY - rect.top));
-        setTextareaHeight(newHeight);
-      }
+      const rect = activeTextarea.getBoundingClientRect();
+      const newHeight = Math.max(32, Math.min(200, e.clientY - rect.top));
+      activeTextarea.style.height = newHeight + 'px';
+      setTextareaHeight(newHeight);
     };
 
     const handleMouseUp = () => {
       setIsResizing(false);
-      setIsTextareaResizing(false);
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
+      setActiveTextarea(null);
     };
 
-    if (isResizing || isTextareaResizing) {
+    if (isResizing) {
       document.addEventListener('mousemove', handleMouseMove);
       document.addEventListener('mouseup', handleMouseUp);
-      document.body.style.cursor = isTextareaResizing ? 'ns-resize' : 'nw-resize';
       document.body.style.userSelect = 'none';
+      document.body.style.cursor = 'nw-resize';
     }
 
     return () => {
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
+      document.body.style.userSelect = '';
+      document.body.style.cursor = '';
     };
-  }, [isResizing, isTextareaResizing, containerSize]);
+  }, [isResizing, activeTextarea]);
 
-  const handleCardResizeStart = (e) => {
-    e.preventDefault();
-    setIsResizing(true);
-  };
-
-  const handleTextareaResizeStart = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsTextareaResizing(true);
-  };
-
-  useEffect(() => {
-    const conversationId = context?.conversation?.id;
-    if (conversationId) {
-      loadCommentHistoryFromStorage(conversationId);
-      loadTaskResultsFromStorage(conversationId);
-    }
-  }, [context]);
-
-  useEffect(() => {
-    if (selectedFormat && selectedFormat !== 'custom') {
-      const selected = formatOptions.find(opt => opt.value === selectedFormat);
-      if (selected) {
-        setOutputFormat(selected.label.replace(/[📧•📊📄✅📋📅✏️{}]/g, '').trim());
-      }
-    }
-  }, [selectedFormat]);
-
+  // Function to combine instructions and output format for AirOps
   const createCombinedInstructions = () => {
     let combinedText = comment.trim();
     
-    if (mode === 'task') {
-      if (outputFormat.trim()) {
-        combinedText += `\n\nOutput Format: ${outputFormat.trim()}`;
-      }
-      
-      if (uploadedFile) {
-        combinedText += `\n\nReference File: ${uploadedFile.name} (${uploadedFile.type}, ${(uploadedFile.size / 1024).toFixed(1)}KB)`;
-        combinedText += `\nFile Content Preview: ${uploadedFile.preview || 'Binary file - see attachment'}`;
-      }
+    if (mode === 'task' && outputFormat.trim()) {
+      combinedText += `\n\nOutput Format: ${outputFormat.trim()}`;
     }
     
     return combinedText;
   };
 
-  // CREATE SINGLE NESTED PAYLOAD OBJECT
-  const createSinglePayload = (combinedInstructions, conversationData, taskId) => {
-    // Everything nested under ONE field so AirOps sees just one input
-    const singlePayload = {
-      request: {
-        instructions: combinedInstructions,
-        mode: mode,
-        context: {
-          type: context?.type,
-          conversation: conversationData,
-          user: context?.teammate
-        },
-        ...(taskId && { taskId: taskId }),
-        ...(uploadedFile && {
-          attachedFile: {
-            name: uploadedFile.name,
-            type: uploadedFile.type,
-            size: uploadedFile.size,
-            preview: uploadedFile.preview
-          }
-        })
-      }
-    };
-    
-    addDebugLog('📦 Created SINGLE nested payload object');
-    return singlePayload;
+  const handleResizeStart = (e, textareaRef) => {
+    e.preventDefault();
+    setIsResizing(true);
+    setActiveTextarea(textareaRef.current);
   };
 
-  const handleFileUpload = async (event) => {
-    const file = event.target.files[0];
-    if (!file) return;
-
-    if (file.size > 2 * 1024 * 1024) {
-      setStatus('File too large (max 2MB)');
-      return;
-    }
-
+  // Load history from Front conversation context (links)
+  const loadHistoryFromFrontContext = async () => {
     try {
-      const fileData = {
-        name: file.name,
-        type: file.type,
-        size: file.size,
-        lastModified: file.lastModified
-      };
-
-      if (file.type.startsWith('text/') || file.name.endsWith('.json') || file.name.endsWith('.csv')) {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          const content = e.target.result;
-          fileData.preview = content.substring(0, 500) + (content.length > 500 ? '...' : '');
-          setUploadedFile(fileData);
-          setStatus('File uploaded successfully');
-        };
-        reader.readAsText(file);
-      } else {
-        setUploadedFile(fileData);
-        setStatus('File uploaded successfully');
+      if (context && context.conversation) {
+        const messages = await context.listMessages();
+        const historyEntries = [];
+        
+        // Look for AirOps history links in conversation
+        messages.results.forEach(message => {
+          if (message.body && message.body.includes('AirOps Request:')) {
+            // Parse AirOps history from message body or links
+            const historyMatch = message.body.match(/AirOps Request: (.+)/);
+            if (historyMatch) {
+              historyEntries.push({
+                text: historyMatch[1],
+                timestamp: message.created_at,
+                user: message.author?.name || 'Unknown',
+                mode: message.body.includes('Task:') ? 'task' : 'email'
+              });
+            }
+          }
+        });
+        
+        setCommentHistory(historyEntries);
       }
     } catch (error) {
-      console.error('File upload error:', error);
-      setStatus('File upload failed');
+      console.error('Error loading history from Front:', error);
+      setCommentHistory([]);
     }
   };
 
-  const removeFile = () => {
-    setUploadedFile(null);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
-    setStatus('File removed');
-  };
-
-  const loadCommentHistoryFromStorage = (conversationId) => {
-    const storageKey = `airops-history-${conversationId}`;
+  // Save history to Front conversation context
+  const saveHistoryToFrontContext = async (entry) => {
     try {
-      const savedHistory = localStorage.getItem(storageKey);
-      if (savedHistory) {
-        setCommentHistory(JSON.parse(savedHistory));
+      if (context && context.conversation) {
+        const historyText = `AirOps Request: ${entry.text}${entry.mode === 'task' ? ` | Format: ${entry.outputFormat}` : ''}`;
+        
+        // Add as a link to the conversation
+        await context.addLink({
+          name: `AirOps ${entry.mode === 'email' ? 'Email' : 'Task'} Request`,
+          url: `https://app.airops.com/`, // Could link to specific workflow
+          description: historyText
+        });
+        
+        setStatus('Request saved to conversation!');
       }
-    } catch (e) {
-      console.error("Error loading history:", e);
-    }
-  };
-
-  const saveCommentHistoryToStorage = (conversationId, history) => {
-    const storageKey = `airops-history-${conversationId}`;
-    try {
-      localStorage.setItem(storageKey, JSON.stringify(history));
-    } catch (e) {
-      console.error("Error saving history:", e);
-    }
-  };
-
-  const loadTaskResultsFromStorage = (conversationId) => {
-    const storageKey = `airops-tasks-${conversationId}`;
-    try {
-      const savedTasks = localStorage.getItem(storageKey);
-      if (savedTasks) {
-        const tasks = JSON.parse(savedTasks);
-        setTaskResults(tasks);
+    } catch (error) {
+      console.error('Error saving to Front context:', error);
+      // Fallback to comment if link doesn't work
+      try {
+        await context.createComment({
+          body: `🤖 AirOps ${entry.mode === 'email' ? 'Email' : 'Task'} Request: ${entry.text}${entry.outputFormat ? ` | Format: ${entry.outputFormat}` : ''}`,
+          author_id: context.teammate?.id
+        });
+      } catch (commentError) {
+        console.error('Error adding comment:', commentError);
       }
-    } catch (e) {
-      console.error("Error loading task results:", e);
     }
   };
 
-  const saveTaskResultsToStorage = (conversationId, tasks) => {
-    const storageKey = `airops-tasks-${conversationId}`;
+  // Load task results from Front context
+  const loadTaskResultsFromFrontContext = async () => {
     try {
-      localStorage.setItem(storageKey, JSON.stringify(tasks));
-    } catch (e) {
-      console.error("Error saving task results:", e);
+      if (context && context.conversation) {
+        const messages = await context.listMessages();
+        const taskEntries = [];
+        
+        // Look for task results in conversation
+        messages.results.forEach(message => {
+          if (message.body && message.body.includes('AirOps Task Result:')) {
+            const taskMatch = message.body.match(/Task ID: (\w+)/);
+            if (taskMatch) {
+              taskEntries.push({
+                id: taskMatch[1],
+                status: 'completed',
+                result: message.body,
+                completedAt: message.created_at
+              });
+            }
+          }
+        });
+        
+        setTaskResults(taskEntries);
+      }
+    } catch (error) {
+      console.error('Error loading task results from Front:', error);
+      setTaskResults([]);
+    }
+  };
+
+  // Save task results to Front context
+  const saveTaskResultToFrontContext = async (task) => {
+    try {
+      if (context && context.conversation && task.result) {
+        await context.addLink({
+          name: `AirOps Task Result - ${task.outputFormat}`,
+          url: `https://app.airops.com/`, // Could link to specific task
+          description: `Task ID: ${task.id} | Result: ${task.result.substring(0, 200)}...`
+        });
+        
+        setStatus('Task result saved to conversation!');
+      }
+    } catch (error) {
+      console.error('Error saving task result to Front:', error);
     }
   };
 
@@ -327,24 +214,11 @@ function App() {
           );
           
           setTaskResults(updatedTasks);
-          const conversationId = context?.conversation?.id;
-          if (conversationId) {
-            saveTaskResultsToStorage(conversationId, updatedTasks);
-          }
           
-          // Add completion link to Front conversation
-          try {
-            if (context.addLink && context.conversation) {
-              const completedTask = updatedTasks.find(t => t.id === taskId);
-              const linkUrl = `https://app.airops.com/airops-2/workflows/84946/results?taskId=${taskId}`;
-              const linkName = `✅ AirOps Result: ${completedTask?.outputFormat || 'Task'} - Completed`;
-              
-              await context.addLink(linkUrl, linkName);
-              addDebugLog('🔗 Completion link added to Front conversation');
-            }
-          } catch (linkError) {
-            addDebugLog(`❌ Error adding completion link: ${linkError.message}`);
-            console.error('Error adding completion link to Front:', linkError);
+          // Save completed task to Front context
+          const completedTask = updatedTasks.find(task => task.id === taskId);
+          if (completedTask) {
+            await saveTaskResultToFrontContext(completedTask);
           }
           
           setPollingTasks(prev => {
@@ -353,7 +227,7 @@ function App() {
             return newSet;
           });
           
-          setStatus('Task completed!');
+          setStatus('Task completed and saved!');
         }
       }
     } catch (error) {
@@ -361,13 +235,13 @@ function App() {
     }
   };
 
-  const saveTaskResultsToStorage = (conversationId, tasks) => {
-    const storageKey = `airops-tasks-${conversationId}`;
-    try {
-      localStorage.setItem(storageKey, JSON.stringify(tasks));
-    } catch (e) {
-      console.error("Error saving task results:", e);
-    }
+  const copyToClipboard = (text) => {
+    navigator.clipboard.writeText(text).then(() => {
+      setStatus('Copied!');
+      setTimeout(() => setStatus(''), 1500);
+    }).catch(() => {
+      setStatus('Copy failed');
+    });
   };
 
   const insertIntoDraft = (content) => {
@@ -383,44 +257,30 @@ function App() {
       });
       setStatus('Draft created!');
     } else {
-      navigator.clipboard.writeText(content).then(() => {
-        setStatus('Copied to clipboard!');
-      }).catch(() => {
-        setStatus('Copy failed');
-      });
+      copyToClipboard(content);
     }
   };
 
   const processRequest = async () => {
-    // Prevent multiple calls
-    const now = Date.now();
-    if (isProcessingRef.current || (now - lastCallTimeRef.current) < 1000) {
-      addDebugLog('🚫 Prevented duplicate call');
-      return;
-    }
-
     if (!comment.trim()) {
       setStatus('Add instructions');
       return;
     }
 
-    if (mode === 'task' && !outputFormat.trim() && !selectedFormat) {
-      setStatus('Select or enter output format');
+    if (mode === 'task' && !outputFormat.trim()) {
+      setStatus('Add output format');
       return;
     }
     
-    // Set processing flags
-    isProcessingRef.current = true;
-    lastCallTimeRef.current = now;
     setIsSending(true);
     setStatus('Processing...');
-    addDebugLog('🚀 Starting webhook call');
     
     try {
       const taskId = mode === 'task' ? `task_${Date.now()}_${Math.random().toString(36).substr(2, 9)}` : null;
+      const callbackUrl = taskId ? `${window.location.origin}/api/task-callback` : null;
       
+      // Create combined instructions for AirOps workflow
       const combinedInstructions = createCombinedInstructions();
-      addDebugLog(`📝 Combined instructions: ${combinedInstructions.substring(0, 50)}...`);
       
       let conversationData = {};
       
@@ -439,35 +299,30 @@ function App() {
         try {
           const messages = await context.listMessages();
           conversationData.messages = messages.results;
-          addDebugLog(`📧 Loaded ${messages.results.length} messages`);
         } catch (err) {
-          addDebugLog(`❌ Error loading messages: ${err.message}`);
           console.error("Couldn't fetch messages:", err);
         }
         
         const newEntry = {
           text: comment,
           mode: mode,
-          outputFormat: outputFormat,
-          selectedFormat: selectedFormat,
-          hasFile: !!uploadedFile,
-          fileName: uploadedFile?.name,
+          outputFormat: mode === 'task' ? outputFormat : null,
           timestamp: new Date().toISOString(),
           user: context.teammate ? context.teammate.name : 'Unknown user'
         };
         
+        // Save to Front context instead of localStorage
+        await saveHistoryToFrontContext(newEntry);
+        
+        // Update local state
         const updatedHistory = [newEntry, ...commentHistory];
         setCommentHistory(updatedHistory);
-        saveCommentHistoryToStorage(conversationId, updatedHistory);
 
         if (mode === 'task' && taskId) {
           const newTask = {
             id: taskId,
             comment: comment,
             outputFormat: outputFormat,
-            selectedFormat: selectedFormat,
-            hasFile: !!uploadedFile,
-            fileName: uploadedFile?.name,
             status: 'pending',
             createdAt: new Date().toISOString(),
             user: context.teammate ? context.teammate.name : 'Unknown user'
@@ -475,41 +330,18 @@ function App() {
           
           const updatedTasks = [newTask, ...taskResults];
           setTaskResults(updatedTasks);
-          saveTaskResultsToStorage(conversationId, updatedTasks);
           
-          // Add link to Front conversation using addLink API
           try {
-            if (context.addLink && context.conversation) {
-              const linkUrl = `https://app.airops.com/airops-2/workflows/84946/edit?taskId=${taskId}`;
-              const linkName = `AirOps Task: ${outputFormat || selectedFormat || 'Processing'} ${uploadedFile ? '📎' : ''}`;
-              
-              await context.addLink(linkUrl, linkName);
-              addDebugLog('🔗 Link added to Front conversation');
-            } else {
-              addDebugLog('⚠️ addLink not available or no conversation context');
-            }
-          } catch (linkError) {
-            addDebugLog(`❌ Error adding link: ${linkError.message}`);
-            console.error('Error adding link to Front:', linkError);
+            await fetch('/api/store-task', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ taskId, task: newTask })
+            });
+          } catch (blobError) {
+            console.error('Error storing task in Netlify Blobs:', blobError);
           }
           
-          addDebugLog('💾 Task stored locally');
-        }
-        
-        // For email mode, also add a link
-        if (mode === 'email') {
-          try {
-            if (context.addLink && context.conversation) {
-              const linkUrl = `https://app.airops.com/airops-2/workflows/73407/edit`;
-              const linkName = `AirOps Email: ${combinedInstructions.substring(0, 30)}...`;
-              
-              await context.addLink(linkUrl, linkName);
-              addDebugLog('🔗 Email link added to Front conversation');
-            }
-          } catch (linkError) {
-            addDebugLog(`❌ Error adding email link: ${linkError.message}`);
-            console.error('Error adding email link to Front:', linkError);
-          }
+          setPollingTasks(prev => new Set([...prev, taskId]));
         }
       }
       
@@ -520,87 +352,47 @@ function App() {
         };
       }
       
+      if (context?.teammate) {
+        conversationData.teammate = context.teammate;
+      }
+      
       const webhookUrl = mode === 'email' ? EMAIL_WEBHOOK_URL : TASK_WEBHOOK_URL;
-      addDebugLog(`🎯 Using ${mode} webhook`);
       
-      // Try different payload approaches
-      const payloadApproaches = [
-        // Approach 1: Just the combined instructions (simplest)
-        combinedInstructions,
-        
-        // Approach 2: Single nested object  
-        createSinglePayload(combinedInstructions, conversationData, taskId),
-        
-        // Approach 3: Minimal object with just essentials
-        {
-          userComment: combinedInstructions,
-          mode: mode
-        }
-      ];
+      // Updated payload with combined instructions
+      const payload = {
+        frontData: conversationData,
+        contextType: context?.type,
+        userComment: combinedInstructions, // Combined instructions + output format
+        mode: mode,
+        ...(taskId && { taskId: taskId }),
+        ...(callbackUrl && { callbackUrl: callbackUrl })
+      };
       
-      let successfulResponse = null;
+      const response = await fetch(webhookUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
       
-      for (let i = 0; i < payloadApproaches.length; i++) {
-        try {
-          addDebugLog(`🔄 Trying payload approach ${i + 1}/${payloadApproaches.length}`);
-          console.log(`🧪 PAYLOAD APPROACH ${i + 1}:`, payloadApproaches[i]);
-          
-          const response = await fetch(webhookUrl, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(payloadApproaches[i])
-          });
-          
-          addDebugLog(`📈 Approach ${i + 1} response: ${response.status}`);
-          
-          if (response.ok) {
-            addDebugLog(`✅ Payload approach ${i + 1} worked!`);
-            successfulResponse = response;
-            break;
-          } else {
-            const errorText = await response.text();
-            addDebugLog(`❌ Approach ${i + 1} failed: ${response.status} - ${errorText.substring(0, 100)}`);
-            if (i === payloadApproaches.length - 1) {
-              throw new Error(`All payload approaches failed. Last error: ${response.status}: ${errorText}`);
-            }
-          }
-        } catch (error) {
-          addDebugLog(`💥 Approach ${i + 1} error: ${error.message}`);
-          if (i === payloadApproaches.length - 1) {
-            throw error;
-          }
-        }
+      if (!response.ok) {
+        throw new Error(`HTTP error ${response.status}`);
       }
       
-      if (successfulResponse) {
-        const responseData = await successfulResponse.text();
-        addDebugLog(`✅ Success: ${responseData.substring(0, 50)}...`);
-        
-        if (mode === 'email') {
-          setStatus('Email sent successfully!');
-        } else {
-          setStatus('Task created successfully!');
-        }
-        
-        setComment('');
-        setOutputFormat('');
-        setSelectedFormat('');
-        setUploadedFile(null);
-        if (fileInputRef.current) {
-          fileInputRef.current.value = '';
-        }
+      if (mode === 'email') {
+        setStatus('Sent and saved to conversation!');
+      } else {
+        setStatus('Task created and saved to conversation!');
       }
       
+      setComment('');
+      setOutputFormat('');
     } catch (error) {
-      console.error('❌ WEBHOOK ERROR:', error);
-      addDebugLog(`💥 Error: ${error.message}`);
+      console.error('Error:', error);
       setStatus('Error: ' + error.message);
     } finally {
       setIsSending(false);
-      isProcessingRef.current = false;
-      addDebugLog('🏁 Request completed');
     }
   };
 
@@ -609,501 +401,220 @@ function App() {
       const date = new Date(isoString);
       return date.toLocaleDateString(undefined, { 
         month: 'short', 
-        day: 'numeric'
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
       });
     } catch (e) {
       return isoString;
     }
   };
 
+  const toggleHistory = () => {
+    setShowHistory(!showHistory);
+  };
+
   if (!context) {
     return (
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        height: '200px',
-        fontSize: textSizes.base,
-        color: '#9ca3af'
-      }}>
-        Loading context...
-      </div> 
+      <div className="loading">
+        <div className="spinner"></div>
+      </div>
     );
   }
 
   if (context.type === 'messageComposer' && !context.conversation) {
     return (
-      <div style={{
-        padding: '16px',
-        fontSize: textSizes.base,
-        color: '#64748b',
-        textAlign: 'center'
-      }}>
-        Select a conversation to use this plugin
+      <div className="app">
+        <div className="card">
+          <div className="header">
+            <img src={AIROPS_LOGO_URL} alt="" className="logo" />
+            <span>Send to AirOps</span>
+          </div>
+          <div className="status">Select a conversation to use this plugin</div>
+        </div>
       </div>
     );
   }
 
   return (
-    <div 
-      ref={cardRef}
-      style={{
-        width: `${cardSize.width}px`,
-        height: `${cardSize.height}px`,
-        background: 'white',
-        border: '1px solid #e5e7eb',
-        borderRadius: '8px',
-        padding: '12px',
-        fontSize: textSizes.base,
-        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-        position: 'relative',
-        overflow: 'hidden',
-        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
-        display: 'flex',
-        flexDirection: 'column',
-        transition: 'width 0.2s ease, height 0.2s ease' // Smooth auto-resize
-      }}
-    >
-      {/* Header */}
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        marginBottom: '12px',
-        fontSize: textSizes.header,
-        fontWeight: '600',
-        color: '#111827'
-      }}>
-        <img 
-          src={AIROPS_LOGO_URL} 
-          alt="" 
-          style={{ width: '16px', height: '16px', marginRight: '8px' }}
-        />
-        <span>Send to AirOps</span>
-        <span style={{ 
-          marginLeft: 'auto', 
-          fontSize: textSizes.tiny, 
-          color: '#94a3b8',
-          fontWeight: 'normal'
-        }}>
-          {containerStyle} {cardSize.width}×{cardSize.height}
-        </span>
-      </div>
-
-      {/* Mode Tabs */}
-      <div style={{
-        display: 'flex',
-        marginBottom: '12px',
-        background: '#f1f5f9',
-        borderRadius: '6px',
-        padding: '2px'
-      }}>
-        <button 
-          onClick={() => setMode('email')}
-          style={{
-            flex: 1,
-            padding: '6px 12px',
-            border: 'none',
-            borderRadius: '4px',
-            fontSize: textSizes.base,
-            fontWeight: '500',
-            cursor: 'pointer',
-            background: mode === 'email' ? 'white' : 'transparent',
-            color: mode === 'email' ? '#1e293b' : '#64748b',
-            boxShadow: mode === 'email' ? '0 1px 2px rgba(0, 0, 0, 0.05)' : 'none'
-          }}
-        >
-          Email
-        </button>
-        <button 
-          onClick={() => setMode('task')}
-          style={{
-            flex: 1,
-            padding: '6px 12px',
-            border: 'none',
-            borderRadius: '4px',
-            fontSize: textSizes.base,
-            fontWeight: '500',
-            cursor: 'pointer',
-            background: mode === 'task' ? 'white' : 'transparent',
-            color: mode === 'task' ? '#1e293b' : '#64748b',
-            boxShadow: mode === 'task' ? '0 1px 2px rgba(0, 0, 0, 0.05)' : 'none'
-          }}
-        >
-          Task
-        </button>
-      </div>
-      
-      {/* Scrollable Content Area */}
-      <div style={{
-        flex: 1,
-        overflowY: 'auto',
-        paddingRight: '4px',
-        marginBottom: '12px'
-      }}>
-        {/* Instructions Textarea with drag resize */}
-        <div ref={textareaContainerRef} style={{ position: 'relative', marginBottom: '8px' }}>
-          <textarea
-            ref={textareaRef}
-            value={comment}
-            onChange={(e) => setComment(e.target.value)}
-            placeholder={mode === 'email' ? "How should we respond?" : "What do you need?"}
-            style={{
-              width: '100%',
-              height: `${textareaHeight}px`,
-              padding: '8px 12px',
-              border: '1px solid #d1d5db',
-              borderRadius: '6px',
-              fontSize: textSizes.base,
-              fontFamily: 'inherit',
-              resize: 'none',
-              transition: 'border-color 0.15s ease',
-              paddingBottom: '20px'
-            }}
-            onFocus={(e) => e.target.style.borderColor = '#6366f1'}
-            onBlur={(e) => e.target.style.borderColor = '#d1d5db'}
-          />
-          
-          {/* Textarea drag resize handle */}
-          <div
-            onMouseDown={handleTextareaResizeStart}
-            style={{
-              position: 'absolute',
-              bottom: '2px',
-              right: '8px',
-              left: '8px',
-              height: '12px',
-              cursor: 'ns-resize',
-              background: 'linear-gradient(90deg, transparent 30%, #d1d5db 30%, #d1d5db 35%, transparent 35%, transparent 65%, #d1d5db 65%, #d1d5db 70%, transparent 70%)',
-              backgroundSize: '8px 2px',
-              opacity: 0.3,
-              borderRadius: '0 0 4px 4px',
-              transition: 'opacity 0.2s ease',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}
-            onMouseEnter={(e) => e.target.style.opacity = '0.7'}
-            onMouseLeave={(e) => e.target.style.opacity = '0.3'}
-            title="Drag to resize"
-          >
-            <div style={{
-              width: '20px',
-              height: '3px',
-              background: '#9ca3af',
-              borderRadius: '2px'
-            }} />
-          </div>
+    <div className="app">
+      <div className="card">
+        <div className="header">
+          <img src={AIROPS_LOGO_URL} alt="" className="logo" />
+          <span>Send to AirOps</span>
         </div>
 
-        {/* Task Mode Controls */}
-        {mode === 'task' && (
-          <div style={{ marginBottom: '12px' }}>
-            <select
-              value={selectedFormat}
-              onChange={(e) => setSelectedFormat(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '8px 12px',
-                border: '1px solid #d1d5db',
-                borderRadius: '6px',
-                fontSize: textSizes.base,
-                fontFamily: 'inherit',
-                marginBottom: '8px',
-                background: 'white',
-                cursor: 'pointer'
-              }}
-            >
-              {formatOptions.map(option => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-
-            {selectedFormat === 'custom' && (
-              <input
-                type="text"
-                value={outputFormat}
-                onChange={(e) => setOutputFormat(e.target.value)}
-                placeholder="Enter custom format description..."
-                style={{
-                  width: '100%',
-                  padding: '8px 12px',
-                  border: '1px solid #d1d5db',
-                  borderRadius: '6px',
-                  fontSize: textSizes.base,
-                  fontFamily: 'inherit',
-                  marginBottom: '8px'
-                }}
-              />
-            )}
-
-            {/* File Upload */}
+        <div className="tabs">
+          <button 
+            className={mode === 'email' ? 'active' : ''}
+            onClick={() => setMode('email')}
+          >
+            Email
+          </button>
+          <button 
+            className={mode === 'task' ? 'active' : ''}
+            onClick={() => setMode('task')}
+          >
+            Task
+          </button>
+        </div>
+        
+        <div 
+          className={`textarea-container ${isResizing && activeTextarea === commentTextareaRef.current ? 'resizing' : ''}`}
+          onMouseEnter={() => setShowResizeOptions(true)}
+          onMouseLeave={() => setShowResizeOptions(false)}
+        >
+          <textarea
+            ref={commentTextareaRef}
+            value={comment}
+            onChange={(e) => setComment(e.target.value)}
+            placeholder={mode === 'email' 
+              ? "How should we respond?" 
+              : "What do you need?"
+            }
+            rows="2"
+            style={{ height: `${textareaHeight}px` }}
+          />
+          <div 
+            className={`resize-handle ${isResizing && activeTextarea === commentTextareaRef.current ? 'resizing' : ''}`}
+            onMouseDown={(e) => handleResizeStart(e, commentTextareaRef)}
+          />
+          
+          {/* Quick resize buttons */}
+          {showResizeOptions && (
             <div style={{
-              border: '1px dashed #d1d5db',
-              borderRadius: '6px',
-              padding: '12px',
-              textAlign: 'center',
-              background: '#fafafa'
+              position: 'absolute',
+              top: '-25px',
+              right: '0px',
+              display: 'flex',
+              gap: '2px',
+              background: 'rgba(255,255,255,0.9)',
+              padding: '2px',
+              borderRadius: '3px',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
             }}>
-              <input
-                ref={fileInputRef}
-                type="file"
-                onChange={handleFileUpload}
-                accept=".txt,.csv,.json,.doc,.docx,.pdf,.png,.jpg,.jpeg"
-                style={{ display: 'none' }}
-              />
-              
-              {!uploadedFile ? (
-                <div>
-                  <button
-                    onClick={() => fileInputRef.current?.click()}
-                    style={{
-                      background: 'none',
-                      border: 'none',
-                      color: '#6366f1',
-                      fontSize: textSizes.base,
-                      cursor: 'pointer',
-                      textDecoration: 'underline'
-                    }}
-                  >
-                    📎 Upload reference file
-                  </button>
-                  <div style={{ fontSize: textSizes.small, color: '#94a3b8', marginTop: '4px' }}>
-                    CSV, JSON, TXT, DOC, PDF, images (max 2MB)
-                  </div>
-                </div>
-              ) : (
-                <div>
-                  <div style={{ fontSize: textSizes.base, color: '#374151', marginBottom: '6px' }}>
-                    📎 {uploadedFile.name} ({(uploadedFile.size / 1024).toFixed(1)}KB)
-                  </div>
-                  <button
-                    onClick={removeFile}
-                    style={{
-                      background: '#ef4444',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '4px',
-                      fontSize: textSizes.small,
-                      padding: '4px 8px',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    Remove
-                  </button>
-                </div>
-              )}
+              <button
+                onClick={() => setTextareaHeight(32)}
+                style={{
+                  padding: '2px 6px',
+                  fontSize: '9px',
+                  border: 'none',
+                  borderRadius: '2px',
+                  background: textareaHeight === 32 ? '#6366f1' : '#64748b',
+                  color: 'white',
+                  cursor: 'pointer'
+                }}
+              >
+                S
+              </button>
+              <button
+                onClick={() => setTextareaHeight(60)}
+                style={{
+                  padding: '2px 6px',
+                  fontSize: '9px',
+                  border: 'none',
+                  borderRadius: '2px',
+                  background: textareaHeight === 60 ? '#6366f1' : '#64748b',
+                  color: 'white',
+                  cursor: 'pointer'
+                }}
+              >
+                M
+              </button>
+              <button
+                onClick={() => setTextareaHeight(100)}
+                style={{
+                  padding: '2px 6px',
+                  fontSize: '9px',
+                  border: 'none',
+                  borderRadius: '2px',
+                  background: textareaHeight === 100 ? '#6366f1' : '#64748b',
+                  color: 'white',
+                  cursor: 'pointer'
+                }}
+              >
+                L
+              </button>
             </div>
-          </div>
-        )}
+          )}
+        </div>
 
-        {/* Debug Log */}
-        {debugLog.length > 0 && (
-          <div style={{
-            background: '#f8fafc',
-            border: '1px solid #e2e8f0',
-            borderRadius: '4px',
-            padding: '6px',
-            marginBottom: '8px',
-            fontSize: textSizes.tiny,
-            maxHeight: '80px',
-            overflowY: 'auto'
-          }}>
-            <div style={{ fontWeight: '600', color: '#64748b', marginBottom: '2px' }}>
-              🔍 Debug Log:
-            </div>
-            {debugLog.map((log, index) => (
-              <div key={index} style={{ color: '#475569', marginBottom: '1px' }}>
-                {log}
+        {mode === 'task' && (
+          <input
+            type="text"
+            value={outputFormat}
+            onChange={(e) => setOutputFormat(e.target.value)}
+            placeholder="Output format (will be combined with instructions)"
+          />
+        )}
+        
+        <button
+          onClick={processRequest}
+          disabled={isSending}
+          className={`btn ${isSending ? 'loading' : ''}`}
+        >
+          {isSending ? '...' : 'Send'}
+        </button>
+        
+        {status && <div className="status">{status}</div>}
+
+        {/* Task Results */}
+        {taskResults.length > 0 && (
+          <div className="task-results">
+            <div className="task-header">Tasks ({taskResults.length})</div>
+            {taskResults.slice(0, 3).map((task) => (
+              <div key={task.id} className="task-item">
+                <div className="task-meta">
+                  <span className={`task-status ${task.status}`}>
+                    {task.status === 'pending' ? '⏳' : '✅'}
+                  </span>
+                  <span className="task-format">{task.outputFormat}</span>
+                  <span className="task-date">{formatDate(task.createdAt)}</span>
+                </div>
+                {task.result && (
+                  <div className="task-result">
+                    <div 
+                      className="task-content"
+                      dangerouslySetInnerHTML={{ __html: task.result }}
+                    />
+                    <button 
+                      onClick={() => insertIntoDraft(task.result.replace(/<[^>]*>/g, ''))}
+                      className="copy-btn"
+                    >
+                      Insert
+                    </button>
+                  </div>
+                )}
               </div>
             ))}
           </div>
         )}
-
-        {/* Results using Accordion */}
-        {(taskResults.length > 0 || commentHistory.length > 0) && (
-          <Accordion expandMode="multi">
-            {taskResults.length > 0 && (
-              <AccordionSection
-                id="tasks"
-                title={`Tasks (${taskResults.length})`}
-              >
-                <div>
-                  {taskResults.slice(0, 3).map((task) => (
-                    <div key={task.id} style={{
-                      background: '#f8fafc',
-                      border: '1px solid #f1f5f9',
-                      borderRadius: '6px',
-                      padding: '8px',
-                      marginBottom: '6px',
-                      fontSize: textSizes.small
-                    }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
-                        <span>{task.status === 'pending' ? '⏳' : '✅'}</span>
-                        <span style={{ flex: 1, color: '#475569', fontWeight: '500' }}>
-                          {task.selectedFormat ? formatOptions.find(f => f.value === task.selectedFormat)?.label || task.outputFormat : task.outputFormat}
-                          {task.hasFile && ' 📎'}
-                        </span>
-                        <span style={{ color: '#94a3b8', fontSize: textSizes.tiny }}>
-                          {formatDate(task.createdAt)}
-                        </span>
-                      </div>
-                      {task.result && (
-                        <div style={{ position: 'relative' }}>
-                          <div 
-                            style={{
-                              fontSize: textSizes.small,
-                              color: '#475569',
-                              background: 'white',
-                              padding: '6px',
-                              borderRadius: '4px',
-                              border: '1px solid #e2e8f0',
-                              maxHeight: '80px',
-                              overflow: 'auto'
-                            }}
-                            dangerouslySetInnerHTML={{ __html: task.result }}
-                          />
-                          <button 
-                            onClick={() => insertIntoDraft(task.result.replace(/<[^>]*>/g, ''))}
-                            style={{
-                              position: 'absolute',
-                              top: '2px',
-                              right: '2px',
-                              background: '#64748b',
-                              color: 'white',
-                              border: 'none',
-                              borderRadius: '3px',
-                              fontSize: textSizes.tiny,
-                              padding: '2px 6px',
-                              cursor: 'pointer'
-                            }}
-                          >
-                            Insert
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </AccordionSection>
-            )}
-
-            {commentHistory.length > 0 && (
-              <AccordionSection
-                id="history"
-                title={`History (${commentHistory.length})`}
-              >
-                <div style={{ maxHeight: '120px', overflowY: 'auto' }}>
-                  {commentHistory.slice(0, 3).map((entry, index) => (
-                    <div key={index} style={{
-                      padding: '6px',
-                      background: '#f8fafc',
-                      border: '1px solid #f1f5f9',
-                      borderRadius: '4px',
-                      marginBottom: '4px',
-                      fontSize: textSizes.small
-                    }}>
-                      <div style={{ 
-                        color: '#94a3b8', 
-                        marginBottom: '2px',
-                        fontSize: textSizes.tiny,
-                        fontWeight: '500'
-                      }}>
-                        {formatDate(entry.timestamp)} • {entry.mode === 'email' ? '✉️' : '📋'}
-                        {entry.hasFile && ' 📎'}
-                      </div>
-                      <div style={{ 
-                        color: '#475569', 
-                        lineHeight: 1.3,
-                        fontSize: textSizes.small
-                      }}>
-                        {entry.text}
-                      </div>
-                      {entry.outputFormat && (
-                        <div style={{ 
-                          fontSize: textSizes.tiny,
-                          color: '#94a3b8',
-                          fontStyle: 'italic',
-                          marginTop: '2px'
-                        }}>
-                          Format: {entry.selectedFormat ? formatOptions.find(f => f.value === entry.selectedFormat)?.label || entry.outputFormat : entry.outputFormat}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </AccordionSection>
-            )}
-          </Accordion>
-        )}
-      </div>
-
-      {/* Bottom Section - Send Button and Status */}
-      <div style={{
-        borderTop: '1px solid #f1f5f9',
-        paddingTop: '12px'
-      }}>
-        <button
-          onClick={processRequest}
-          disabled={isSending}
-          style={{
-            width: '100%',
-            background: isSending ? '#9ca3af' : '#1f2937',
-            color: 'white',
-            border: 'none',
-            borderRadius: '6px',
-            padding: '10px',
-            fontSize: textSizes.base,
-            fontWeight: '500',
-            cursor: isSending ? 'not-allowed' : 'pointer',
-            marginBottom: '8px',
-            transition: 'background-color 0.15s ease'
-          }}
-          onMouseEnter={(e) => {
-            if (!isSending) e.target.style.background = '#374151';
-          }}
-          onMouseLeave={(e) => {
-            if (!isSending) e.target.style.background = '#1f2937';
-          }}
-        >
-          {isSending ? 'Processing...' : 'Send'}
-        </button>
         
-        {status && (
-          <div style={{
-            padding: '6px 8px',
-            background: '#f8fafc',
-            border: '1px solid #e2e8f0',
-            borderRadius: '4px',
-            fontSize: textSizes.small,
-            color: '#64748b',
-            textAlign: 'center'
-          }}>
-            {status}
+        {/* History from Front Context */}
+        {commentHistory.length > 0 && (
+          <div className="history">
+            <button onClick={toggleHistory} className="history-btn">
+              {showHistory ? '−' : '+'} Conversation History ({commentHistory.length})
+            </button>
+            
+            {showHistory && (
+              <div className="history-items">
+                {commentHistory.slice(0, 5).map((entry, index) => (
+                  <div key={index} className="history-item">
+                    <div className="history-date">
+                      {formatDate(entry.timestamp)} • {entry.mode === 'email' ? '✉️' : '📋'} • {entry.user}
+                    </div>
+                    <div className="history-text">{entry.text}</div>
+                    {entry.outputFormat && (
+                      <div className="history-format">Format: {entry.outputFormat}</div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>
-
-      {/* Card Resize Handle */}
-      <div
-        onMouseDown={handleCardResizeStart}
-        style={{
-          position: 'absolute',
-          bottom: '2px',
-          right: '2px',
-          width: '14px',
-          height: '14px',
-          cursor: 'nw-resize',
-          background: 'linear-gradient(-45deg, transparent 30%, #9ca3af 30%, #9ca3af 35%, transparent 35%, transparent 65%, #9ca3af 65%, #9ca3af 70%, transparent 70%)',
-          backgroundSize: '4px 4px',
-          opacity: 0.4,
-          borderRadius: '0 0 6px 0',
-          transition: 'opacity 0.2s ease'
-        }}
-        onMouseEnter={(e) => e.target.style.opacity = '0.8'}
-        onMouseLeave={(e) => e.target.style.opacity = '0.4'}
-      />
     </div>
   );
 }
