@@ -387,36 +387,120 @@ function App() {
       const webhookUrl = mode === 'email' ? EMAIL_WEBHOOK_URL : TASK_WEBHOOK_URL;
       addDebugLog(`🎯 Using ${mode} webhook`);
       
-      // SINGLE PAYLOAD CONSTRUCTION
-      const payload = {
-        frontData: conversationData,
-        contextType: context?.type,
-        userComment: combinedInstructions,
-        mode: mode,
-        ...(taskId && { taskId: taskId }),
-        ...(uploadedFile && { 
-          fileReference: {
-            name: uploadedFile.name,
-            type: uploadedFile.type,
-            size: uploadedFile.size,
-            preview: uploadedFile.preview
-          }
-        })
-      };
+      // Try different payload structures for task vs email
+      let payload;
+      
+      if (mode === 'email') {
+        // Simple payload for email (we know this works)
+        payload = {
+          frontData: conversationData,
+          contextType: context?.type,
+          userComment: combinedInstructions,
+          mode: mode
+        };
+      } else {
+        // Try minimal task payload first (remove potentially problematic fields)
+        payload = {
+          frontData: conversationData,
+          contextType: context?.type,
+          userComment: combinedInstructions,
+          mode: mode
+          // Temporarily removing: taskId, callbackUrl, fileReference
+        };
+      }
       
       addDebugLog(`📦 Payload size: ${JSON.stringify(payload).length} chars`);
       console.log('🔍 EXACT PAYLOAD BEING SENT:', payload);
       console.log('🎯 WEBHOOK URL:', webhookUrl);
       
-      // SINGLE WEBHOOK CALL
+      // Also try a super minimal test payload for task
+      if (mode === 'task') {
+        const testPayload = {
+          userComment: combinedInstructions
+        };
+        console.log('🧪 MINIMAL TEST PAYLOAD:', testPayload);
+        addDebugLog(`🧪 Also trying minimal payload: ${JSON.stringify(testPayload).length} chars`);
+      }
+      
+      // SINGLE WEBHOOK CALL with fallback for tasks
       addDebugLog('📡 Making webhook call...');
-      const response = await fetch(webhookUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(payload)
-      });
+      
+      let response;
+      
+      if (mode === 'task') {
+        // Try multiple payload formats for task webhook
+        const payloadFormats = [
+          // Format 1: Full payload (original)
+          {
+            frontData: conversationData,
+            contextType: context?.type,
+            userComment: combinedInstructions,
+            mode: mode,
+            ...(taskId && { taskId: taskId }),
+            ...(uploadedFile && { 
+              fileReference: {
+                name: uploadedFile.name,
+                type: uploadedFile.type,
+                size: uploadedFile.size,
+                preview: uploadedFile.preview
+              }
+            })
+          },
+          // Format 2: Minimal payload (just the essentials)
+          {
+            userComment: combinedInstructions,
+            mode: mode
+          },
+          // Format 3: Match email format exactly
+          {
+            frontData: conversationData,
+            contextType: context?.type,
+            userComment: combinedInstructions,
+            mode: mode
+          }
+        ];
+        
+        for (let i = 0; i < payloadFormats.length; i++) {
+          try {
+            addDebugLog(`🔄 Trying task payload format ${i + 1}/${payloadFormats.length}`);
+            console.log(`🧪 TASK PAYLOAD FORMAT ${i + 1}:`, payloadFormats[i]);
+            
+            response = await fetch(webhookUrl, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify(payloadFormats[i])
+            });
+            
+            if (response.ok) {
+              addDebugLog(`✅ Task payload format ${i + 1} worked!`);
+              break;
+            } else {
+              addDebugLog(`❌ Format ${i + 1} failed: ${response.status}`);
+              if (i === payloadFormats.length - 1) {
+                // Last attempt failed
+                const errorText = await response.text();
+                throw new Error(`All payload formats failed. Last error: ${response.status}: ${errorText}`);
+              }
+            }
+          } catch (error) {
+            addDebugLog(`💥 Format ${i + 1} error: ${error.message}`);
+            if (i === payloadFormats.length - 1) {
+              throw error;
+            }
+          }
+        }
+      } else {
+        // Email mode - use working payload format
+        response = await fetch(webhookUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(payload)
+        });
+      }
       
       addDebugLog(`📈 Response status: ${response.status}`);
       
@@ -426,8 +510,8 @@ function App() {
         
         // Show specific error for 404
         if (response.status === 404) {
-          addDebugLog('🔍 404 Error - Check if AirOps workflow is active and URL is correct');
-          setStatus('AirOps workflow not found (404). Check if it\'s active.');
+          addDebugLog('🔍 404 Error - This suggests payload format issue for task webhook');
+          setStatus('Task webhook payload format issue (404). Check AirOps workflow input requirements.');
         } else {
           throw new Error(`HTTP error ${response.status}: ${errorText}`);
         }
@@ -436,9 +520,9 @@ function App() {
         addDebugLog(`✅ Success: ${responseData.substring(0, 50)}...`);
         
         if (mode === 'email') {
-          setStatus('Sent!');
+          setStatus('Email sent successfully!');
         } else {
-          setStatus('Task created! (Note: Polling disabled due to 404s)');
+          setStatus('Task created successfully!');
         }
       }
       
