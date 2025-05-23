@@ -1,28 +1,38 @@
-import { createContext, useContext, useEffect, useState } from 'react';
+import {createContext, useContext, useEffect, useState} from 'react';
 import Front from '@frontapp/plugin-sdk';
 
-// Context
+/*
+ * Context.
+ */
+
 export const FrontContext = createContext();
 
-// Hook
+/*
+ * Hook.
+ */
+
 export function useFrontContext() {
   return useContext(FrontContext);
 }
 
-// Component
-export const FrontContextProvider = ({ children }) => {
+/*
+ * Component.
+ */
+
+export const FrontContextProvider = ({children}) => {
   const [context, setContext] = useState();
 
   useEffect(() => {
     const subscription = Front.contextUpdates.subscribe(frontContext => {
+      console.log('Front context update:', frontContext);
       setContext(frontContext);
-    });
+    })
     return () => subscription.unsubscribe();
-  }, []);
+  }, [])
 
   return (
     <FrontContext.Provider value={context}>
-      {children}
+      {children}  
     </FrontContext.Provider>
-  );
-};
+  )
+}

@@ -1,5 +1,18 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useFrontContext } from './providers/frontContext';
+import { 
+  Button, 
+  ButtonGroup, 
+  Hoverable,
+  FormFieldContainer,
+  TextInput,
+  Icon,
+  Link,
+  ListItem,
+  Pill,
+  ShortcutHandler,
+  ShortcutEnums 
+} from '@frontapp/ui-kit';
 import './App.css';
 
 function App() {
@@ -14,27 +27,60 @@ function App() {
   const [taskResults, setTaskResults] = useState([]);
   const [pollingTasks, setPollingTasks] = useState(new Set());
   
+  // UI state
+  const [showResizeOptions, setShowResizeOptions] = useState(false);
+  const [textareaHeight, setTextareaHeight] = useState(40);
+  
   const EMAIL_WEBHOOK_URL = 'https://app.airops.com/public_api/airops_apps/73407/webhook_async_execute?auth_token=pxaMrQO7aOUSOXe6gSiLNz4cF1r-E9fOS4E378ws12BBD8SPt-OIVu500KEh';
   const TASK_WEBHOOK_URL = 'https://app.airops.com/public_api/airops_apps/84946/webhook_async_execute?auth_token=pxaMrQO7aOUSOXe6gSiLNz4cF1r-E9fOS4E378ws12BBD8SPt-OIVu500KEh';
   const AIROPS_LOGO_URL = 'https://app.ashbyhq.com/api/images/org-theme-logo/78d1f89f-3e5a-4a8b-b6b5-a91acb030fed/aba001ed-b5b5-4a1b-8bd6-dfb86392876e/d8e6228c-ea82-4061-b660-d7b6c502f155.png';
   
   useEffect(() => {
-    if (context && context.conversation && context.conversation.id) {
-      loadCommentHistoryFromStorage(context.conversation.id);
-      loadTaskResultsFromStorage(context.conversation.id);
+    const conversationId = context?.conversation?.id;
+    if (conversationId) {
+      loadCommentHistoryFromStorage(conversationId);
+      loadTaskResultsFromStorage(conversationId);
     }
   }, [context]);
 
-  // Polling for task updates
   useEffect(() => {
     if (pollingTasks.size > 0) {
       const interval = setInterval(() => {
         pollingTasks.forEach(taskId => checkTaskStatus(taskId));
-      }, 5000); // Poll every 5 seconds
-
+      }, 5000);
       return () => clearInterval(interval);
     }
   }, [pollingTasks]);
+
+  // Mode selection options
+  const modeOptions = [
+    { title: 'Email', value: 'email' },
+    { title: 'Task', value: 'task' }
+  ];
+
+  // Function to combine instructions and output format
+  const createCombinedInstructions = () => {
+    let combinedText = comment.trim();
+    
+    if (mode === 'task' && outputFormat.trim()) {
+      combinedText += `\n\nOutput Format: ${outputFormat.trim()}`;
+    }
+    
+    return combinedText;
+  };
+
+  // Keyboard shortcuts
+  const shortcutHandlers = {
+    [ShortcutEnums.ENTER]: () => {
+      if (comment.trim()) {
+        processRequest();
+      }
+    },
+    [ShortcutEnums.ESC]: () => {
+      setComment('');
+      setOutputFormat('');
+    }
+  };
 
   const loadCommentHistoryFromStorage = (conversationId) => {
     const storageKey = `airops-history-${conversationId}`;
@@ -68,7 +114,6 @@ function App() {
         const tasks = JSON.parse(savedTasks);
         setTaskResults(tasks);
         
-        // Resume polling for pending tasks
         const pendingTasks = tasks.filter(task => task.status === 'pending').map(task => task.id);
         if (pendingTasks.length > 0) {
           setPollingTasks(new Set(pendingTasks));
@@ -105,9 +150,11 @@ function App() {
           );
           
           setTaskResults(updatedTasks);
-          saveTaskResultsToStorage(context.conversation.id, updatedTasks);
+          const conversationId = context?.conversation?.id;
+          if (conversationId) {
+            saveTaskResultsToStorage(conversationId, updatedTasks);
+          }
           
-          // Remove from polling
           setPollingTasks(prev => {
             const newSet = new Set(prev);
             newSet.delete(taskId);
@@ -131,6 +178,23 @@ function App() {
     });
   };
 
+  const insertIntoDraft = (content) => {
+    if (context && context.draft && typeof context.insertTextIntoBody === 'function') {
+      context.insertTextIntoBody(content);
+      setStatus('Inserted into draft!');
+    } else if (context && typeof context.createDraft === 'function') {
+      context.createDraft({
+        content: {
+          body: content,
+          type: 'text'
+        }
+      });
+      setStatus('Draft created!');
+    } else {
+      copyToClipboard(content);
+    }
+  };
+
   const processRequest = async () => {
     if (!comment.trim()) {
       setStatus('Add instructions');
@@ -146,15 +210,15 @@ function App() {
     setStatus('Processing...');
     
     try {
-      // Generate task ID for task mode
       const taskId = mode === 'task' ? `task_${Date.now()}_${Math.random().toString(36).substr(2, 9)}` : null;
-      
-      // Include your Netlify callback URL in the payload for AirOps to callback to
       const callbackUrl = taskId ? `${window.location.origin}/api/task-callback` : null;
+      
+      // Create combined instructions for AirOps workflow
+      const combinedInstructions = createCombinedInstructions();
       
       let conversationData = {};
       
-      if (context.conversation) {
+      if (context?.conversation) {
         const conversationId = context.conversation.id;
         
         conversationData = {
@@ -185,7 +249,6 @@ function App() {
         setCommentHistory(updatedHistory);
         saveCommentHistoryToStorage(conversationId, updatedHistory);
 
-        // For task mode, create a pending task entry
         if (mode === 'task' && taskId) {
           const newTask = {
             id: taskId,
@@ -200,7 +263,6 @@ function App() {
           setTaskResults(updatedTasks);
           saveTaskResultsToStorage(conversationId, updatedTasks);
           
-          // Also save to Netlify Blobs for the callback function to access
           try {
             await fetch('/api/store-task', {
               method: 'POST',
@@ -211,32 +273,32 @@ function App() {
             console.error('Error storing task in Netlify Blobs:', blobError);
           }
           
-          // Start polling for this task
           setPollingTasks(prev => new Set([...prev, taskId]));
         }
       }
       
-      if (context.draft) {
+      if (context?.draft) {
         conversationData.draft = {
           body: context.draft.body,
           subject: context.draft.subject
         };
       }
       
-      if (context.teammate) {
+      if (context?.teammate) {
         conversationData.teammate = context.teammate;
       }
       
       const webhookUrl = mode === 'email' ? EMAIL_WEBHOOK_URL : TASK_WEBHOOK_URL;
       
+      // Updated payload with combined instructions
       const payload = {
         frontData: conversationData,
-        contextType: context.type,
-        userComment: comment,
+        contextType: context?.type,
+        userComment: combinedInstructions, // Combined instructions + output format
         mode: mode,
         ...(taskId && { taskId: taskId }),
-        ...(callbackUrl && { callbackUrl: callbackUrl }),
-        ...(mode === 'task' && { outputFormat: outputFormat })
+        ...(callbackUrl && { callbackUrl: callbackUrl })
+        // Note: Removed separate outputFormat field since it's now combined
       };
       
       const response = await fetch(webhookUrl, {
@@ -283,10 +345,31 @@ function App() {
     setShowHistory(!showHistory);
   };
 
+  // Resize options
+  const resizeOptions = [
+    { id: 'small', title: 'Small', onPress: () => setTextareaHeight(32) },
+    { id: 'medium', title: 'Medium', onPress: () => setTextareaHeight(60) },
+    { id: 'large', title: 'Large', onPress: () => setTextareaHeight(100) }
+  ];
+
   if (!context) {
     return (
       <div className="loading">
         <div className="spinner"></div>
+      </div>
+    );
+  }
+
+  if (context.type === 'messageComposer' && !context.conversation) {
+    return (
+      <div className="app">
+        <div className="card">
+          <div className="header">
+            <img src={AIROPS_LOGO_URL} alt="" className="logo" />
+            <span>Send to AirOps</span>
+          </div>
+          <div className="status">Select a conversation to use this plugin</div>
+        </div>
       </div>
     );
   }
@@ -299,54 +382,104 @@ function App() {
           <span>Send to AirOps</span>
         </div>
 
-        <div className="tabs">
-          <button 
-            className={mode === 'email' ? 'active' : ''}
-            onClick={() => setMode('email')}
-          >
-            Email
-          </button>
-          <button 
-            className={mode === 'task' ? 'active' : ''}
-            onClick={() => setMode('task')}
-          >
-            Task
-          </button>
+        {/* Mode Selection using ButtonGroup */}
+        <div style={{ marginBottom: '6px' }}>
+          <ButtonGroup
+            items={modeOptions}
+            value={mode}
+            onItemSelected={setMode}
+          />
         </div>
         
-        <textarea
-          value={comment}
-          onChange={(e) => setComment(e.target.value)}
-          placeholder={mode === 'email' 
-            ? "How should we respond?" 
-            : "What do you need?"
-          }
-          rows="2"
-        />
+        {/* Instructions Input with FormFieldContainer */}
+        <FormFieldContainer
+          label="Instructions"
+          hintMessage={mode === 'email' ? "How should we respond?" : "What do you need?"}
+        >
+          <div style={{ position: 'relative' }}>
+            <TextInput
+              value={comment}
+              onChangeText={setComment}
+              placeholder={mode === 'email' ? "How should we respond?" : "What do you need?"}
+              multiline={true}
+              style={{ 
+                height: `${textareaHeight}px`,
+                minHeight: '32px',
+                resize: 'none'
+              }}
+            />
+            
+            {/* Resize Controls using Hoverable */}
+            <Hoverable
+              onHoverIn={() => setShowResizeOptions(true)}
+              onHoverOut={() => setShowResizeOptions(false)}
+            >
+              <div style={{
+                position: 'absolute',
+                bottom: '2px',
+                right: '2px',
+                display: 'flex',
+                gap: '2px',
+                opacity: showResizeOptions ? 1 : 0.3,
+                transition: 'opacity 0.2s ease'
+              }}>
+                <Button
+                  title="S"
+                  onPress={() => setTextareaHeight(32)}
+                  style={{ padding: '2px 4px', fontSize: '8px' }}
+                />
+                <Button
+                  title="M"
+                  onPress={() => setTextareaHeight(60)}
+                  style={{ padding: '2px 4px', fontSize: '8px' }}
+                />
+                <Button
+                  title="L"
+                  onPress={() => setTextareaHeight(100)}
+                  style={{ padding: '2px 4px', fontSize: '8px' }}
+                />
+              </div>
+            </Hoverable>
+          </div>
+        </FormFieldContainer>
 
+        {/* Output Format Input (Task mode only) */}
         {mode === 'task' && (
-          <input
-            type="text"
-            value={outputFormat}
-            onChange={(e) => setOutputFormat(e.target.value)}
-            placeholder="Output format..."
-          />
+          <FormFieldContainer
+            label="Output Format"
+            hintMessage="Specify the desired format for the result"
+          >
+            <TextInput
+              value={outputFormat}
+              onChangeText={setOutputFormat}
+              placeholder="e.g., Bullet points, Email draft, JSON..."
+              iconLeft={{ name: 'tag' }}
+            />
+          </FormFieldContainer>
         )}
         
-        <button
-          onClick={processRequest}
+        {/* Send Button */}
+        <Button
+          title={isSending ? 'Processing...' : 'Send'}
+          onPress={processRequest}
           disabled={isSending}
-          className={`btn ${isSending ? 'loading' : ''}`}
-        >
-          {isSending ? '...' : 'Send'}
-        </button>
+          type="primary"
+          style={{ marginBottom: '4px' }}
+        />
         
-        {status && <div className="status">{status}</div>}
+        {/* Status */}
+        {status && (
+          <div className="status">
+            <Pill title={status} />
+          </div>
+        )}
 
         {/* Task Results */}
         {taskResults.length > 0 && (
           <div className="task-results">
-            <div className="task-header">Tasks ({taskResults.length})</div>
+            <div className="task-header">
+              <Icon name="bullets-list" /> Tasks ({taskResults.length})
+            </div>
             {taskResults.slice(0, 3).map((task) => (
               <div key={task.id} className="task-item">
                 <div className="task-meta">
@@ -362,12 +495,11 @@ function App() {
                       className="task-content"
                       dangerouslySetInnerHTML={{ __html: task.result }}
                     />
-                    <button 
-                      onClick={() => copyToClipboard(task.result.replace(/<[^>]*>/g, ''))}
-                      className="copy-btn"
-                    >
-                      Copy
-                    </button>
+                    <Button
+                      title="Insert"
+                      onPress={() => insertIntoDraft(task.result.replace(/<[^>]*>/g, ''))}
+                      style={{ position: 'absolute', top: '2px', right: '2px' }}
+                    />
                   </div>
                 )}
               </div>
@@ -375,11 +507,15 @@ function App() {
           </div>
         )}
         
+        {/* History */}
         {commentHistory.length > 0 && (
           <div className="history">
-            <button onClick={toggleHistory} className="history-btn">
-              {showHistory ? '−' : '+'} {commentHistory.length}
-            </button>
+            <ListItem
+              id="history-toggle"
+              title={`${showHistory ? '−' : '+'} History (${commentHistory.length})`}
+              onPress={toggleHistory}
+              leftComponent={<Icon name="calendar" />}
+            />
             
             {showHistory && (
               <div className="history-items">
@@ -398,6 +534,12 @@ function App() {
             )}
           </div>
         )}
+
+        {/* Keyboard Shortcuts Handler */}
+        <ShortcutHandler
+          handlers={shortcutHandlers}
+          hidden={true}
+        />
       </div>
     </div>
   );
