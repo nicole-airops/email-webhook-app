@@ -165,7 +165,7 @@ function App() {
   useEffect(() => {
     const conversationId = context?.conversation?.id;
     if (conversationId) {
-      loadHistoryFromFrontContext();
+      loadHistoryFromNetlify(conversationId);
       loadTaskResultsFromFrontContext();
     }
   }, [context]);
@@ -438,67 +438,38 @@ function App() {
     setStatus('File removed');
   };
 
-  // Load history from Front conversation context (links/comments)
-  const loadHistoryFromFrontContext = async () => {
+  // Load history from Netlify Blobs storage
+  const loadHistoryFromNetlify = async (conversationId) => {
     try {
-      if (context && context.conversation) {
-        const messages = await context.listMessages();
-        const historyEntries = [];
-        
-        // Look for AirOps history links/comments in conversation
-        messages.results.forEach(message => {
-          if (message.body && (message.body.includes('🤖 AirOps') || message.body.includes('AirOps Request:'))) {
-            // Parse AirOps history from message body
-            const historyMatch = message.body.match(/AirOps (?:Email|Task) Request: (.+?)(?:\s*\|\s*Format: (.+?))?$/);
-            if (historyMatch) {
-              historyEntries.push({
-                text: historyMatch[1],
-                outputFormat: historyMatch[2] || '',
-                timestamp: message.created_at,
-                user: message.author?.name || 'Unknown',
-                mode: message.body.includes('Task') ? 'task' : 'email'
-              });
-            }
-          }
-        });
-        
-        setCommentHistory(historyEntries);
+      const response = await fetch(`/api/get-conversation-history?conversationId=${conversationId}`);
+      if (response.ok) {
+        const { history } = await response.json();
+        setCommentHistory(history || []);
+      } else {
+        setCommentHistory([]);
       }
     } catch (error) {
-      console.error('Error loading history from Front:', error);
+      console.error('Error loading history from Netlify:', error);
       setCommentHistory([]);
     }
   };
 
-  // Save history to Front conversation context
-  const saveHistoryToFrontContext = async (entry) => {
+  // Save history to Netlify Blobs storage
+  const saveHistoryToNetlify = async (conversationId, entry) => {
     try {
-      if (context && context.conversation) {
-        const historyText = `🤖 AirOps ${entry.mode === 'email' ? 'Email' : 'Task'} Request: ${entry.text}${entry.outputFormat ? ` | Format: ${entry.outputFormat}` : ''}${entry.hasFile ? ' | File: ' + entry.fileName : ''}`;
-        
-        // Try to add as a link first
-        try {
-          await context.addLink({
-            name: `AirOps ${entry.mode === 'email' ? 'Email' : 'Task'} Request`,
-            url: `https://app.airops.com/`,
-            description: historyText
-          });
-          
-        } catch (linkError) {
-          // Fallback to comment if link doesn't work
-          console.warn('Link creation failed, trying comment:', linkError);
-          
-          await context.createComment({
-            body: historyText,
-            author_id: context.teammate?.id
-          });
-          
-        }
-        
-        setStatus('Request saved to conversation!');
+      const response = await fetch('/api/save-conversation-history', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ conversationId, entry })
+      });
+      
+      if (response.ok) {
+        setStatus('Request saved!');
+      } else {
+        console.error('Failed to save history to Netlify');
       }
     } catch (error) {
-      console.error('Error saving to Front context:', error);
+      console.error('Error saving to Netlify:', error);
     }
   };
 
@@ -632,8 +603,10 @@ function App() {
       // Create COMPLETE nested payload with ALL context
       const completePayload = await createCompletePayload(combinedInstructions, taskId);
       
-      // Save request to Front context first
+      // Save request to Netlify storage
       if (context?.conversation) {
+        const conversationId = context.conversation.id;
+        
         const newEntry = {
           text: comment,
           mode: mode,
@@ -645,8 +618,8 @@ function App() {
           user: context.teammate ? context.teammate.name : 'Unknown user'
         };
         
-        // Save to Front context
-        await saveHistoryToFrontContext(newEntry);
+        // Save to Netlify storage
+        await saveHistoryToNetlify(conversationId, newEntry);
         
         // Update local state
         const updatedHistory = [newEntry, ...commentHistory];
@@ -702,9 +675,9 @@ function App() {
       const responseData = await response.json();
       
       if (mode === 'email') {
-        setStatus('Email sent and saved to conversation!');
+        setStatus('Email sent successfully!');
       } else {
-        setStatus('Task created and saved to conversation!');
+        setStatus('Task created successfully!');
       }
       
       setComment('');
@@ -1089,7 +1062,7 @@ function App() {
             {commentHistory.length > 0 && (
               <AccordionSection
                 id="history"
-                title={`History (${commentHistory.length})`}
+                title={`Plugin History (${commentHistory.length})`}
               >
                 <div style={{ maxHeight: '120px', overflowY: 'auto' }}>
                   {commentHistory.slice(0, 3).map((entry, index) => (
