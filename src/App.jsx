@@ -15,9 +15,14 @@ function App() {
   const [commentHistory, setCommentHistory] = useState([]);
   const [taskResults, setTaskResults] = useState([]);
   const [pollingTasks, setPollingTasks] = useState(new Set());
+  const [debugLog, setDebugLog] = useState([]);
+  
+  // Prevent multiple calls
+  const isProcessingRef = useRef(false);
+  const lastCallTimeRef = useRef(0);
   
   // Resize state
-  const [cardSize, setCardSize] = useState({ width: 360, height: 480 });
+  const [cardSize, setCardSize] = useState({ width: 340, height: 420 });
   const [isResizing, setIsResizing] = useState(false);
   const [textareaHeight, setTextareaHeight] = useState(60);
   const cardRef = useRef(null);
@@ -42,9 +47,30 @@ function App() {
     { value: 'custom', label: '✏️ Custom Format' }
   ];
 
-  // Adaptive text size based on card size
+  // Add debug logging
+  const addDebugLog = (message) => {
+    const timestamp = new Date().toLocaleTimeString();
+    setDebugLog(prev => [`${timestamp}: ${message}`, ...prev.slice(0, 4)]);
+  };
+
+  // Detect if we're in composer or sidebar
+  const isComposer = context?.type === 'messageComposer';
+  const containerStyle = isComposer ? 'composer' : 'sidebar';
+
+  // Adaptive sizing based on context
+  const getContainerSize = () => {
+    if (isComposer) {
+      return { width: Math.min(380, cardSize.width), height: Math.min(500, cardSize.height) };
+    } else {
+      return { width: Math.min(340, cardSize.width), height: Math.min(600, cardSize.height) };
+    }
+  };
+
+  const containerSize = getContainerSize();
+
+  // Adaptive text size
   const getAdaptiveTextSize = () => {
-    const baseSize = Math.max(11, Math.min(14, cardSize.width / 30));
+    const baseSize = Math.max(11, Math.min(14, containerSize.width / 28));
     return {
       base: `${baseSize}px`,
       small: `${baseSize - 1}px`,
@@ -61,8 +87,8 @@ function App() {
       if (!isResizing) return;
       
       const rect = cardRef.current.getBoundingClientRect();
-      const newWidth = Math.max(320, e.clientX - rect.left);
-      const newHeight = Math.max(400, e.clientY - rect.top);
+      const newWidth = Math.max(300, e.clientX - rect.left);
+      const newHeight = Math.max(350, e.clientY - rect.top);
       
       setCardSize({ width: newWidth, height: newHeight });
     };
@@ -86,6 +112,11 @@ function App() {
     };
   }, [isResizing]);
 
+  const handleResizeStart = (e) => {
+    e.preventDefault();
+    setIsResizing(true);
+  };
+
   // Textarea resize functionality
   const handleTextareaResize = (direction) => {
     const increment = 20;
@@ -94,11 +125,6 @@ function App() {
     } else {
       setTextareaHeight(prev => Math.min(200, prev + increment));
     }
-  };
-
-  const handleResizeStart = (e) => {
-    e.preventDefault();
-    setIsResizing(true);
   };
 
   useEffect(() => {
@@ -291,6 +317,13 @@ function App() {
   };
 
   const processRequest = async () => {
+    // Prevent multiple calls
+    const now = Date.now();
+    if (isProcessingRef.current || (now - lastCallTimeRef.current) < 1000) {
+      addDebugLog('🚫 Prevented duplicate call');
+      return;
+    }
+
     if (!comment.trim()) {
       setStatus('Add instructions');
       return;
@@ -301,14 +334,19 @@ function App() {
       return;
     }
     
+    // Set processing flags
+    isProcessingRef.current = true;
+    lastCallTimeRef.current = now;
     setIsSending(true);
     setStatus('Processing...');
+    addDebugLog('🚀 Starting webhook call');
     
     try {
       const taskId = mode === 'task' ? `task_${Date.now()}_${Math.random().toString(36).substr(2, 9)}` : null;
       const callbackUrl = taskId ? `${window.location.origin}/api/task-callback` : null;
       
       const combinedInstructions = createCombinedInstructions();
+      addDebugLog(`📝 Combined instructions: ${combinedInstructions.substring(0, 50)}...`);
       
       let conversationData = {};
       
@@ -327,7 +365,9 @@ function App() {
         try {
           const messages = await context.listMessages();
           conversationData.messages = messages.results;
+          addDebugLog(`📧 Loaded ${messages.results.length} messages`);
         } catch (err) {
+          addDebugLog(`❌ Error loading messages: ${err.message}`);
           console.error("Couldn't fetch messages:", err);
         }
         
@@ -369,7 +409,9 @@ function App() {
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ taskId, task: newTask })
             });
+            addDebugLog('💾 Task stored in Netlify');
           } catch (blobError) {
+            addDebugLog(`❌ Error storing task: ${blobError.message}`);
             console.error('Error storing task in Netlify Blobs:', blobError);
           }
           
@@ -389,7 +431,9 @@ function App() {
       }
       
       const webhookUrl = mode === 'email' ? EMAIL_WEBHOOK_URL : TASK_WEBHOOK_URL;
+      addDebugLog(`🎯 Using ${mode} webhook`);
       
+      // SINGLE PAYLOAD CONSTRUCTION
       const payload = {
         frontData: conversationData,
         contextType: context?.type,
@@ -407,6 +451,11 @@ function App() {
         })
       };
       
+      addDebugLog(`📦 Payload size: ${JSON.stringify(payload).length} chars`);
+      console.log('🔍 EXACT PAYLOAD BEING SENT:', payload);
+      
+      // SINGLE WEBHOOK CALL
+      addDebugLog('📡 Making webhook call...');
       const response = await fetch(webhookUrl, {
         method: 'POST',
         headers: {
@@ -415,9 +464,16 @@ function App() {
         body: JSON.stringify(payload)
       });
       
+      addDebugLog(`📈 Response status: ${response.status}`);
+      
       if (!response.ok) {
-        throw new Error(`HTTP error ${response.status}`);
+        const errorText = await response.text();
+        addDebugLog(`❌ Webhook error: ${errorText}`);
+        throw new Error(`HTTP error ${response.status}: ${errorText}`);
       }
+      
+      const responseData = await response.text();
+      addDebugLog(`✅ Success: ${responseData.substring(0, 50)}...`);
       
       if (mode === 'email') {
         setStatus('Sent!');
@@ -433,10 +489,13 @@ function App() {
         fileInputRef.current.value = '';
       }
     } catch (error) {
-      console.error('Error:', error);
+      console.error('❌ WEBHOOK ERROR:', error);
+      addDebugLog(`💥 Error: ${error.message}`);
       setStatus('Error: ' + error.message);
     } finally {
       setIsSending(false);
+      isProcessingRef.current = false;
+      addDebugLog('🏁 Request completed');
     }
   };
 
@@ -484,8 +543,8 @@ function App() {
     <div 
       ref={cardRef}
       style={{
-        width: `${cardSize.width}px`,
-        height: `${cardSize.height}px`,
+        width: `${containerSize.width}px`,
+        height: `${containerSize.height}px`,
         background: 'white',
         border: '1px solid #e5e7eb',
         borderRadius: '8px',
@@ -514,6 +573,14 @@ function App() {
           style={{ width: '16px', height: '16px', marginRight: '8px' }}
         />
         <span>Send to AirOps</span>
+        <span style={{ 
+          marginLeft: 'auto', 
+          fontSize: textSizes.tiny, 
+          color: '#94a3b8',
+          fontWeight: 'normal'
+        }}>
+          {containerStyle}
+        </span>
       </div>
 
       {/* Mode Tabs */}
@@ -584,7 +651,7 @@ function App() {
               fontFamily: 'inherit',
               resize: 'none',
               transition: 'border-color 0.15s ease',
-              paddingBottom: '24px' // Make room for resize controls
+              paddingBottom: '28px'
             }}
             onFocus={(e) => e.target.style.borderColor = '#6366f1'}
             onBlur={(e) => e.target.style.borderColor = '#d1d5db'}
@@ -731,6 +798,29 @@ function App() {
                 </div>
               )}
             </div>
+          </div>
+        )}
+
+        {/* Debug Log */}
+        {debugLog.length > 0 && (
+          <div style={{
+            background: '#f8fafc',
+            border: '1px solid #e2e8f0',
+            borderRadius: '4px',
+            padding: '6px',
+            marginBottom: '8px',
+            fontSize: textSizes.tiny,
+            maxHeight: '80px',
+            overflowY: 'auto'
+          }}>
+            <div style={{ fontWeight: '600', color: '#64748b', marginBottom: '2px' }}>
+              🔍 Debug Log:
+            </div>
+            {debugLog.map((log, index) => (
+              <div key={index} style={{ color: '#475569', marginBottom: '1px' }}>
+                {log}
+              </div>
+            ))}
           </div>
         )}
 
