@@ -21,15 +21,18 @@ function App() {
   const isProcessingRef = useRef(false);
   const lastCallTimeRef = useRef(0);
   
-  // Resize state
+  // Auto-resize state
   const [cardSize, setCardSize] = useState({ width: 340, height: 420 });
   const [isResizing, setIsResizing] = useState(false);
   const [textareaHeight, setTextareaHeight] = useState(60);
   const [isTextareaResizing, setIsTextareaResizing] = useState(false);
+  const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
+  
   const cardRef = useRef(null);
   const textareaRef = useRef(null);
   const textareaContainerRef = useRef(null);
   const fileInputRef = useRef(null);
+  const containerRef = useRef(null);
   
   const EMAIL_WEBHOOK_URL = 'https://app.airops.com/public_api/airops_apps/73407/webhook_async_execute?auth_token=pxaMrQO7aOUSOXe6gSiLNz4cF1r-E9fOS4E378ws12BBD8SPt-OIVu500KEh';
   const TASK_WEBHOOK_URL = 'https://app.airops.com/public_api/airops_apps/84946/webhook_async_execute?auth_token=pxaMrQO7aOUSOXe6gSiLNz4cF1r-E9fOS4E378ws12BBD8SPt-OIVu500KEh';
@@ -55,24 +58,54 @@ function App() {
     setDebugLog(prev => [`${timestamp}: ${message}`, ...prev.slice(0, 4)]);
   };
 
+  // Detect container size changes (sidebar resize)
+  useEffect(() => {
+    const observeContainerSize = () => {
+      if (!cardRef.current) return;
+      
+      const parent = cardRef.current.parentElement;
+      if (!parent) return;
+      
+      const updateSize = () => {
+        const rect = parent.getBoundingClientRect();
+        setContainerSize({ width: rect.width, height: rect.height });
+        
+        // Auto-adjust card size to fit container with padding
+        const maxWidth = Math.max(320, rect.width - 40);
+        const maxHeight = Math.max(400, rect.height - 40);
+        
+        setCardSize(prev => ({
+          width: Math.min(prev.width, maxWidth),
+          height: Math.min(prev.height, maxHeight)
+        }));
+      };
+      
+      // Initial size
+      updateSize();
+      
+      // Use ResizeObserver if available
+      if (window.ResizeObserver) {
+        const resizeObserver = new ResizeObserver(updateSize);
+        resizeObserver.observe(parent);
+        return () => resizeObserver.disconnect();
+      } else {
+        // Fallback to window resize
+        window.addEventListener('resize', updateSize);
+        return () => window.removeEventListener('resize', updateSize);
+      }
+    };
+    
+    const cleanup = observeContainerSize();
+    return cleanup;
+  }, []);
+
   // Detect if we're in composer or sidebar
   const isComposer = context?.type === 'messageComposer';
   const containerStyle = isComposer ? 'composer' : 'sidebar';
 
-  // Adaptive sizing based on context
-  const getContainerSize = () => {
-    if (isComposer) {
-      return { width: Math.min(380, cardSize.width), height: Math.min(500, cardSize.height) };
-    } else {
-      return { width: Math.min(340, cardSize.width), height: Math.min(600, cardSize.height) };
-    }
-  };
-
-  const containerSize = getContainerSize();
-
-  // Adaptive text size
+  // Adaptive text size based on card size
   const getAdaptiveTextSize = () => {
-    const baseSize = Math.max(11, Math.min(14, containerSize.width / 28));
+    const baseSize = Math.max(11, Math.min(14, cardSize.width / 28));
     return {
       base: `${baseSize}px`,
       small: `${baseSize - 1}px`,
@@ -83,13 +116,13 @@ function App() {
 
   const textSizes = getAdaptiveTextSize();
 
-  // Card resize functionality
+  // Manual resize functionality
   useEffect(() => {
     const handleMouseMove = (e) => {
       if (isResizing && !isTextareaResizing) {
         const rect = cardRef.current.getBoundingClientRect();
-        const newWidth = Math.max(300, e.clientX - rect.left);
-        const newHeight = Math.max(350, e.clientY - rect.top);
+        const newWidth = Math.max(300, Math.min(containerSize.width - 20, e.clientX - rect.left));
+        const newHeight = Math.max(350, Math.min(containerSize.height - 20, e.clientY - rect.top));
         setCardSize({ width: newWidth, height: newHeight });
       }
       
@@ -118,7 +151,7 @@ function App() {
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [isResizing, isTextareaResizing]);
+  }, [isResizing, isTextareaResizing, containerSize]);
 
   const handleCardResizeStart = (e) => {
     e.preventDefault();
@@ -138,16 +171,6 @@ function App() {
       loadTaskResultsFromStorage(conversationId);
     }
   }, [context]);
-
-  // Remove polling for now since the endpoints are 404ing
-  // useEffect(() => {
-  //   if (pollingTasks.size > 0) {
-  //     const interval = setInterval(() => {
-  //       pollingTasks.forEach(taskId => checkTaskStatus(taskId));
-  //     }, 5000);
-  //     return () => clearInterval(interval);
-  //   }
-  // }, [pollingTasks]);
 
   useEffect(() => {
     if (selectedFormat && selectedFormat !== 'custom') {
@@ -173,6 +196,34 @@ function App() {
     }
     
     return combinedText;
+  };
+
+  // CREATE SINGLE NESTED PAYLOAD OBJECT
+  const createSinglePayload = (combinedInstructions, conversationData, taskId) => {
+    // Everything nested under ONE field so AirOps sees just one input
+    const singlePayload = {
+      request: {
+        instructions: combinedInstructions,
+        mode: mode,
+        context: {
+          type: context?.type,
+          conversation: conversationData,
+          user: context?.teammate
+        },
+        ...(taskId && { taskId: taskId }),
+        ...(uploadedFile && {
+          attachedFile: {
+            name: uploadedFile.name,
+            type: uploadedFile.type,
+            size: uploadedFile.size,
+            preview: uploadedFile.preview
+          }
+        })
+      }
+    };
+    
+    addDebugLog('📦 Created SINGLE nested payload object');
+    return singlePayload;
   };
 
   const handleFileUpload = async (event) => {
@@ -250,6 +301,63 @@ function App() {
       }
     } catch (e) {
       console.error("Error loading task results:", e);
+    }
+  };
+
+  const saveTaskResultsToStorage = (conversationId, tasks) => {
+    const storageKey = `airops-tasks-${conversationId}`;
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(tasks));
+    } catch (e) {
+      console.error("Error saving task results:", e);
+    }
+  };
+
+  const checkTaskStatus = async (taskId) => {
+    try {
+      const response = await fetch(`/api/task-status?taskId=${taskId}`);
+      if (response.ok) {
+        const result = await response.json();
+        
+        if (result.status === 'completed') {
+          const updatedTasks = taskResults.map(task => 
+            task.id === taskId 
+              ? { ...task, status: 'completed', result: result.data, completedAt: result.completedAt }
+              : task
+          );
+          
+          setTaskResults(updatedTasks);
+          const conversationId = context?.conversation?.id;
+          if (conversationId) {
+            saveTaskResultsToStorage(conversationId, updatedTasks);
+          }
+          
+          // Add completion link to Front conversation
+          try {
+            if (context.addLink && context.conversation) {
+              const completedTask = updatedTasks.find(t => t.id === taskId);
+              const linkUrl = `https://app.airops.com/airops-2/workflows/84946/results?taskId=${taskId}`;
+              const linkName = `✅ AirOps Result: ${completedTask?.outputFormat || 'Task'} - Completed`;
+              
+              await context.addLink(linkUrl, linkName);
+              addDebugLog('🔗 Completion link added to Front conversation');
+            }
+          } catch (linkError) {
+            addDebugLog(`❌ Error adding completion link: ${linkError.message}`);
+            console.error('Error adding completion link to Front:', linkError);
+          }
+          
+          setPollingTasks(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(taskId);
+            return newSet;
+          });
+          
+          setStatus('Task completed!');
+        }
+      }
+    } catch (error) {
+      console.error('Error checking task status:', error);
     }
   };
 
@@ -369,7 +477,39 @@ function App() {
           setTaskResults(updatedTasks);
           saveTaskResultsToStorage(conversationId, updatedTasks);
           
-          addDebugLog('💾 Task stored locally (skipping Netlify due to 404s)');
+          // Add link to Front conversation using addLink API
+          try {
+            if (context.addLink && context.conversation) {
+              const linkUrl = `https://app.airops.com/airops-2/workflows/84946/edit?taskId=${taskId}`;
+              const linkName = `AirOps Task: ${outputFormat || selectedFormat || 'Processing'} ${uploadedFile ? '📎' : ''}`;
+              
+              await context.addLink(linkUrl, linkName);
+              addDebugLog('🔗 Link added to Front conversation');
+            } else {
+              addDebugLog('⚠️ addLink not available or no conversation context');
+            }
+          } catch (linkError) {
+            addDebugLog(`❌ Error adding link: ${linkError.message}`);
+            console.error('Error adding link to Front:', linkError);
+          }
+          
+          addDebugLog('💾 Task stored locally');
+        }
+        
+        // For email mode, also add a link
+        if (mode === 'email') {
+          try {
+            if (context.addLink && context.conversation) {
+              const linkUrl = `https://app.airops.com/airops-2/workflows/73407/edit`;
+              const linkName = `AirOps Email: ${combinedInstructions.substring(0, 30)}...`;
+              
+              await context.addLink(linkUrl, linkName);
+              addDebugLog('🔗 Email link added to Front conversation');
+            }
+          } catch (linkError) {
+            addDebugLog(`❌ Error adding email link: ${linkError.message}`);
+            console.error('Error adding email link to Front:', linkError);
+          }
         }
       }
       
@@ -380,143 +520,62 @@ function App() {
         };
       }
       
-      if (context?.teammate) {
-        conversationData.teammate = context.teammate;
-      }
-      
       const webhookUrl = mode === 'email' ? EMAIL_WEBHOOK_URL : TASK_WEBHOOK_URL;
       addDebugLog(`🎯 Using ${mode} webhook`);
       
-      // Try different payload structures for task vs email
-      let payload;
-      
-      if (mode === 'email') {
-        // Simple payload for email (we know this works)
-        payload = {
-          frontData: conversationData,
-          contextType: context?.type,
+      // Try different payload approaches
+      const payloadApproaches = [
+        // Approach 1: Just the combined instructions (simplest)
+        combinedInstructions,
+        
+        // Approach 2: Single nested object  
+        createSinglePayload(combinedInstructions, conversationData, taskId),
+        
+        // Approach 3: Minimal object with just essentials
+        {
           userComment: combinedInstructions,
           mode: mode
-        };
-      } else {
-        // Try minimal task payload first (remove potentially problematic fields)
-        payload = {
-          frontData: conversationData,
-          contextType: context?.type,
-          userComment: combinedInstructions,
-          mode: mode
-          // Temporarily removing: taskId, callbackUrl, fileReference
-        };
-      }
+        }
+      ];
       
-      addDebugLog(`📦 Payload size: ${JSON.stringify(payload).length} chars`);
-      console.log('🔍 EXACT PAYLOAD BEING SENT:', payload);
-      console.log('🎯 WEBHOOK URL:', webhookUrl);
+      let successfulResponse = null;
       
-      // Also try a super minimal test payload for task
-      if (mode === 'task') {
-        const testPayload = {
-          userComment: combinedInstructions
-        };
-        console.log('🧪 MINIMAL TEST PAYLOAD:', testPayload);
-        addDebugLog(`🧪 Also trying minimal payload: ${JSON.stringify(testPayload).length} chars`);
-      }
-      
-      // SINGLE WEBHOOK CALL with fallback for tasks
-      addDebugLog('📡 Making webhook call...');
-      
-      let response;
-      
-      if (mode === 'task') {
-        // Try multiple payload formats for task webhook
-        const payloadFormats = [
-          // Format 1: Full payload (original)
-          {
-            frontData: conversationData,
-            contextType: context?.type,
-            userComment: combinedInstructions,
-            mode: mode,
-            ...(taskId && { taskId: taskId }),
-            ...(uploadedFile && { 
-              fileReference: {
-                name: uploadedFile.name,
-                type: uploadedFile.type,
-                size: uploadedFile.size,
-                preview: uploadedFile.preview
-              }
-            })
-          },
-          // Format 2: Minimal payload (just the essentials)
-          {
-            userComment: combinedInstructions,
-            mode: mode
-          },
-          // Format 3: Match email format exactly
-          {
-            frontData: conversationData,
-            contextType: context?.type,
-            userComment: combinedInstructions,
-            mode: mode
-          }
-        ];
-        
-        for (let i = 0; i < payloadFormats.length; i++) {
-          try {
-            addDebugLog(`🔄 Trying task payload format ${i + 1}/${payloadFormats.length}`);
-            console.log(`🧪 TASK PAYLOAD FORMAT ${i + 1}:`, payloadFormats[i]);
-            
-            response = await fetch(webhookUrl, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify(payloadFormats[i])
-            });
-            
-            if (response.ok) {
-              addDebugLog(`✅ Task payload format ${i + 1} worked!`);
-              break;
-            } else {
-              addDebugLog(`❌ Format ${i + 1} failed: ${response.status}`);
-              if (i === payloadFormats.length - 1) {
-                // Last attempt failed
-                const errorText = await response.text();
-                throw new Error(`All payload formats failed. Last error: ${response.status}: ${errorText}`);
-              }
-            }
-          } catch (error) {
-            addDebugLog(`💥 Format ${i + 1} error: ${error.message}`);
-            if (i === payloadFormats.length - 1) {
-              throw error;
+      for (let i = 0; i < payloadApproaches.length; i++) {
+        try {
+          addDebugLog(`🔄 Trying payload approach ${i + 1}/${payloadApproaches.length}`);
+          console.log(`🧪 PAYLOAD APPROACH ${i + 1}:`, payloadApproaches[i]);
+          
+          const response = await fetch(webhookUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payloadApproaches[i])
+          });
+          
+          addDebugLog(`📈 Approach ${i + 1} response: ${response.status}`);
+          
+          if (response.ok) {
+            addDebugLog(`✅ Payload approach ${i + 1} worked!`);
+            successfulResponse = response;
+            break;
+          } else {
+            const errorText = await response.text();
+            addDebugLog(`❌ Approach ${i + 1} failed: ${response.status} - ${errorText.substring(0, 100)}`);
+            if (i === payloadApproaches.length - 1) {
+              throw new Error(`All payload approaches failed. Last error: ${response.status}: ${errorText}`);
             }
           }
+        } catch (error) {
+          addDebugLog(`💥 Approach ${i + 1} error: ${error.message}`);
+          if (i === payloadApproaches.length - 1) {
+            throw error;
+          }
         }
-      } else {
-        // Email mode - use working payload format
-        response = await fetch(webhookUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(payload)
-        });
       }
       
-      addDebugLog(`📈 Response status: ${response.status}`);
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        addDebugLog(`❌ Webhook error: ${errorText}`);
-        
-        // Show specific error for 404
-        if (response.status === 404) {
-          addDebugLog('🔍 404 Error - This suggests payload format issue for task webhook');
-          setStatus('Task webhook payload format issue (404). Check AirOps workflow input requirements.');
-        } else {
-          throw new Error(`HTTP error ${response.status}: ${errorText}`);
-        }
-      } else {
-        const responseData = await response.text();
+      if (successfulResponse) {
+        const responseData = await successfulResponse.text();
         addDebugLog(`✅ Success: ${responseData.substring(0, 50)}...`);
         
         if (mode === 'email') {
@@ -524,15 +583,16 @@ function App() {
         } else {
           setStatus('Task created successfully!');
         }
+        
+        setComment('');
+        setOutputFormat('');
+        setSelectedFormat('');
+        setUploadedFile(null);
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
       }
       
-      setComment('');
-      setOutputFormat('');
-      setSelectedFormat('');
-      setUploadedFile(null);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
     } catch (error) {
       console.error('❌ WEBHOOK ERROR:', error);
       addDebugLog(`💥 Error: ${error.message}`);
@@ -588,8 +648,8 @@ function App() {
     <div 
       ref={cardRef}
       style={{
-        width: `${containerSize.width}px`,
-        height: `${containerSize.height}px`,
+        width: `${cardSize.width}px`,
+        height: `${cardSize.height}px`,
         background: 'white',
         border: '1px solid #e5e7eb',
         borderRadius: '8px',
@@ -600,7 +660,8 @@ function App() {
         overflow: 'hidden',
         boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
         display: 'flex',
-        flexDirection: 'column'
+        flexDirection: 'column',
+        transition: 'width 0.2s ease, height 0.2s ease' // Smooth auto-resize
       }}
     >
       {/* Header */}
@@ -624,7 +685,7 @@ function App() {
           color: '#94a3b8',
           fontWeight: 'normal'
         }}>
-          {containerStyle}
+          {containerStyle} {cardSize.width}×{cardSize.height}
         </span>
       </div>
 
@@ -696,7 +757,7 @@ function App() {
               fontFamily: 'inherit',
               resize: 'none',
               transition: 'border-color 0.15s ease',
-              paddingBottom: '20px' // Make room for resize handle
+              paddingBottom: '20px'
             }}
             onFocus={(e) => e.target.style.borderColor = '#6366f1'}
             onBlur={(e) => e.target.style.borderColor = '#d1d5db'}
