@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useFrontContext } from './providers/frontContext';
+import { Accordion, AccordionSection } from '@frontapp/ui-kit';
 import './App.css';
 
 function App() {
@@ -14,8 +15,6 @@ function App() {
   const [commentHistory, setCommentHistory] = useState([]);
   const [taskResults, setTaskResults] = useState([]);
   const [pollingTasks, setPollingTasks] = useState(new Set());
-  const [debugLog, setDebugLog] = useState([]);
-  
   // Prevent multiple calls
   const isProcessingRef = useRef(false);
   const lastCallTimeRef = useRef(0);
@@ -26,15 +25,14 @@ function App() {
   const [textareaHeight, setTextareaHeight] = useState(60);
   const [isTextareaResizing, setIsTextareaResizing] = useState(false);
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
-  const [showTaskResults, setShowTaskResults] = useState(false);
-  const [showHistory, setShowHistory] = useState(false);
   
   const cardRef = useRef(null);
   const textareaRef = useRef(null);
   const textareaContainerRef = useRef(null);
   const fileInputRef = useRef(null);
   
-  const EMAIL_WEBHOOK_URL = 'https://app.airops.com/public_api/airops_apps/73407/webhook_async_execute?auth_token=pxaMrQO7aOUSOXe6gSiLNz4cF1r-E9fOS4E378ws12BBD8SPt-OIVu500KEh';
+  // UPDATED URLs with correct UUID format
+  const EMAIL_WEBHOOK_URL = 'https://app.airops.com/public_api/airops_apps/f124518f-2185-4e62-9520-c6ff0fc3fcb0/webhook_async_execute?auth_token=pxaMrQO7aOUSOXe6gSiLNz4cF1r-E9fOS4E378ws12BBD8SPt-OIVu500KEh';
   const TASK_WEBHOOK_URL = 'https://app.airops.com/public_api/airops_apps/a628c7d4-6b22-42af-9ded-fb01839d5e06/webhook_async_execute?auth_token=pxaMrQO7aOUSOXe6gSiLNz4cF1r-E9fOS4E378ws12BBD8SPt-OIVu500KEh';
   const AIROPS_LOGO_URL = 'https://app.ashbyhq.com/api/images/org-theme-logo/78d1f89f-3e5a-4a8b-b6b5-a91acb030fed/aba001ed-b5b5-4a1b-8bd6-dfb86392876e/d8e6228c-ea82-4061-b660-d7b6c502f155.png';
   
@@ -207,234 +205,193 @@ function App() {
     return combinedText;
   };
 
-  // CREATE SINGLE NESTED PAYLOAD OBJECT
-  const createSinglePayload = (combinedInstructions, conversationData, taskId) => {
-    // Everything nested under ONE field so AirOps sees just one input
-    const singlePayload = {
-      request: {
-        instructions: combinedInstructions,
-        mode: mode,
-        context: {
-          type: context?.type,
-          conversation: conversationData,
-          user: context?.teammate
+  // COMPLETE NESTED PAYLOAD CREATOR
+  const createCompletePayload = async (combinedInstructions, taskId = null) => {
+    const timestamp = new Date().toISOString();
+    
+    // Gather ALL conversation data
+    let conversationData = {};
+    let messagesData = [];
+    
+    if (context?.conversation) {
+      // Basic conversation info
+      conversationData = {
+        id: context.conversation.id,
+        subject: context.conversation.subject || 'No Subject',
+        status: context.conversation.status,
+        created_at: context.conversation.created_at,
+        updated_at: context.conversation.updated_at,
+        tags: context.conversation.tags || [],
+        assignee: context.conversation.assignee,
+        recipient: context.conversation.recipient,
+        participants: context.conversation.participants || [],
+        channel: context.conversation.channel,
+        priority: context.conversation.priority,
+        is_private: context.conversation.is_private,
+        folder: context.conversation.folder
+      };
+      
+      // Load ALL messages with full context
+      try {
+        const messages = await context.listMessages();
+        messagesData = messages.results.map(msg => ({
+          id: msg.id,
+          type: msg.type,
+          body: msg.body,
+          subject: msg.subject,
+          author: {
+            id: msg.author?.id,
+            name: msg.author?.name,
+            email: msg.author?.email,
+            role: msg.author?.role
+          },
+          recipients: msg.recipients || [],
+          created_at: msg.created_at,
+          updated_at: msg.updated_at,
+          is_inbound: msg.is_inbound,
+          is_draft: msg.is_draft,
+          attachments: msg.attachments || [],
+          metadata: msg.metadata || {}
+        }));
+        
+      } catch (err) {
+        messagesData = [];
+      }
+    }
+    
+    // Get current draft context (for composer)
+    let draftData = null;
+    if (context?.draft) {
+      draftData = {
+        body: context.draft.body,
+        subject: context.draft.subject,
+        to: context.draft.to,
+        cc: context.draft.cc,
+        bcc: context.draft.bcc,
+        reply_options: context.draft.reply_options
+      };
+    }
+    
+    // Get user/teammate info
+    const teammateData = context?.teammate ? {
+      id: context.teammate.id,
+      name: context.teammate.name,
+      email: context.teammate.email,
+      role: context.teammate.role,
+      avatar_url: context.teammate.avatar_url,
+      timezone: context.teammate.timezone
+    } : null;
+    
+    // Create the COMPLETE nested payload
+    const completePayload = {
+      airops_request: {
+        // Primary instruction combining everything
+        combined_instructions: combinedInstructions,
+        
+        // Request metadata
+        request_info: {
+          mode: mode,
+          timestamp: timestamp,
+          plugin_context: context?.type, // 'messageComposer' or 'singleConversation'
+          task_id: taskId,
+          user_agent: navigator.userAgent,
+          plugin_version: "1.0.0"
         },
-        ...(taskId && { taskId: taskId }),
-        ...(uploadedFile && {
-          attachedFile: {
-            name: uploadedFile.name,
-            type: uploadedFile.type,
-            size: uploadedFile.size,
-            preview: uploadedFile.preview
-          }
-        })
+        
+        // User making the request
+        requesting_user: teammateData,
+        
+        // Output format details
+        output_specification: {
+          selected_format: selectedFormat,
+          custom_format: outputFormat,
+          format_label: selectedFormat ? formatOptions.find(f => f.value === selectedFormat)?.label : null,
+          raw_instructions: comment,
+          has_custom_format: selectedFormat === 'custom'
+        },
+        
+        // File attachment with full context
+        attached_file: uploadedFile ? {
+          name: uploadedFile.name,
+          type: uploadedFile.type,
+          size: uploadedFile.size,
+          size_formatted: `${(uploadedFile.size / 1024).toFixed(1)}KB`,
+          last_modified: uploadedFile.lastModified ? new Date(uploadedFile.lastModified).toISOString() : null,
+          content_preview: uploadedFile.preview || null,
+          has_preview: !!uploadedFile.preview,
+          is_text_file: uploadedFile.type?.startsWith('text/') || uploadedFile.name?.match(/\.(txt|csv|json|md)$/i)
+        } : null,
+        
+        // Complete Front conversation context
+        front_conversation: {
+          // Basic conversation details
+          conversation: conversationData,
+          
+          // All messages in the conversation
+          messages: messagesData,
+          
+          // Current draft (if in composer)
+          current_draft: draftData,
+          
+          // Conversation stats
+          stats: {
+            total_messages: messagesData.length,
+            inbound_messages: messagesData.filter(m => m.is_inbound).length,
+            outbound_messages: messagesData.filter(m => !m.is_inbound).length,
+            draft_messages: messagesData.filter(m => m.is_draft).length,
+            has_attachments: messagesData.some(m => m.attachments && m.attachments.length > 0),
+            participants_count: conversationData.participants?.length || 0,
+            tags_count: conversationData.tags?.length || 0
+          },
+          
+          // Most recent message for context
+          latest_message: messagesData.length > 0 ? messagesData[0] : null,
+          
+          // Original message (last in chronological order)
+          original_message: messagesData.length > 0 ? messagesData[messagesData.length - 1] : null
+        },
+        
+        // Request history context
+        request_history: {
+          previous_requests: commentHistory.slice(0, 5).map(entry => ({
+            text: entry.text,
+            mode: entry.mode,
+            output_format: entry.outputFormat,
+            selected_format: entry.selectedFormat,
+            had_file: entry.hasFile,
+            file_name: entry.fileName,
+            timestamp: entry.timestamp,
+            user: entry.user
+          })),
+          total_requests: commentHistory.length,
+          recent_tasks: taskResults.slice(0, 3).map(task => ({
+            id: task.id,
+            status: task.status,
+            output_format: task.outputFormat,
+            created_at: task.createdAt,
+            completed_at: task.completedAt,
+            had_file: task.hasFile,
+            user: task.user
+          }))
+        },
+        
+        // Additional context for AI processing
+        ai_context_hints: {
+          conversation_subject: conversationData.subject,
+          is_reply_context: !!draftData,
+          has_file_attachment: !!uploadedFile,
+          conversation_length: messagesData.length,
+          is_multi_participant: (conversationData.participants?.length || 0) > 2,
+          has_tags: (conversationData.tags?.length || 0) > 0,
+          conversation_age_hours: conversationData.created_at ? 
+            Math.round((new Date() - new Date(conversationData.created_at)) / (1000 * 60 * 60)) : null,
+          latest_message_age_hours: messagesData.length > 0 && messagesData[0].created_at ?
+            Math.round((new Date() - new Date(messagesData[0].created_at)) / (1000 * 60 * 60)) : null
+        }
       }
     };
     
-    addDebugLog('📦 Created SINGLE nested payload object');
-    return singlePayload;
-  };
-
-  // Load history from Front conversation context (links and comments)
-  const loadHistoryFromFrontContext = async () => {
-    try {
-      if (context && context.conversation) {
-        const messages = await context.listMessages();
-        const historyEntries = [];
-        
-        // Look for AirOps history in conversation messages and links
-        messages.results.forEach(message => {
-          // Check message body for AirOps references
-          if (message.body && message.body.includes('🤖 AirOps')) {
-            const match = message.body.match(/🤖 AirOps (Email|Task) Request: (.+?)(?:\||\n|$)/);
-            if (match) {
-              historyEntries.push({
-                text: match[2],
-                mode: match[1].toLowerCase(),
-                timestamp: message.created_at,
-                user: message.author?.name || 'Unknown',
-                source: 'comment'
-              });
-            }
-          }
-          
-          // Check for links added by the plugin
-          if (message.attachments) {
-            message.attachments.forEach(attachment => {
-              if (attachment.url && attachment.url.includes('airops.com') && attachment.filename) {
-                const isTask = attachment.filename.includes('Task');
-                historyEntries.push({
-                  text: attachment.filename.replace(/AirOps (Email|Task): /, ''),
-                  mode: isTask ? 'task' : 'email',
-                  timestamp: message.created_at,
-                  user: message.author?.name || 'Unknown',
-                  source: 'link',
-                  url: attachment.url
-                });
-              }
-            });
-          }
-        });
-        
-        // Sort by timestamp (newest first)
-        historyEntries.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-        setCommentHistory(historyEntries);
-        addDebugLog(`📚 Loaded ${historyEntries.length} history entries from Front`);
-      }
-    } catch (error) {
-      console.error('Error loading history from Front:', error);
-      addDebugLog(`❌ Error loading history: ${error.message}`);
-      // Fallback to localStorage
-      const conversationId = context?.conversation?.id;
-      if (conversationId) {
-        loadCommentHistoryFromStorage(conversationId);
-      }
-    }
-  };
-
-  // Save history to Front conversation context
-  const saveHistoryToFrontContext = async (entry) => {
-    try {
-      if (context && context.conversation) {
-        const historyText = `${entry.text}${entry.outputFormat ? ` | Format: ${entry.outputFormat}` : ''}${entry.hasFile ? ` | File: ${entry.fileName}` : ''}`;
-        
-        // Try to add as a link first
-        if (context.addLink) {
-          const linkUrl = mode === 'email' 
-            ? `https://app.airops.com/airops-2/workflows/73407/edit`
-            : `https://app.airops.com/airops-2/workflows/84946/edit${entry.taskId ? `?taskId=${entry.taskId}` : ''}`;
-          const linkName = `AirOps ${entry.mode === 'email' ? 'Email' : 'Task'}: ${historyText.substring(0, 50)}...`;
-          
-          await context.addLink(linkUrl, linkName);
-          addDebugLog('🔗 Request saved as link to Front conversation');
-          setStatus('Request saved to conversation!');
-          return;
-        }
-        
-        // Fallback to comment if addLink isn't available
-        if (context.createComment) {
-          await context.createComment({
-            body: `🤖 AirOps ${entry.mode === 'email' ? 'Email' : 'Task'} Request: ${historyText}`,
-            author_id: context.teammate?.id
-          });
-          addDebugLog('💬 Request saved as comment to Front conversation');
-          setStatus('Request saved as comment!');
-          return;
-        }
-      }
-    } catch (error) {
-      console.error('Error saving to Front context:', error);
-      addDebugLog(`❌ Error saving to Front: ${error.message}`);
-      // Fallback to localStorage
-      const conversationId = context?.conversation?.id;
-      if (conversationId) {
-        const updatedHistory = [entry, ...commentHistory];
-        setCommentHistory(updatedHistory);
-        saveCommentHistoryToStorage(conversationId, updatedHistory);
-        setStatus('Request saved locally');
-      }
-    }
-  };
-
-  // Load task results from Front context
-  const loadTaskResultsFromFrontContext = async () => {
-    try {
-      if (context && context.conversation) {
-        const messages = await context.listMessages();
-        const taskEntries = [];
-        
-        // Look for completed tasks in conversation
-        messages.results.forEach(message => {
-          // Check for completion links
-          if (message.attachments) {
-            message.attachments.forEach(attachment => {
-              if (attachment.url && attachment.url.includes('airops.com/airops-2/workflows/84946/results')) {
-                const taskIdMatch = attachment.url.match(/taskId=([^&]+)/);
-                if (taskIdMatch) {
-                  taskEntries.push({
-                    id: taskIdMatch[1],
-                    status: 'completed',
-                    outputFormat: attachment.filename?.replace(/✅ AirOps Result: /, '')?.replace(/ - Completed$/, '') || 'Task',
-                    completedAt: message.created_at,
-                    result: `Task completed - see link: ${attachment.url}`,
-                    source: 'front_link'
-                  });
-                }
-              }
-            });
-          }
-          
-          // Check for task result comments
-          if (message.body && message.body.includes('AirOps Task Result:')) {
-            const taskMatch = message.body.match(/Task ID: (\w+)/);
-            if (taskMatch) {
-              taskEntries.push({
-                id: taskMatch[1],
-                status: 'completed',
-                result: message.body,
-                completedAt: message.created_at,
-                source: 'front_comment'
-              });
-            }
-          }
-        });
-        
-        // Merge with local storage results
-        const conversationId = context?.conversation?.id;
-        if (conversationId) {
-          const storageKey = `airops-tasks-${conversationId}`;
-          try {
-            const savedTasks = localStorage.getItem(storageKey);
-            if (savedTasks) {
-              const localTasks = JSON.parse(savedTasks);
-              // Merge, preferring Front data for completed tasks
-              const mergedTasks = [...taskEntries];
-              localTasks.forEach(localTask => {
-                if (!taskEntries.find(t => t.id === localTask.id)) {
-                  mergedTasks.push(localTask);
-                }
-              });
-              setTaskResults(mergedTasks);
-            } else {
-              setTaskResults(taskEntries);
-            }
-          } catch (e) {
-            setTaskResults(taskEntries);
-          }
-        } else {
-          setTaskResults(taskEntries);
-        }
-        
-        addDebugLog(`📊 Loaded ${taskEntries.length} task results from Front`);
-      }
-    } catch (error) {
-      console.error('Error loading task results from Front:', error);
-      addDebugLog(`❌ Error loading task results: ${error.message}`);
-      // Fallback to localStorage only
-      const conversationId = context?.conversation?.id;
-      if (conversationId) {
-        loadTaskResultsFromStorage(conversationId);
-      }
-    }
-  };
-
-  // Save task results to Front context
-  const saveTaskResultToFrontContext = async (task) => {
-    try {
-      if (context && context.conversation && task.result) {
-        if (context.addLink) {
-          const linkUrl = `https://app.airops.com/airops-2/workflows/84946/results?taskId=${task.id}`;
-          const linkName = `✅ AirOps Result: ${task.outputFormat || 'Task'} - Completed`;
-          
-          await context.addLink(linkUrl, linkName);
-          addDebugLog('🎯 Task completion link added to Front conversation');
-          setStatus('Task result saved to conversation!');
-        }
-      }
-    } catch (error) {
-      console.error('Error saving task result to Front:', error);
-      addDebugLog(`❌ Error saving task result: ${error.message}`);
-    }
+    return completePayload;
   };
 
   const handleFileUpload = async (event) => {
@@ -461,18 +418,15 @@ function App() {
           fileData.preview = content.substring(0, 500) + (content.length > 500 ? '...' : '');
           setUploadedFile(fileData);
           setStatus('File uploaded successfully');
-          addDebugLog(`📎 File uploaded: ${file.name} (${(file.size/1024).toFixed(1)}KB)`);
         };
         reader.readAsText(file);
       } else {
         setUploadedFile(fileData);
         setStatus('File uploaded successfully');
-        addDebugLog(`📎 File uploaded: ${file.name} (${(file.size/1024).toFixed(1)}KB)`);
       }
     } catch (error) {
       console.error('File upload error:', error);
       setStatus('File upload failed');
-      addDebugLog(`❌ File upload failed: ${error.message}`);
     }
   };
 
@@ -482,61 +436,105 @@ function App() {
       fileInputRef.current.value = '';
     }
     setStatus('File removed');
-    addDebugLog('🗑️ File removed');
   };
 
-  const loadCommentHistoryFromStorage = (conversationId) => {
-    const storageKey = `airops-history-${conversationId}`;
+  // Load history from Front conversation context (links/comments)
+  const loadHistoryFromFrontContext = async () => {
     try {
-      const savedHistory = localStorage.getItem(storageKey);
-      if (savedHistory) {
-        setCommentHistory(JSON.parse(savedHistory));
-      }
-    } catch (e) {
-      console.error("Error loading history:", e);
-    }
-  };
-
-  const saveCommentHistoryToStorage = (conversationId, history) => {
-    const storageKey = `airops-history-${conversationId}`;
-    try {
-      localStorage.setItem(storageKey, JSON.stringify(history));
-    } catch (e) {
-      console.error("Error saving history:", e);
-    }
-  };
-
-  const loadTaskResultsFromStorage = (conversationId) => {
-    const storageKey = `airops-tasks-${conversationId}`;
-    try {
-      const savedTasks = localStorage.getItem(storageKey);
-      if (savedTasks) {
-        const tasks = JSON.parse(savedTasks);
-        setTaskResults(tasks);
+      if (context && context.conversation) {
+        const messages = await context.listMessages();
+        const historyEntries = [];
         
-        const pendingTasks = tasks.filter(task => task.status === 'pending').map(task => task.id);
-        if (pendingTasks.length > 0) {
-          setPollingTasks(new Set(pendingTasks));
-        }
+        // Look for AirOps history links/comments in conversation
+        messages.results.forEach(message => {
+          if (message.body && (message.body.includes('🤖 AirOps') || message.body.includes('AirOps Request:'))) {
+            // Parse AirOps history from message body
+            const historyMatch = message.body.match(/AirOps (?:Email|Task) Request: (.+?)(?:\s*\|\s*Format: (.+?))?$/);
+            if (historyMatch) {
+              historyEntries.push({
+                text: historyMatch[1],
+                outputFormat: historyMatch[2] || '',
+                timestamp: message.created_at,
+                user: message.author?.name || 'Unknown',
+                mode: message.body.includes('Task') ? 'task' : 'email'
+              });
+            }
+          }
+        });
+        
+        setCommentHistory(historyEntries);
       }
-    } catch (e) {
-      console.error("Error loading task results:", e);
+    } catch (error) {
+      console.error('Error loading history from Front:', error);
+      setCommentHistory([]);
     }
   };
 
-  const saveTaskResultsToStorage = (conversationId, tasks) => {
-    const storageKey = `airops-tasks-${conversationId}`;
+  // Save history to Front conversation context
+  const saveHistoryToFrontContext = async (entry) => {
     try {
-      localStorage.setItem(storageKey, JSON.stringify(tasks));
-    } catch (e) {
-      console.error("Error saving task results:", e);
+      if (context && context.conversation) {
+        const historyText = `🤖 AirOps ${entry.mode === 'email' ? 'Email' : 'Task'} Request: ${entry.text}${entry.outputFormat ? ` | Format: ${entry.outputFormat}` : ''}${entry.hasFile ? ' | File: ' + entry.fileName : ''}`;
+        
+        // Try to add as a link first
+        try {
+          await context.addLink({
+            name: `AirOps ${entry.mode === 'email' ? 'Email' : 'Task'} Request`,
+            url: `https://app.airops.com/`,
+            description: historyText
+          });
+          
+        } catch (linkError) {
+          // Fallback to comment if link doesn't work
+          console.warn('Link creation failed, trying comment:', linkError);
+          
+          await context.createComment({
+            body: historyText,
+            author_id: context.teammate?.id
+          });
+          
+        }
+        
+        setStatus('Request saved to conversation!');
+      }
+    } catch (error) {
+      console.error('Error saving to Front context:', error);
+    }
+  };
+
+  // Load task results from Front context
+  const loadTaskResultsFromFrontContext = async () => {
+    try {
+      if (context && context.conversation) {
+        const messages = await context.listMessages();
+        const taskEntries = [];
+        
+        // Look for task results in conversation
+        messages.results.forEach(message => {
+          if (message.body && message.body.includes('✅ AirOps Task Result:')) {
+            const taskMatch = message.body.match(/Task ID: (\w+)/);
+            if (taskMatch) {
+              taskEntries.push({
+                id: taskMatch[1],
+                status: 'completed',
+                result: message.body,
+                completedAt: message.created_at
+              });
+            }
+          }
+        });
+        
+        setTaskResults(taskEntries);
+      }
+    } catch (error) {
+      console.error('Error loading task results from Front:', error);
+      setTaskResults([]);
     }
   };
 
   const checkTaskStatus = async (taskId) => {
     try {
-      // Fix: Use correct Netlify function URL
-      const response = await fetch(`/.netlify/functions/task-status?taskId=${taskId}`);
+      const response = await fetch(`/api/task-status?taskId=${taskId}`);
       if (response.ok) {
         const result = await response.json();
         
@@ -548,15 +546,24 @@ function App() {
           );
           
           setTaskResults(updatedTasks);
-          const conversationId = context?.conversation?.id;
-          if (conversationId) {
-            saveTaskResultsToStorage(conversationId, updatedTasks);
-          }
           
-          // Save completed task to Front context
-          const completedTask = updatedTasks.find(task => task.id === taskId);
-          if (completedTask) {
-            await saveTaskResultToFrontContext(completedTask);
+          // Save completion to Front conversation
+          try {
+            if (context.addLink && context.conversation) {
+              const completedTask = updatedTasks.find(t => t.id === taskId);
+              const linkUrl = `https://app.airops.com/airops-2/workflows/84946/results?taskId=${taskId}`;
+              const linkName = `✅ AirOps Result: ${completedTask?.outputFormat || 'Task'} - Completed`;
+              
+              await context.addLink({
+                url: linkUrl,
+                name: linkName,
+                description: `Task ${taskId} completed: ${result.data?.substring(0, 200)}...`
+              });
+              
+              addDebugLog('🔗 Completion link added to Front conversation');
+            }
+          } catch (linkError) {
+            addDebugLog(`❌ Error adding completion link: ${linkError.message}`);
           }
           
           setPollingTasks(prev => {
@@ -566,26 +573,10 @@ function App() {
           });
           
           setStatus('Task completed and saved!');
-          addDebugLog(`✅ Task ${taskId} completed`);
         }
-      } else if (response.status === 404) {
-        // Function not found - stop polling this task
-        addDebugLog(`⚠️ Task status function not found for ${taskId}, stopping polling`);
-        setPollingTasks(prev => {
-          const newSet = new Set(prev);
-          newSet.delete(taskId);
-          return newSet;
-        });
       }
     } catch (error) {
       console.error('Error checking task status:', error);
-      addDebugLog(`❌ Error checking task status: ${error.message}`);
-      // Stop polling on persistent errors
-      setPollingTasks(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(taskId);
-        return newSet;
-      });
     }
   };
 
@@ -593,7 +584,6 @@ function App() {
     if (context && context.draft && typeof context.insertTextIntoBody === 'function') {
       context.insertTextIntoBody(content);
       setStatus('Inserted into draft!');
-      addDebugLog('📝 Content inserted into draft');
     } else if (context && typeof context.createDraft === 'function') {
       context.createDraft({
         content: {
@@ -602,14 +592,11 @@ function App() {
         }
       });
       setStatus('Draft created!');
-      addDebugLog('📝 New draft created');
     } else {
       navigator.clipboard.writeText(content).then(() => {
         setStatus('Copied to clipboard!');
-        addDebugLog('📋 Content copied to clipboard');
       }).catch(() => {
         setStatus('Copy failed');
-        addDebugLog('❌ Clipboard copy failed');
       });
     }
   };
@@ -618,7 +605,6 @@ function App() {
     // Prevent multiple calls
     const now = Date.now();
     if (isProcessingRef.current || (now - lastCallTimeRef.current) < 1000) {
-      addDebugLog('🚫 Prevented duplicate call');
       return;
     }
 
@@ -637,37 +623,17 @@ function App() {
     lastCallTimeRef.current = now;
     setIsSending(true);
     setStatus('Processing...');
-    addDebugLog('🚀 Starting webhook call');
     
     try {
       const taskId = mode === 'task' ? `task_${Date.now()}_${Math.random().toString(36).substr(2, 9)}` : null;
       
       const combinedInstructions = createCombinedInstructions();
-      addDebugLog(`📝 Combined instructions: ${combinedInstructions.substring(0, 50)}...`);
       
-      let conversationData = {};
+      // Create COMPLETE nested payload with ALL context
+      const completePayload = await createCompletePayload(combinedInstructions, taskId);
       
+      // Save request to Front context first
       if (context?.conversation) {
-        const conversationId = context.conversation.id;
-        
-        conversationData = {
-          id: conversationId,
-          subject: context.conversation.subject,
-          status: context.conversation.status,
-          recipient: context.conversation.recipient,
-          tags: context.conversation.tags,
-          assignee: context.conversation.assignee
-        };
-        
-        try {
-          const messages = await context.listMessages();
-          conversationData.messages = messages.results;
-          addDebugLog(`📧 Loaded ${messages.results.length} messages`);
-        } catch (err) {
-          addDebugLog(`❌ Error loading messages: ${err.message}`);
-          console.error("Couldn't fetch messages:", err);
-        }
-        
         const newEntry = {
           text: comment,
           mode: mode,
@@ -676,12 +642,15 @@ function App() {
           hasFile: !!uploadedFile,
           fileName: uploadedFile?.name,
           timestamp: new Date().toISOString(),
-          user: context.teammate ? context.teammate.name : 'Unknown user',
-          taskId: taskId
+          user: context.teammate ? context.teammate.name : 'Unknown user'
         };
         
-        // Save to Front context instead of localStorage
+        // Save to Front context
         await saveHistoryToFrontContext(newEntry);
+        
+        // Update local state
+        const updatedHistory = [newEntry, ...commentHistory];
+        setCommentHistory(updatedHistory);
 
         if (mode === 'task' && taskId) {
           const newTask = {
@@ -698,129 +667,60 @@ function App() {
           
           const updatedTasks = [newTask, ...taskResults];
           setTaskResults(updatedTasks);
-          saveTaskResultsToStorage(conversationId, updatedTasks);
           
           try {
-            // Fix: Use correct Netlify function URL
-            await fetch('/.netlify/functions/store-task', {
+            await fetch('/api/store-task', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ taskId, task: newTask })
             });
-            addDebugLog('💾 Task stored in Netlify Blobs');
           } catch (blobError) {
-            addDebugLog(`❌ Error storing task: ${blobError.message}`);
+            console.error('Error storing task in Netlify Blobs:', blobError);
           }
           
           setPollingTasks(prev => new Set([...prev, taskId]));
-          addDebugLog('⏱️ Started polling for task updates');
         }
-      }
-      
-      if (context?.draft) {
-        conversationData.draft = {
-          body: context.draft.body,
-          subject: context.draft.subject
-        };
       }
       
       const webhookUrl = mode === 'email' ? EMAIL_WEBHOOK_URL : TASK_WEBHOOK_URL;
-      addDebugLog(`🎯 Using ${mode} webhook`);
       
-      // Try different payload approaches with better error handling
-      const payloadApproaches = [
-        // Approach 1: Just the combined instructions (simplest)
-        combinedInstructions,
-        
-        // Approach 2: Single nested object  
-        createSinglePayload(combinedInstructions, conversationData, taskId),
-        
-        // Approach 3: Minimal object with just essentials
-        {
-          userComment: combinedInstructions,
-          mode: mode
-        }
-      ];
+      // Send the complete nested payload
+      const response = await fetch(webhookUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify(completePayload)
+      });
       
-      let successfulResponse = null;
-      let lastError = null;
-      
-      for (let i = 0; i < payloadApproaches.length; i++) {
-        try {
-          addDebugLog(`🔄 Trying payload approach ${i + 1}/${payloadApproaches.length}`);
-          console.log(`🧪 PAYLOAD APPROACH ${i + 1}:`, payloadApproaches[i]);
-          
-          const response = await fetch(webhookUrl, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(payloadApproaches[i])
-          });
-          
-          addDebugLog(`📈 Approach ${i + 1} response: ${response.status}`);
-          
-          if (response.ok) {
-            addDebugLog(`✅ Payload approach ${i + 1} worked!`);
-            successfulResponse = response;
-            break;
-          } else {
-            const errorText = await response.text();
-            lastError = { status: response.status, message: errorText };
-            addDebugLog(`❌ Approach ${i + 1} failed: ${response.status} - ${errorText.substring(0, 100)}`);
-            
-            // Special handling for 404 errors
-            if (response.status === 404) {
-              addDebugLog(`🚨 Webhook endpoint not found: ${webhookUrl}`);
-              if (i === payloadApproaches.length - 1) {
-                throw new Error(`Webhook endpoint not found: ${webhookUrl}. Please check your AirOps webhook URL.`);
-              }
-            } else if (i === payloadApproaches.length - 1) {
-              throw new Error(`All payload approaches failed. Last error: ${response.status}: ${errorText}`);
-            }
-          }
-        } catch (fetchError) {
-          lastError = { status: 'network', message: fetchError.message };
-          addDebugLog(`💥 Approach ${i + 1} network error: ${fetchError.message}`);
-          
-          if (i === payloadApproaches.length - 1) {
-            // Check if it's a network connectivity issue
-            if (fetchError.message.includes('Failed to fetch') || fetchError.message.includes('Network')) {
-              throw new Error(`Network error: Cannot reach AirOps webhook. Please check your internet connection.`);
-            } else {
-              throw new Error(`Webhook error: ${fetchError.message}`);
-            }
-          }
-        }
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
       }
       
-      if (successfulResponse) {
-        const responseData = await successfulResponse.text();
-        addDebugLog(`✅ Success: ${responseData.substring(0, 50)}...`);
-        
-        if (mode === 'email') {
-          setStatus('Email sent and saved to conversation!');
-        } else {
-          setStatus('Task created and saved to conversation!');
-        }
-        
-        setComment('');
-        setOutputFormat('');
-        setSelectedFormat('');
-        setUploadedFile(null);
-        if (fileInputRef.current) {
-          fileInputRef.current.value = '';
-        }
+      const responseData = await response.json();
+      
+      if (mode === 'email') {
+        setStatus('Email sent and saved to conversation!');
+      } else {
+        setStatus('Task created and saved to conversation!');
+      }
+      
+      setComment('');
+      setOutputFormat('');
+      setSelectedFormat('');
+      setUploadedFile(null);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
       }
       
     } catch (error) {
       console.error('❌ WEBHOOK ERROR:', error);
-      addDebugLog(`💥 Error: ${error.message}`);
       setStatus('Error: ' + error.message);
     } finally {
       setIsSending(false);
       isProcessingRef.current = false;
-      addDebugLog('🏁 Request completed');
     }
   };
 
@@ -829,9 +729,7 @@ function App() {
       const date = new Date(isoString);
       return date.toLocaleDateString(undefined, { 
         month: 'short', 
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
+        day: 'numeric'
       });
     } catch (e) {
       return isoString;
@@ -1114,248 +1012,127 @@ function App() {
                   >
                     Remove
                   </button>
-                  {uploadedFile.preview && (
-                    <div style={{
-                      marginTop: '6px',
-                      fontSize: textSizes.tiny,
-                      color: '#64748b',
-                      maxHeight: '40px',
-                      overflow: 'hidden',
-                      textAlign: 'left',
-                      background: 'white',
-                      padding: '4px',
-                      borderRadius: '3px',
-                      border: '1px solid #e5e7eb'
-                    }}>
-                      {uploadedFile.preview}
-                    </div>
-                  )}
                 </div>
               )}
             </div>
           </div>
         )}
 
-        {/* Debug Log */}
-        {debugLog.length > 0 && (
-          <div style={{
-            background: '#f8fafc',
-            border: '1px solid #e2e8f0',
-            borderRadius: '4px',
-            padding: '6px',
-            marginBottom: '8px',
-            fontSize: textSizes.tiny,
-            maxHeight: '120px',
-            overflowY: 'auto'
-          }}>
-            <div style={{ fontWeight: '600', color: '#64748b', marginBottom: '4px' }}>
-              🔍 Debug Log:
-            </div>
-            <div style={{ 
-              fontSize: textSizes.tiny, 
-              color: '#94a3b8', 
-              marginBottom: '4px',
-              padding: '2px 4px',
-              background: '#f1f5f9',
-              borderRadius: '2px'
-            }}>
-              Webhooks: {mode === 'email' ? '📧 Email' : '📋 Task'} | Functions: /.netlify/functions/*
-            </div>
-            {debugLog.map((log, index) => (
-              <div key={index} style={{ 
-                color: log.includes('❌') || log.includes('💥') ? '#dc2626' : 
-                       log.includes('✅') ? '#059669' : '#475569', 
-                marginBottom: '1px',
-                fontFamily: 'monospace'
-              }}>
-                {log}
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Results Sections */}
-        {taskResults.length > 0 && (
-          <div style={{ marginBottom: '8px' }}>
-            <button 
-              onClick={() => setShowTaskResults(!showTaskResults)}
-              style={{
-                width: '100%',
-                background: 'none',
-                border: '1px solid #e5e7eb',
-                borderRadius: '4px',
-                padding: '6px 8px',
-                fontSize: textSizes.small,
-                color: '#64748b',
-                cursor: 'pointer',
-                textAlign: 'left',
-                fontWeight: '500'
-              }}
-            >
-              {showTaskResults ? '▼' : '▶'} Tasks ({taskResults.length})
-            </button>
-            
-            {showTaskResults && (
-              <div style={{ marginTop: '6px', maxHeight: '150px', overflowY: 'auto' }}>
-                {taskResults.slice(0, 3).map((task) => (
-                  <div key={task.id} style={{
-                    background: '#f8fafc',
-                    border: '1px solid #f1f5f9',
-                    borderRadius: '6px',
-                    padding: '8px',
-                    marginBottom: '6px',
-                    fontSize: textSizes.small
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
-                      <span>{task.status === 'pending' ? '⏳' : '✅'}</span>
-                      <span style={{ flex: 1, color: '#475569', fontWeight: '500' }}>
-                        {task.selectedFormat ? formatOptions.find(f => f.value === task.selectedFormat)?.label || task.outputFormat : task.outputFormat}
-                        {task.hasFile && ' 📎'}
-                      </span>
-                      <span style={{ color: '#94a3b8', fontSize: textSizes.tiny }}>
-                        {formatDate(task.createdAt)}
-                      </span>
-                    </div>
-                    {task.result && (
-                      <div style={{ position: 'relative' }}>
-                        <div 
-                          style={{
-                            fontSize: textSizes.small,
-                            color: '#475569',
-                            background: 'white',
-                            padding: '6px',
-                            borderRadius: '4px',
-                            border: '1px solid #e2e8f0',
-                            maxHeight: '80px',
-                            overflow: 'auto'
-                          }}
-                          dangerouslySetInnerHTML={{ __html: task.result }}
-                        />
-                        <button 
-                          onClick={() => insertIntoDraft(task.result.replace(/<[^>]*>/g, ''))}
-                          style={{
-                            position: 'absolute',
-                            top: '2px',
-                            right: '2px',
-                            background: '#64748b',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '3px',
-                            fontSize: textSizes.tiny,
-                            padding: '2px 6px',
-                            cursor: 'pointer'
-                          }}
-                        >
-                          Insert
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {commentHistory.length > 0 && (
-          <div style={{ marginBottom: '8px' }}>
-            <button 
-              onClick={() => setShowHistory(!showHistory)}
-              style={{
-                width: '100%',
-                background: 'none',
-                border: '1px solid #e5e7eb',
-                borderRadius: '4px',
-                padding: '6px 8px',
-                fontSize: textSizes.small,
-                color: '#64748b',
-                cursor: 'pointer',
-                textAlign: 'left',
-                fontWeight: '500'
-              }}
-            >
-              {showHistory ? '▼' : '▶'} History ({commentHistory.length}) - From Front Context
-            </button>
-            
-            {showHistory && (
-              <div style={{ marginTop: '6px', maxHeight: '120px', overflowY: 'auto' }}>
-                {commentHistory.slice(0, 5).map((entry, index) => (
-                  <div key={index} style={{
-                    padding: '6px',
-                    background: entry.source === 'front_link' || entry.source === 'front_comment' ? '#f0f9ff' : '#f8fafc',
-                    border: '1px solid #f1f5f9',
-                    borderRadius: '4px',
-                    marginBottom: '4px',
-                    fontSize: textSizes.small
-                  }}>
-                    <div style={{ 
-                      color: '#94a3b8', 
-                      marginBottom: '2px',
-                      fontSize: textSizes.tiny,
-                      fontWeight: '500',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '4px'
-                    }}>
-                      <span>{formatDate(entry.timestamp)}</span>
-                      <span>•</span>
-                      <span>{entry.mode === 'email' ? '✉️' : '📋'}</span>
-                      <span>•</span>
-                      <span>{entry.user}</span>
-                      {entry.source && (
-                        <>
-                          <span>•</span>
-                          <span style={{ 
-                            background: entry.source.includes('front') ? '#3b82f6' : '#6b7280',
-                            color: 'white',
-                            padding: '1px 4px',
-                            borderRadius: '2px',
-                            fontSize: '8px'
-                          }}>
-                            {entry.source === 'front_link' ? '🔗' : entry.source === 'front_comment' ? '💬' : '💾'}
-                          </span>
-                        </>
-                      )}
-                      {entry.hasFile && <span>📎</span>}
-                    </div>
-                    <div style={{ 
-                      color: '#475569', 
-                      lineHeight: 1.3,
+        {/* Results using Accordion */}
+        {(taskResults.length > 0 || commentHistory.length > 0) && (
+          <Accordion expandMode="multi">
+            {taskResults.length > 0 && (
+              <AccordionSection
+                id="tasks"
+                title={`Tasks (${taskResults.length})`}
+              >
+                <div>
+                  {taskResults.slice(0, 3).map((task) => (
+                    <div key={task.id} style={{
+                      background: '#f8fafc',
+                      border: '1px solid #f1f5f9',
+                      borderRadius: '6px',
+                      padding: '8px',
+                      marginBottom: '6px',
                       fontSize: textSizes.small
                     }}>
-                      {entry.text}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+                        <span>{task.status === 'pending' ? '⏳' : '✅'}</span>
+                        <span style={{ flex: 1, color: '#475569', fontWeight: '500' }}>
+                          {task.selectedFormat ? formatOptions.find(f => f.value === task.selectedFormat)?.label || task.outputFormat : task.outputFormat}
+                          {task.hasFile && ' 📎'}
+                        </span>
+                        <span style={{ color: '#94a3b8', fontSize: textSizes.tiny }}>
+                          {formatDate(task.createdAt)}
+                        </span>
+                      </div>
+                      {task.result && (
+                        <div style={{ position: 'relative' }}>
+                          <div 
+                            style={{
+                              fontSize: textSizes.small,
+                              color: '#475569',
+                              background: 'white',
+                              padding: '6px',
+                              borderRadius: '4px',
+                              border: '1px solid #e2e8f0',
+                              maxHeight: '80px',
+                              overflow: 'auto'
+                            }}
+                            dangerouslySetInnerHTML={{ __html: task.result }}
+                          />
+                          <button 
+                            onClick={() => insertIntoDraft(task.result.replace(/<[^>]*>/g, ''))}
+                            style={{
+                              position: 'absolute',
+                              top: '2px',
+                              right: '2px',
+                              background: '#64748b',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '3px',
+                              fontSize: textSizes.tiny,
+                              padding: '2px 6px',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            Insert
+                          </button>
+                        </div>
+                      )}
                     </div>
-                    {(entry.outputFormat || entry.selectedFormat) && (
-                      <div style={{ 
-                        fontSize: textSizes.tiny,
-                        color: '#94a3b8',
-                        fontStyle: 'italic',
-                        marginTop: '2px'
-                      }}>
-                        Format: {entry.selectedFormat ? formatOptions.find(f => f.value === entry.selectedFormat)?.label || entry.outputFormat : entry.outputFormat}
-                      </div>
-                    )}
-                    {entry.url && (
-                      <div style={{ marginTop: '2px' }}>
-                        <a 
-                          href={entry.url} 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          style={{ 
-                            fontSize: textSizes.tiny,
-                            color: '#3b82f6',
-                            textDecoration: 'none'
-                          }}
-                        >
-                          🔗 View in AirOps
-                        </a>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              </AccordionSection>
             )}
-          </div>
+
+            {commentHistory.length > 0 && (
+              <AccordionSection
+                id="history"
+                title={`History (${commentHistory.length})`}
+              >
+                <div style={{ maxHeight: '120px', overflowY: 'auto' }}>
+                  {commentHistory.slice(0, 3).map((entry, index) => (
+                    <div key={index} style={{
+                      padding: '6px',
+                      background: '#f8fafc',
+                      border: '1px solid #f1f5f9',
+                      borderRadius: '4px',
+                      marginBottom: '4px',
+                      fontSize: textSizes.small
+                    }}>
+                      <div style={{ 
+                        color: '#94a3b8', 
+                        marginBottom: '2px',
+                        fontSize: textSizes.tiny,
+                        fontWeight: '500'
+                      }}>
+                        {formatDate(entry.timestamp)} • {entry.mode === 'email' ? '✉️' : '📋'} • {entry.user}
+                        {entry.hasFile && ' 📎'}
+                      </div>
+                      <div style={{ 
+                        color: '#475569', 
+                        lineHeight: 1.3,
+                        fontSize: textSizes.small
+                      }}>
+                        {entry.text}
+                      </div>
+                      {entry.outputFormat && (
+                        <div style={{ 
+                          fontSize: textSizes.tiny,
+                          color: '#94a3b8',
+                          fontStyle: 'italic',
+                          marginTop: '2px'
+                        }}>
+                          Format: {entry.selectedFormat ? formatOptions.find(f => f.value === entry.selectedFormat)?.label || entry.outputFormat : entry.outputFormat}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </AccordionSection>
+            )}
+          </Accordion>
         )}
       </div>
 
@@ -1393,24 +1170,14 @@ function App() {
         {status && (
           <div style={{
             padding: '6px 8px',
-            background: status.includes('Error') || status.includes('404') || status.includes('Network') ? '#fef2f2' : '#f8fafc',
-            border: `1px solid ${status.includes('Error') || status.includes('404') || status.includes('Network') ? '#fecaca' : '#e2e8f0'}`,
+            background: '#f8fafc',
+            border: '1px solid #e2e8f0',
             borderRadius: '4px',
             fontSize: textSizes.small,
-            color: status.includes('Error') || status.includes('404') || status.includes('Network') ? '#dc2626' : '#64748b',
+            color: '#64748b',
             textAlign: 'center'
           }}>
             {status}
-            {(status.includes('404') || status.includes('Network')) && (
-              <div style={{ 
-                fontSize: textSizes.tiny, 
-                marginTop: '4px', 
-                color: '#7c2d12',
-                fontStyle: 'italic'
-              }}>
-                Check debug log above for details
-              </div>
-            )}
           </div>
         )}
       </div>
