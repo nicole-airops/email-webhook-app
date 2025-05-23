@@ -25,8 +25,10 @@ function App() {
   const [cardSize, setCardSize] = useState({ width: 340, height: 420 });
   const [isResizing, setIsResizing] = useState(false);
   const [textareaHeight, setTextareaHeight] = useState(60);
+  const [isTextareaResizing, setIsTextareaResizing] = useState(false);
   const cardRef = useRef(null);
   const textareaRef = useRef(null);
+  const textareaContainerRef = useRef(null);
   const fileInputRef = useRef(null);
   
   const EMAIL_WEBHOOK_URL = 'https://app.airops.com/public_api/airops_apps/73407/webhook_async_execute?auth_token=pxaMrQO7aOUSOXe6gSiLNz4cF1r-E9fOS4E378ws12BBD8SPt-OIVu500KEh';
@@ -84,25 +86,31 @@ function App() {
   // Card resize functionality
   useEffect(() => {
     const handleMouseMove = (e) => {
-      if (!isResizing) return;
+      if (isResizing && !isTextareaResizing) {
+        const rect = cardRef.current.getBoundingClientRect();
+        const newWidth = Math.max(300, e.clientX - rect.left);
+        const newHeight = Math.max(350, e.clientY - rect.top);
+        setCardSize({ width: newWidth, height: newHeight });
+      }
       
-      const rect = cardRef.current.getBoundingClientRect();
-      const newWidth = Math.max(300, e.clientX - rect.left);
-      const newHeight = Math.max(350, e.clientY - rect.top);
-      
-      setCardSize({ width: newWidth, height: newHeight });
+      if (isTextareaResizing) {
+        const rect = textareaContainerRef.current.getBoundingClientRect();
+        const newHeight = Math.max(40, Math.min(200, e.clientY - rect.top));
+        setTextareaHeight(newHeight);
+      }
     };
 
     const handleMouseUp = () => {
       setIsResizing(false);
+      setIsTextareaResizing(false);
       document.body.style.cursor = '';
       document.body.style.userSelect = '';
     };
 
-    if (isResizing) {
+    if (isResizing || isTextareaResizing) {
       document.addEventListener('mousemove', handleMouseMove);
       document.addEventListener('mouseup', handleMouseUp);
-      document.body.style.cursor = 'nw-resize';
+      document.body.style.cursor = isTextareaResizing ? 'ns-resize' : 'nw-resize';
       document.body.style.userSelect = 'none';
     }
 
@@ -110,21 +118,17 @@ function App() {
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [isResizing]);
+  }, [isResizing, isTextareaResizing]);
 
-  const handleResizeStart = (e) => {
+  const handleCardResizeStart = (e) => {
     e.preventDefault();
     setIsResizing(true);
   };
 
-  // Textarea resize functionality
-  const handleTextareaResize = (direction) => {
-    const increment = 20;
-    if (direction === 'up') {
-      setTextareaHeight(prev => Math.max(40, prev - increment));
-    } else {
-      setTextareaHeight(prev => Math.min(200, prev + increment));
-    }
+  const handleTextareaResizeStart = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsTextareaResizing(true);
   };
 
   useEffect(() => {
@@ -135,14 +139,15 @@ function App() {
     }
   }, [context]);
 
-  useEffect(() => {
-    if (pollingTasks.size > 0) {
-      const interval = setInterval(() => {
-        pollingTasks.forEach(taskId => checkTaskStatus(taskId));
-      }, 5000);
-      return () => clearInterval(interval);
-    }
-  }, [pollingTasks]);
+  // Remove polling for now since the endpoints are 404ing
+  // useEffect(() => {
+  //   if (pollingTasks.size > 0) {
+  //     const interval = setInterval(() => {
+  //       pollingTasks.forEach(taskId => checkTaskStatus(taskId));
+  //     }, 5000);
+  //     return () => clearInterval(interval);
+  //   }
+  // }, [pollingTasks]);
 
   useEffect(() => {
     if (selectedFormat && selectedFormat !== 'custom') {
@@ -242,11 +247,6 @@ function App() {
       if (savedTasks) {
         const tasks = JSON.parse(savedTasks);
         setTaskResults(tasks);
-        
-        const pendingTasks = tasks.filter(task => task.status === 'pending').map(task => task.id);
-        if (pendingTasks.length > 0) {
-          setPollingTasks(new Set(pendingTasks));
-        }
       }
     } catch (e) {
       console.error("Error loading task results:", e);
@@ -259,39 +259,6 @@ function App() {
       localStorage.setItem(storageKey, JSON.stringify(tasks));
     } catch (e) {
       console.error("Error saving task results:", e);
-    }
-  };
-
-  const checkTaskStatus = async (taskId) => {
-    try {
-      const response = await fetch(`/api/task-status?taskId=${taskId}`);
-      if (response.ok) {
-        const result = await response.json();
-        
-        if (result.status === 'completed') {
-          const updatedTasks = taskResults.map(task => 
-            task.id === taskId 
-              ? { ...task, status: 'completed', result: result.data, completedAt: result.completedAt }
-              : task
-          );
-          
-          setTaskResults(updatedTasks);
-          const conversationId = context?.conversation?.id;
-          if (conversationId) {
-            saveTaskResultsToStorage(conversationId, updatedTasks);
-          }
-          
-          setPollingTasks(prev => {
-            const newSet = new Set(prev);
-            newSet.delete(taskId);
-            return newSet;
-          });
-          
-          setStatus('Task completed!');
-        }
-      }
-    } catch (error) {
-      console.error('Error checking task status:', error);
     }
   };
 
@@ -343,7 +310,6 @@ function App() {
     
     try {
       const taskId = mode === 'task' ? `task_${Date.now()}_${Math.random().toString(36).substr(2, 9)}` : null;
-      const callbackUrl = taskId ? `${window.location.origin}/api/task-callback` : null;
       
       const combinedInstructions = createCombinedInstructions();
       addDebugLog(`📝 Combined instructions: ${combinedInstructions.substring(0, 50)}...`);
@@ -403,19 +369,7 @@ function App() {
           setTaskResults(updatedTasks);
           saveTaskResultsToStorage(conversationId, updatedTasks);
           
-          try {
-            await fetch('/api/store-task', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ taskId, task: newTask })
-            });
-            addDebugLog('💾 Task stored in Netlify');
-          } catch (blobError) {
-            addDebugLog(`❌ Error storing task: ${blobError.message}`);
-            console.error('Error storing task in Netlify Blobs:', blobError);
-          }
-          
-          setPollingTasks(prev => new Set([...prev, taskId]));
+          addDebugLog('💾 Task stored locally (skipping Netlify due to 404s)');
         }
       }
       
@@ -440,7 +394,6 @@ function App() {
         userComment: combinedInstructions,
         mode: mode,
         ...(taskId && { taskId: taskId }),
-        ...(callbackUrl && { callbackUrl: callbackUrl }),
         ...(uploadedFile && { 
           fileReference: {
             name: uploadedFile.name,
@@ -453,6 +406,7 @@ function App() {
       
       addDebugLog(`📦 Payload size: ${JSON.stringify(payload).length} chars`);
       console.log('🔍 EXACT PAYLOAD BEING SENT:', payload);
+      console.log('🎯 WEBHOOK URL:', webhookUrl);
       
       // SINGLE WEBHOOK CALL
       addDebugLog('📡 Making webhook call...');
@@ -469,16 +423,23 @@ function App() {
       if (!response.ok) {
         const errorText = await response.text();
         addDebugLog(`❌ Webhook error: ${errorText}`);
-        throw new Error(`HTTP error ${response.status}: ${errorText}`);
-      }
-      
-      const responseData = await response.text();
-      addDebugLog(`✅ Success: ${responseData.substring(0, 50)}...`);
-      
-      if (mode === 'email') {
-        setStatus('Sent!');
+        
+        // Show specific error for 404
+        if (response.status === 404) {
+          addDebugLog('🔍 404 Error - Check if AirOps workflow is active and URL is correct');
+          setStatus('AirOps workflow not found (404). Check if it\'s active.');
+        } else {
+          throw new Error(`HTTP error ${response.status}: ${errorText}`);
+        }
       } else {
-        setStatus('Task created! Processing...');
+        const responseData = await response.text();
+        addDebugLog(`✅ Success: ${responseData.substring(0, 50)}...`);
+        
+        if (mode === 'email') {
+          setStatus('Sent!');
+        } else {
+          setStatus('Task created! (Note: Polling disabled due to 404s)');
+        }
       }
       
       setComment('');
@@ -634,8 +595,8 @@ function App() {
         paddingRight: '4px',
         marginBottom: '12px'
       }}>
-        {/* Instructions Textarea with resize controls */}
-        <div style={{ position: 'relative', marginBottom: '8px' }}>
+        {/* Instructions Textarea with drag resize */}
+        <div ref={textareaContainerRef} style={{ position: 'relative', marginBottom: '8px' }}>
           <textarea
             ref={textareaRef}
             value={comment}
@@ -651,50 +612,41 @@ function App() {
               fontFamily: 'inherit',
               resize: 'none',
               transition: 'border-color 0.15s ease',
-              paddingBottom: '28px'
+              paddingBottom: '20px' // Make room for resize handle
             }}
             onFocus={(e) => e.target.style.borderColor = '#6366f1'}
             onBlur={(e) => e.target.style.borderColor = '#d1d5db'}
           />
           
-          {/* Textarea resize controls */}
-          <div style={{
-            position: 'absolute',
-            bottom: '4px',
-            right: '8px',
-            display: 'flex',
-            gap: '4px'
-          }}>
-            <button
-              onClick={() => handleTextareaResize('up')}
-              style={{
-                background: '#f3f4f6',
-                border: '1px solid #d1d5db',
-                borderRadius: '3px',
-                padding: '2px 6px',
-                fontSize: textSizes.tiny,
-                cursor: 'pointer',
-                color: '#374151'
-              }}
-              title="Make smaller"
-            >
-              ↕−
-            </button>
-            <button
-              onClick={() => handleTextareaResize('down')}
-              style={{
-                background: '#f3f4f6',
-                border: '1px solid #d1d5db',
-                borderRadius: '3px',
-                padding: '2px 6px',
-                fontSize: textSizes.tiny,
-                cursor: 'pointer',
-                color: '#374151'
-              }}
-              title="Make larger"
-            >
-              ↕+
-            </button>
+          {/* Textarea drag resize handle */}
+          <div
+            onMouseDown={handleTextareaResizeStart}
+            style={{
+              position: 'absolute',
+              bottom: '2px',
+              right: '8px',
+              left: '8px',
+              height: '12px',
+              cursor: 'ns-resize',
+              background: 'linear-gradient(90deg, transparent 30%, #d1d5db 30%, #d1d5db 35%, transparent 35%, transparent 65%, #d1d5db 65%, #d1d5db 70%, transparent 70%)',
+              backgroundSize: '8px 2px',
+              opacity: 0.3,
+              borderRadius: '0 0 4px 4px',
+              transition: 'opacity 0.2s ease',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
+            onMouseEnter={(e) => e.target.style.opacity = '0.7'}
+            onMouseLeave={(e) => e.target.style.opacity = '0.3'}
+            title="Drag to resize"
+          >
+            <div style={{
+              width: '20px',
+              height: '3px',
+              background: '#9ca3af',
+              borderRadius: '2px'
+            }} />
           </div>
         </div>
 
@@ -990,7 +942,7 @@ function App() {
 
       {/* Card Resize Handle */}
       <div
-        onMouseDown={handleResizeStart}
+        onMouseDown={handleCardResizeStart}
         style={{
           position: 'absolute',
           bottom: '2px',
