@@ -1,3 +1,4 @@
+/* Reset and base styles */
 * {
   box-sizing: border-box;
   margin: 0;
@@ -5,262 +6,323 @@
 }
 
 html,
-body {
-  margin: 0;
-  padding: 0;
-  height: auto;
-}
-
+body,
 #root {
   margin: 0;
   padding: 0;
-  display: inline-block;
-}
-
-body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  font-size: 11px;
-  line-height: 1.3;
+  font-size: 10px;
+  line-height: 1.2;
   color: #374151;
-  margin: 0;
-  padding: 0;
 }
 
-.app {
-  display: inline-block;
-  margin: 0;
-  padding: 0;
+/* Scrollbar styling for compact areas */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
 }
 
-.card {
-  background: white;
-  border-radius: 8px;
-  padding: 8px;
-  width: auto;
-  min-width: 280px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  border: 1px solid #e5e7eb;
-  margin: 0;
-  display: inline-block;
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 2px;
 }
 
-.header {
-  display: flex;
-  align-items: center;
-  margin-bottom: 6px;
-  font-size: 12px;
-  font-weight: 600;
-  color: #111827;
-}
-
-.logo {
-  width: 14px;
-  height: 14px;
-  margin-right: 6px;
-}
-
-/* Remove custom button, input, textarea styles - Front UI Kit handles these */
-
-/* Keep custom task results styling */
-.task-results {
-  border-top: 1px solid #f1f5f9;
-  padding-top: 8px;
-  margin-top: 8px;
-}
-
-.task-header {
-  font-size: 10px;
-  color: #64748b;
-  font-weight: 500;
-  margin-bottom: 6px;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.task-item {
-  background: #f8fafc;
-  border: 1px solid #f1f5f9;
-  border-radius: 4px;
-  padding: 6px;
-  margin-bottom: 4px;
-}
-
-.task-item:last-child {
-  margin-bottom: 0;
-}
-
-.task-meta {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-bottom: 4px;
-  font-size: 9px;
-}
-
-.task-status {
-  font-size: 10px;
-}
-
-.task-format {
-  color: #475569;
-  font-weight: 500;
-  flex: 1;
-}
-
-.task-date {
-  color: #94a3b8;
-}
-
-.task-result {
-  margin-top: 6px;
-  position: relative;
-}
-
-.task-content {
-  font-size: 10px;
-  line-height: 1.3;
-  color: #475569;
-  background: white;
-  padding: 6px;
-  border-radius: 3px;
-  border: 1px solid #e2e8f0;
-  max-height: 80px;
-  overflow-y: auto;
-}
-
-.task-content h1,
-.task-content h2,
-.task-content h3,
-.task-content h4,
-.task-content h5,
-.task-content h6 {
-  font-size: 10px;
-  margin: 2px 0;
-  color: #1e293b;
-}
-
-.task-content p {
-  margin: 2px 0;
-}
-
-.task-content ul,
-.task-content ol {
-  margin: 2px 0;
-  padding-left: 12px;
-}
-
-.task-content::-webkit-scrollbar {
-  width: 3px;
-}
-
-.task-content::-webkit-scrollbar-thumb {
+::-webkit-scrollbar-thumb {
   background: #cbd5e1;
   border-radius: 2px;
 }
 
-/* Keep custom history styling */
-.history {
-  border-top: 1px solid #f1f5f9;
-  padding-top: 8px;
-  margin-top: 8px;
-}
-
-.history-items {
-  margin-top: 6px;
-  max-height: 100px;
-  overflow-y: auto;
-}
-
-.history-item {
-  padding: 6px;
-  background: #f8fafc;
-  border: 1px solid #f1f5f9;
-  border-radius: 4px;
-  margin-bottom: 4px;
-}
-
-.history-item:last-child {
-  margin-bottom: 0;
-}
-
-.history-date {
-  font-size: 9px;
-  color: #94a3b8;
-  margin-bottom: 2px;
-  font-weight: 500;
-}
-
-.history-text {
-  font-size: 10px;
-  color: #475569;
-  line-height: 1.3;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-.history-format {
-  font-size: 9px;
-  color: #94a3b8;
-  font-style: italic;
-  margin-top: 2px;
-}
-
-.history-items::-webkit-scrollbar {
-  width: 3px;
-}
-
-.history-items::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 2px;
-}
-
-.history-items::-webkit-scrollbar-thumb:hover {
+::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;
 }
 
-/* Loading spinner - keep this */
+/* Input focus states */
+input:focus,
+textarea:focus,
+select:focus {
+  outline: none;
+  border-color: #6366f1 !important;
+  box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.1);
+}
+
+/* Button hover states */
+button:hover:not(:disabled) {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+
+button:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+/* Compact animations */
+* {
+  transition: all 0.1s ease;
+}
+
+/* Hide default file input styling */
+input[type="file"] {
+  opacity: 0;
+  position: absolute;
+  z-index: -1;
+}
+
+/* Compact text truncation utility */
+.truncate {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Compact spacing utilities */
+.mb-1 {
+  margin-bottom: 2px;
+}
+
+.mb-2 {
+  margin-bottom: 4px;
+}
+
+.mb-3 {
+  margin-bottom: 6px;
+}
+
+.p-1 {
+  padding: 2px;
+}
+
+.p-2 {
+  padding: 4px;
+}
+
+.p-3 {
+  padding: 6px;
+}
+
+/* Responsive text sizing */
+@media (max-width: 300px) {
+
+  html,
+  body,
+  #root {
+    font-size: 9px;
+  }
+}
+
+/* Focus within container */
+.card:focus-within {
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+
+/* Loading state */
 .loading {
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 60px;
+  min-height: 60px;
+  color: #9ca3af;
+  font-size: 9px;
+}
+
+/* Status indicators */
+.status-success {
+  color: #059669;
+}
+
+.status-error {
+  color: #dc2626;
+}
+
+.status-warning {
+  color: #d97706;
+}
+
+.status-info {
+  color: #2563eb;
+}
+
+/* Compact badge/pill styling */
+.badge {
+  display: inline-block;
+  padding: 1px 4px;
+  font-size: 7px;
+  font-weight: 500;
+  border-radius: 2px;
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.badge-primary {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.badge-success {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+/* Compact form elements */
+.form-compact input,
+.form-compact textarea,
+.form-compact select {
+  padding: 3px 5px;
+  font-size: 9px;
+  border: 1px solid #d1d5db;
+  border-radius: 2px;
+}
+
+.form-compact button {
+  padding: 4px 8px;
+  font-size: 9px;
+  border-radius: 2px;
+}
+
+/* Utility classes for compact layout */
+.flex {
+  display: flex;
+}
+
+.flex-col {
+  flex-direction: column;
+}
+
+.items-center {
+  align-items: center;
+}
+
+.justify-between {
+  justify-content: space-between;
+}
+
+.gap-1 {
+  gap: 2px;
+}
+
+.gap-2 {
+  gap: 4px;
+}
+
+.text-xs {
+  font-size: 8px;
+}
+
+.text-sm {
+  font-size: 9px;
+}
+
+.text-base {
+  font-size: 10px;
+}
+
+.font-medium {
+  font-weight: 500;
+}
+
+.font-semibold {
+  font-weight: 600;
+}
+
+.text-gray-400 {
   color: #9ca3af;
 }
 
-.spinner {
-  width: 12px;
-  height: 12px;
-  border: 1px solid #f3f4f6;
-  border-left-color: #6b7280;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
+.text-gray-500 {
+  color: #6b7280;
 }
 
-@keyframes spin {
-  0% {
-    transform: rotate(0deg);
-  }
-
-  100% {
-    transform: rotate(360deg);
-  }
+.text-gray-600 {
+  color: #4b5563;
 }
 
-/* Status pill container */
-.status {
-  display: flex;
-  justify-content: center;
-  margin-bottom: 4px;
+.text-gray-900 {
+  color: #111827;
 }
 
-/* Override Front UI Kit spacing if needed */
-.card>* {
+.bg-gray-50 {
+  background-color: #f9fafb;
+}
+
+.bg-gray-100 {
+  background-color: #f3f4f6;
+}
+
+.border {
+  border: 1px solid #e5e7eb;
+}
+
+.border-gray-200 {
+  border-color: #e5e7eb;
+}
+
+.border-gray-300 {
+  border-color: #d1d5db;
+}
+
+.rounded {
+  border-radius: 0.25rem;
+}
+
+.rounded-sm {
+  border-radius: 0.125rem;
+}
+
+/* Hover and focus utilities */
+.hover-bg-gray-50:hover {
+  background-color: #f9fafb;
+}
+
+.hover-bg-gray-100:hover {
+  background-color: #f3f4f6;
+}
+
+.focus-ring:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+}
+
+/* Compact card specific styles */
+.card-header {
+  padding-bottom: 6px;
+  border-bottom: 1px solid #f1f5f9;
   margin-bottom: 6px;
 }
 
-.card>*:last-child {
-  margin-bottom: 0;
+.card-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 2px 0;
+}
+
+.card-footer {
+  padding-top: 6px;
+  border-top: 1px solid #f1f5f9;
+  margin-top: 6px;
+}
+
+/* Resize handle styling */
+.resize-handle {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 12px;
+  height: 12px;
+  cursor: nw-resize;
+  opacity: 0.3;
+  transition: opacity 0.2s ease;
+}
+
+.resize-handle:hover {
+  opacity: 0.7;
+}
+
+.resize-handle::after {
+  content: '';
+  position: absolute;
+  bottom: 2px;
+  right: 2px;
+  width: 8px;
+  height: 8px;
+  background: linear-gradient(-45deg, transparent 30%, #9ca3af 30%, #9ca3af 35%, transparent 35%);
+  background-size: 3px 3px;
 }
