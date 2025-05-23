@@ -1,305 +1,245 @@
-* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
+import { useState, useEffect } from 'react';
+import { useFrontContext } from './providers/frontContext';
+import './App.css';
+
+function App() {
+  const context = useFrontContext();
+  const [mode, setMode] = useState('email');
+  const [comment, setComment] = useState('');
+  const [outputFormat, setOutputFormat] = useState('');
+  const [isSending, setIsSending] = useState(false);
+  const [status, setStatus] = useState('');
+  const [commentHistory, setCommentHistory] = useState([]);
+  const [showHistory, setShowHistory] = useState(false);
+  
+  const EMAIL_WEBHOOK_URL = 'https://app.airops.com/public_api/airops_apps/73407/webhook_async_execute?auth_token=pxaMrQO7aOUSOXe6gSiLNz4cF1r-E9fOS4E378ws12BBD8SPt-OIVu500KEh';
+  const TASK_WEBHOOK_URL = 'https://app.airops.com/public_api/airops_apps/84946/webhook_async_execute?auth_token=pxaMrQO7aOUSOXe6gSiLNz4cF1r-E9fOS4E378ws12BBD8SPt-OIVu500KEh';
+  const AIROPS_LOGO_URL = 'https://app.ashbyhq.com/api/images/org-theme-logo/78d1f89f-3e5a-4a8b-b6b5-a91acb030fed/aba001ed-b5b5-4a1b-8bd6-dfb86392876e/d8e6228c-ea82-4061-b660-d7b6c502f155.png';
+  
+  useEffect(() => {
+    if (context && context.conversation && context.conversation.id) {
+      loadCommentHistoryFromStorage(context.conversation.id);
+    }
+  }, [context]);
+
+  const loadCommentHistoryFromStorage = (conversationId) => {
+    const storageKey = `airops-history-${conversationId}`;
+    try {
+      const savedHistory = localStorage.getItem(storageKey);
+      if (savedHistory) {
+        setCommentHistory(JSON.parse(savedHistory));
+      } else {
+        setCommentHistory([]);
+      }
+    } catch (e) {
+      console.error("Error loading history:", e);
+      setCommentHistory([]);
+    }
+  };
+
+  const saveCommentHistoryToStorage = (conversationId, history) => {
+    const storageKey = `airops-history-${conversationId}`;
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(history));
+    } catch (e) {
+      console.error("Error saving history:", e);
+    }
+  };
+
+  const processRequest = async () => {
+    if (!comment.trim()) {
+      setStatus('Add instructions');
+      return;
+    }
+
+    if (mode === 'task' && !outputFormat.trim()) {
+      setStatus('Add output format');
+      return;
+    }
+    
+    setIsSending(true);
+    setStatus('Processing...');
+    
+    try {
+      let conversationData = {};
+      
+      if (context.conversation) {
+        const conversationId = context.conversation.id;
+        
+        conversationData = {
+          id: conversationId,
+          subject: context.conversation.subject,
+          status: context.conversation.status,
+          recipient: context.conversation.recipient,
+          tags: context.conversation.tags,
+          assignee: context.conversation.assignee
+        };
+        
+        try {
+          const messages = await context.listMessages();
+          conversationData.messages = messages.results;
+        } catch (err) {
+          console.error("Couldn't fetch messages:", err);
+        }
+        
+        const newEntry = {
+          text: comment,
+          mode: mode,
+          outputFormat: mode === 'task' ? outputFormat : null,
+          timestamp: new Date().toISOString(),
+          user: context.teammate ? context.teammate.name : 'Unknown user'
+        };
+        
+        const updatedHistory = [newEntry, ...commentHistory];
+        setCommentHistory(updatedHistory);
+        saveCommentHistoryToStorage(conversationId, updatedHistory);
+      }
+      
+      if (context.draft) {
+        conversationData.draft = {
+          body: context.draft.body,
+          subject: context.draft.subject
+        };
+      }
+      
+      if (context.teammate) {
+        conversationData.teammate = context.teammate;
+      }
+      
+      const webhookUrl = mode === 'email' ? EMAIL_WEBHOOK_URL : TASK_WEBHOOK_URL;
+      
+      const payload = {
+        "Front Webhook Payload": {
+          frontData: conversationData,
+          contextType: context.type,
+          userComment: comment,
+          mode: mode,
+          ...(mode === 'task' && { outputFormat: outputFormat })
+        }
+      };
+      
+      const response = await fetch(webhookUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error ${response.status}`);
+      }
+      
+      setStatus('Sent!');
+      setComment('');
+      setOutputFormat('');
+    } catch (error) {
+      console.error('Error:', error);
+      setStatus('Error: ' + error.message);
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  const formatDate = (isoString) => {
+    try {
+      const date = new Date(isoString);
+      return date.toLocaleDateString(undefined, { 
+        month: 'short', 
+        day: 'numeric'
+      });
+    } catch (e) {
+      return isoString;
+    }
+  };
+
+  const toggleHistory = () => {
+    setShowHistory(!showHistory);
+  };
+
+  if (!context) {
+    return (
+      <div className="loading">
+        <div className="spinner"></div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="app">
+      <div className="card">
+        <div className="header">
+          <img src={AIROPS_LOGO_URL} alt="" className="logo" />
+          <span>Send to AirOps</span>
+        </div>
+
+        <div className="tabs">
+          <button 
+            className={mode === 'email' ? 'active' : ''}
+            onClick={() => setMode('email')}
+          >
+            Email
+          </button>
+          <button 
+            className={mode === 'task' ? 'active' : ''}
+            onClick={() => setMode('task')}
+          >
+            Task
+          </button>
+        </div>
+        
+        <textarea
+          value={comment}
+          onChange={(e) => setComment(e.target.value)}
+          placeholder={mode === 'email' 
+            ? "How should we respond?" 
+            : "What do you need?"
+          }
+          rows="2"
+        />
+
+        {mode === 'task' && (
+          <input
+            type="text"
+            value={outputFormat}
+            onChange={(e) => setOutputFormat(e.target.value)}
+            placeholder="Output format..."
+          />
+        )}
+        
+        <button
+          onClick={processRequest}
+          disabled={isSending}
+          className={`btn ${isSending ? 'loading' : ''}`}
+        >
+          {isSending ? '...' : 'Send'}
+        </button>
+        
+        {status && <div className="status">{status}</div>}
+        
+        {commentHistory.length > 0 && (
+          <div className="history">
+            <button onClick={toggleHistory} className="history-btn">
+              {showHistory ? '−' : '+'} {commentHistory.length}
+            </button>
+            
+            {showHistory && (
+              <div className="history-items">
+                {commentHistory.slice(0, 3).map((entry, index) => (
+                  <div key={index} className="history-item">
+                    <div className="history-date">
+                      {formatDate(entry.timestamp)} • {entry.mode === 'email' ? '✉️' : '📋'}
+                    </div>
+                    <div className="history-text">{entry.text}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
-html, body {
-  margin: 0;
-  padding: 0;
-  height: auto;
-}
-
-#root {
-  margin: 0;
-  padding: 0;
-  display: inline-block;
-}
-
-body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  font-size: 11px;
-  line-height: 1.3;
-  color: #374151;
-  margin: 0;
-  padding: 0;
-}
-
-.app {
-  display: inline-block;
-  margin: 0;
-  padding: 0;
-}
-
-.card {
-  background: white;
-  border-radius: 8px;
-  padding: 8px;
-  width: auto;
-  min-width: 280px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  border: 1px solid #e5e7eb;
-  margin: 0;
-  display: inline-block;
-} 3px rgba(0, 0, 0, 0.1);
-  border: 1px solid #e5e7eb;
-  position: relative;
-}
-
-.card::after {
-  content: '';
-  position: absolute;
-  bottom: 3px;
-  right: 3px;
-  width: 12px;
-  height: 12px;
-  background: linear-gradient(-45deg, transparent 30%, #cbd5e1 30%, #cbd5e1 35%, transparent 35%, transparent 65%, #cbd5e1 65%, #cbd5e1 70%, transparent 70%);
-  cursor: se-resize;
-  pointer-events: none;
-  opacity: 0.5;
-  transition: opacity 0.2s ease;
-}
-
-.card:hover::after {
-  opacity: 0.8;
-}
-
-.header {
-  display: flex;
-  align-items: center;
-  margin-bottom: 6px;
-  font-size: 12px;
-  font-weight: 600;
-  color: #111827;
-}
-
-.logo {
-  width: 14px;
-  height: 14px;
-  margin-right: 6px;
-}
-
-.tabs {
-  display: flex;
-  background: #f1f5f9;
-  border-radius: 4px;
-  padding: 1px;
-  margin-bottom: 6px;
-  gap: 1px;
-}
-
-.tabs button {
-  flex: 1;
-  padding: 4px 8px;
-  border: none;
-  border-radius: 3px;
-  font-size: 10px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  background: transparent;
-  color: #64748b;
-}
-
-.tabs button.active {
-  background: white;
-  color: #1e293b;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-}
-
-.tabs button:hover:not(.active) {
-  color: #475569;
-}
-
-textarea {
-  width: 100%;
-  padding: 6px 8px 16px 8px;
-  border: 1px solid #d1d5db;
-  border-radius: 4px;
-  font-size: 11px;
-  font-family: inherit;
-  background: white;
-  color: #374151;
-  resize: vertical;
-  margin-bottom: 6px;
-  transition: border-color 0.15s ease;
-  min-height: 32px;
-  background-image: 
-    linear-gradient(135deg, transparent 85%, #cbd5e1 85%),
-    linear-gradient(135deg, transparent 90%, #cbd5e1 90%),
-    linear-gradient(135deg, transparent 95%, #cbd5e1 95%);
-  background-position: 
-    bottom 4px right 4px,
-    bottom 2px right 2px,
-    bottom 1px right 1px;
-  background-size: 
-    6px 6px,
-    4px 4px,
-    2px 2px;
-  background-repeat: no-repeat;
-}
-
-textarea:hover {
-  border-color: #9ca3af;
-  background-image: 
-    linear-gradient(135deg, transparent 85%, #9ca3af 85%),
-    linear-gradient(135deg, transparent 90%, #9ca3af 90%),
-    linear-gradient(135deg, transparent 95%, #9ca3af 95%);
-  background-position: 
-    bottom 4px right 4px,
-    bottom 2px right 2px,
-    bottom 1px right 1px;
-  background-size: 
-    6px 6px,
-    4px 4px,
-    2px 2px;
-  background-repeat: no-repeat;
-}
-
-input {
-  width: 100%;
-  padding: 6px 8px;
-  border: 1px solid #d1d5db;
-  border-radius: 4px;
-  font-size: 11px;
-  font-family: inherit;
-  background: white;
-  color: #374151;
-  resize: none;
-  margin-bottom: 6px;
-  transition: border-color 0.15s ease;
-}
-
-textarea:focus, input:focus {
-  outline: none;
-  border-color: #9ca3af;
-}
-
-textarea::placeholder, input::placeholder {
-  color: #9ca3af;
-  font-size: 10px;
-}
-
-.btn {
-  width: 100%;
-  background: #1f2937;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  padding: 6px;
-  font-size: 11px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background-color 0.15s ease;
-  margin-bottom: 4px;
-}
-
-.btn:hover {
-  background: #374151;
-}
-
-.btn.loading {
-  background: #9ca3af;
-  cursor: not-allowed;
-}
-
-.status {
-  padding: 4px 6px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 3px;
-  font-size: 9px;
-  color: #64748b;
-  text-align: center;
-  margin-bottom: 4px;
-}
-
-.history {
-  border-top: 1px solid #f1f5f9;
-  padding-top: 4px;
-}
-
-.history-btn {
-  background: none;
-  border: none;
-  font-size: 10px;
-  color: #64748b;
-  cursor: pointer;
-  padding: 0;
-  font-family: inherit;
-  font-weight: 500;
-}
-
-.history-btn:hover {
-  color: #475569;
-}
-
-.history-items {
-  margin-top: 6px;
-  max-height: 80px;
-  overflow-y: auto;
-}
-
-.history-item {
-  padding: 4px 6px;
-  background: #f8fafc;
-  border: 1px solid #f1f5f9;
-  border-radius: 3px;
-  margin-bottom: 3px;
-}
-
-.history-item:last-child {
-  margin-bottom: 0;
-}
-
-.history-date {
-  font-size: 9px;
-  color: #94a3b8;
-  margin-bottom: 2px;
-  font-weight: 500;
-}
-
-.history-text {
-  font-size: 10px;
-  color: #475569;
-  line-height: 1.2;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-.loading {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 60px;
-  color: #9ca3af;
-}
-
-.spinner {
-  width: 12px;
-  height: 12px;
-  border: 1px solid #f3f4f6;
-  border-left-color: #6b7280;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
-
-.history-items::-webkit-scrollbar {
-  width: 2px;
-}
-
-.history-items::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 1px;
-}
-
-.history-items::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
-}
+export default App;
