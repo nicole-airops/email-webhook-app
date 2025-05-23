@@ -15,6 +15,7 @@ function App() {
   const [commentHistory, setCommentHistory] = useState([]);
   const [taskResults, setTaskResults] = useState([]);
   const [pollingTasks, setPollingTasks] = useState(new Set());
+  
   // Prevent multiple calls
   const isProcessingRef = useRef(false);
   const lastCallTimeRef = useRef(0);
@@ -36,27 +37,14 @@ function App() {
   const TASK_WEBHOOK_URL = 'https://app.airops.com/public_api/airops_apps/a628c7d4-6b22-42af-9ded-fb01839d5e06/webhook_async_execute?auth_token=pxaMrQO7aOUSOXe6gSiLNz4cF1r-E9fOS4E378ws12BBD8SPt-OIVu500KEh';
   const AIROPS_LOGO_URL = 'https://app.ashbyhq.com/api/images/org-theme-logo/78d1f89f-3e5a-4a8b-b6b5-a91acb030fed/aba001ed-b5b5-4a1b-8bd6-dfb86392876e/d8e6228c-ea82-4061-b660-d7b6c502f155.png';
   
-  // Format options
+  // Format options - ONLY Text and Table (FIXED!)
   const formatOptions = [
     { value: '', label: 'Select format...' },
-    { value: 'email', label: '📧 Email Draft' },
-    { value: 'bullets', label: '• Bullet Points' },
-    { value: 'table', label: '📊 Table/Spreadsheet' },
-    { value: 'document', label: '📄 Document/Report' },
-    { value: 'json', label: '{ } JSON Data' },
-    { value: 'summary', label: '📋 Executive Summary' },
-    { value: 'tasks', label: '✅ Action Items' },
-    { value: 'timeline', label: '📅 Timeline/Schedule' },
-    { value: 'custom', label: '✏️ Custom Format' }
+    { value: 'text', label: 'Text' },
+    { value: 'table', label: 'Table' }
   ];
 
-  // Add debug logging
-  const addDebugLog = (message) => {
-    const timestamp = new Date().toLocaleTimeString();
-    setDebugLog(prev => [`${timestamp}: ${message}`, ...prev.slice(0, 4)]);
-  };
-
-  // Detect container size changes and make app fully responsive
+  // Detect container size changes and auto-resize card responsively
   useEffect(() => {
     const observeContainerSize = () => {
       if (!cardRef.current) return;
@@ -66,40 +54,40 @@ function App() {
       
       const updateSize = () => {
         const rect = parent.getBoundingClientRect();
+        const containerWidth = rect.width;
+        const containerHeight = rect.height;
         
-        // Make card fully responsive - always fit container with small padding
-        const newWidth = Math.max(280, rect.width - 12);
-        const newHeight = Math.max(350, rect.height - 12);
+        // Auto-resize card to fit container with padding
+        const newWidth = Math.max(280, containerWidth - 8);
+        const newHeight = Math.max(350, containerHeight - 8);
         
-        setContainerSize({ width: rect.width, height: rect.height });
+        setContainerSize({ width: containerWidth, height: containerHeight });
         setCardSize({ width: newWidth, height: newHeight });
       };
       
       // Initial size
       updateSize();
       
-      // Use ResizeObserver for better responsiveness
+      // Use ResizeObserver for real-time responsiveness
       if (window.ResizeObserver) {
-        const resizeObserver = new ResizeObserver((entries) => {
-          updateSize();
+        const resizeObserver = new ResizeObserver(() => {
+          requestAnimationFrame(updateSize);
         });
         resizeObserver.observe(parent);
         
-        // Also observe window for additional responsiveness
-        const handleWindowResize = () => updateSize();
-        window.addEventListener('resize', handleWindowResize);
+        // Also listen to window resize
+        window.addEventListener('resize', updateSize);
         
         return () => {
           resizeObserver.disconnect();
-          window.removeEventListener('resize', handleWindowResize);
+          window.removeEventListener('resize', updateSize);
         };
       } else {
-        // Fallback with more frequent updates
-        const handleResize = () => updateSize();
+        // Fallback with frequent polling for older browsers
+        const handleResize = () => requestAnimationFrame(updateSize);
         window.addEventListener('resize', handleResize);
         
-        // Poll for size changes as fallback
-        const interval = setInterval(updateSize, 200);
+        const interval = setInterval(updateSize, 100); // More frequent for better responsiveness
         
         return () => {
           window.removeEventListener('resize', handleResize);
@@ -129,16 +117,20 @@ function App() {
 
   const textSizes = getAdaptiveTextSize();
 
-  // Manual resize functionality that respects container bounds
+  // Manual drag resize functionality with smooth adaptation
   useEffect(() => {
     const handleMouseMove = (e) => {
       if (isResizing && !isTextareaResizing) {
-        const rect = cardRef.current.getBoundingClientRect();
-        // Ensure resize stays within container bounds with better padding
-        const maxWidth = containerSize.width - 12;
-        const maxHeight = containerSize.height - 12;
-        const newWidth = Math.max(280, Math.min(maxWidth, e.clientX - rect.left));
-        const newHeight = Math.max(350, Math.min(maxHeight, e.clientY - rect.top));
+        const parent = cardRef.current.parentElement;
+        if (!parent) return;
+        
+        const parentRect = parent.getBoundingClientRect();
+        const cardRect = cardRef.current.getBoundingClientRect();
+        
+        // Calculate new size based on mouse position relative to card start
+        const newWidth = Math.max(280, Math.min(parentRect.width - 8, e.clientX - cardRect.left));
+        const newHeight = Math.max(350, Math.min(parentRect.height - 8, e.clientY - cardRect.top));
+        
         setCardSize({ width: newWidth, height: newHeight });
       }
       
@@ -167,7 +159,7 @@ function App() {
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [isResizing, isTextareaResizing, containerSize]);
+  }, [isResizing, isTextareaResizing]);
 
   const handleCardResizeStart = (e) => {
     e.preventDefault();
@@ -188,11 +180,62 @@ function App() {
     }
   }, [context]);
 
+  // Check for completed tasks from webhook notifications
+  const checkTaskStatus = async (taskId) => {
+    try {
+      const response = await fetch(`/api/task-status?taskId=${taskId}`);
+      if (response.ok) {
+        const result = await response.json();
+        
+        if (result.status === 'completed' || result.status === 'failed') {
+          const updatedTasks = taskResults.map(task => 
+            task.id === taskId 
+              ? { ...task, status: result.status, result: result.data, completedAt: result.completedAt }
+              : task
+          );
+          
+          setTaskResults(updatedTasks);
+          
+          // Save completed task to Netlify
+          try {
+            if (context.addLink && context.conversation) {
+              const completedTask = updatedTasks.find(t => t.id === taskId);
+              const linkUrl = `https://app.airops.com/airops-2/workflows/84946/results?taskId=${taskId}`;
+              const linkName = `✅ AirOps Result: ${completedTask?.outputFormat || 'Task'} - ${result.status}`;
+              
+              await context.addLink({
+                url: linkUrl,
+                name: linkName,
+                description: `Task ${taskId} ${result.status}: ${result.data?.substring(0, 200)}...`
+              });
+            }
+          } catch (linkError) {
+            console.error('Error adding completion link:', linkError);
+          }
+          
+          // Stop polling this task
+          setPollingTasks(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(taskId);
+            return newSet;
+          });
+          
+          setStatus(`Task ${result.status}!`);
+          return true; // Task completed
+        }
+      }
+    } catch (error) {
+      console.error('Error checking task status:', error);
+    }
+    return false; // Task still pending
+  };
+
+  // Reduced polling frequency since webhooks handle most updates
   useEffect(() => {
     if (pollingTasks.size > 0) {
       const interval = setInterval(() => {
         pollingTasks.forEach(taskId => checkTaskStatus(taskId));
-      }, 5000);
+      }, 30000); // Check every 30 seconds instead of 5 (webhook handles real-time)
       return () => clearInterval(interval);
     }
   }, [pollingTasks]);
@@ -223,9 +266,10 @@ function App() {
     return combinedText;
   };
 
-  // COMPLETE NESTED PAYLOAD CREATOR
+  // COMPLETE NESTED PAYLOAD CREATOR with SEPARATE output_format and attachment
   const createCompletePayload = async (combinedInstructions, taskId = null) => {
     const timestamp = new Date().toISOString();
+    const callbackUrl = taskId ? `${window.location.origin}/api/task-completion-webhook` : null;
     
     // Gather ALL conversation data
     let conversationData = {};
@@ -331,6 +375,7 @@ function App() {
           timestamp: timestamp,
           plugin_context: context?.type,
           task_id: taskId,
+          callback_url: callbackUrl,
           user_agent: navigator.userAgent,
           plugin_version: "1.0.0"
         },
@@ -516,54 +561,6 @@ function App() {
     } catch (error) {
       console.error('Error loading task results from Front:', error);
       setTaskResults([]);
-    }
-  };
-
-  const checkTaskStatus = async (taskId) => {
-    try {
-      const response = await fetch(`/api/task-status?taskId=${taskId}`);
-      if (response.ok) {
-        const result = await response.json();
-        
-        if (result.status === 'completed') {
-          const updatedTasks = taskResults.map(task => 
-            task.id === taskId 
-              ? { ...task, status: 'completed', result: result.data, completedAt: result.completedAt }
-              : task
-          );
-          
-          setTaskResults(updatedTasks);
-          
-          // Save completion to Front conversation
-          try {
-            if (context.addLink && context.conversation) {
-              const completedTask = updatedTasks.find(t => t.id === taskId);
-              const linkUrl = `https://app.airops.com/airops-2/workflows/84946/results?taskId=${taskId}`;
-              const linkName = `✅ AirOps Result: ${completedTask?.outputFormat || 'Task'} - Completed`;
-              
-              await context.addLink({
-                url: linkUrl,
-                name: linkName,
-                description: `Task ${taskId} completed: ${result.data?.substring(0, 200)}...`
-              });
-              
-              addDebugLog('🔗 Completion link added to Front conversation');
-            }
-          } catch (linkError) {
-            addDebugLog(`❌ Error adding completion link: ${linkError.message}`);
-          }
-          
-          setPollingTasks(prev => {
-            const newSet = new Set(prev);
-            newSet.delete(taskId);
-            return newSet;
-          });
-          
-          setStatus('Task completed and saved!');
-        }
-      }
-    } catch (error) {
-      console.error('Error checking task status:', error);
     }
   };
 
@@ -770,7 +767,11 @@ function App() {
         boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
         display: 'flex',
         flexDirection: 'column',
-        transition: 'width 0.2s ease, height 0.2s ease'
+        minWidth: '280px',
+        minHeight: '350px',
+        maxWidth: '100%',
+        maxHeight: '100%',
+        transition: isResizing ? 'none' : 'width 0.1s ease, height 0.1s ease'
       }}
     >
       {/* Header */}
@@ -896,7 +897,7 @@ function App() {
           </div>
         </div>
 
-        {/* Task Mode Controls */}
+        {/* Task Mode Controls - ONLY Text and Table options */}
         {mode === 'task' && (
           <div style={{ marginBottom: '12px' }}>
             <select
@@ -1145,25 +1146,45 @@ function App() {
         )}
       </div>
 
-      {/* Card Resize Handle */}
+      {/* Enhanced Card Resize Handle */}
       <div
         onMouseDown={handleCardResizeStart}
         style={{
           position: 'absolute',
-          bottom: '2px',
-          right: '2px',
-          width: '14px',
-          height: '14px',
+          bottom: '0px',
+          right: '0px',
+          width: '20px',
+          height: '20px',
           cursor: 'nw-resize',
           background: 'linear-gradient(-45deg, transparent 30%, #9ca3af 30%, #9ca3af 35%, transparent 35%, transparent 65%, #9ca3af 65%, #9ca3af 70%, transparent 70%)',
-          backgroundSize: '4px 4px',
-          opacity: 0.4,
-          borderRadius: '0 0 6px 0',
-          transition: 'opacity 0.2s ease'
+          backgroundSize: '6px 6px',
+          opacity: 0.5,
+          borderRadius: '0 0 8px 0',
+          transition: 'opacity 0.2s ease, background-color 0.2s ease',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center'
         }}
-        onMouseEnter={(e) => e.target.style.opacity = '0.8'}
-        onMouseLeave={(e) => e.target.style.opacity = '0.4'}
-      />
+        onMouseEnter={(e) => {
+          e.target.style.opacity = '1';
+          e.target.style.background = 'linear-gradient(-45deg, transparent 30%, #6366f1 30%, #6366f1 35%, transparent 35%, transparent 65%, #6366f1 65%, #6366f1 70%, transparent 70%)';
+        }}
+        onMouseLeave={(e) => {
+          e.target.style.opacity = '0.5';
+          e.target.style.background = 'linear-gradient(-45deg, transparent 30%, #9ca3af 30%, #9ca3af 35%, transparent 35%, transparent 65%, #9ca3af 65%, #9ca3af 70%, transparent 70%)';
+        }}
+        title="Drag to resize"
+      >
+        {/* Small visual indicator */}
+        <div style={{
+          width: '8px',
+          height: '8px',
+          background: 'transparent',
+          border: '1px solid currentColor',
+          borderRadius: '1px',
+          opacity: 0.7
+        }} />
+      </div>
     </div>
   );
 }

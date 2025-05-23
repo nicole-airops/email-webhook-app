@@ -1,9 +1,23 @@
+// netlify/functions/task-completion-webhook.js
 const { getStore } = require('@netlify/blobs');
 
 exports.handler = async (event, context) => {
+  if (event.httpMethod === 'OPTIONS') {
+    return {
+      statusCode: 200,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Headers': 'Content-Type',
+        'Access-Control-Allow-Methods': 'POST, OPTIONS'
+      },
+      body: ''
+    };
+  }
+
   if (event.httpMethod !== 'POST') {
     return {
       statusCode: 405,
+      headers: { 'Access-Control-Allow-Origin': '*' },
       body: JSON.stringify({ error: 'Method not allowed' })
     };
   }
@@ -15,6 +29,7 @@ exports.handler = async (event, context) => {
     if (!taskId) {
       return {
         statusCode: 400,
+        headers: { 'Access-Control-Allow-Origin': '*' },
         body: JSON.stringify({ error: 'taskId is required' })
       };
     }
@@ -29,7 +44,7 @@ exports.handler = async (event, context) => {
       task = JSON.parse(existingTaskData);
     }
 
-    // Update task with callback data
+    // Update task with completion data
     task.status = status || 'completed';
     task.completedAt = new Date().toISOString();
     
@@ -45,7 +60,7 @@ exports.handler = async (event, context) => {
     // Save updated task
     await store.set(taskId, JSON.stringify(task));
     
-    console.log('Task callback processed:', { taskId, status });
+    console.log('Task completion webhook processed:', { taskId, status });
     
     return {
       statusCode: 200,
@@ -53,12 +68,16 @@ exports.handler = async (event, context) => {
         'Content-Type': 'application/json',
         'Access-Control-Allow-Origin': '*'
       },
-      body: JSON.stringify({ success: true })
+      body: JSON.stringify({ 
+        success: true,
+        message: `Task ${taskId} marked as ${task.status}` 
+      })
     };
   } catch (error) {
-    console.error('Error processing task callback:', error);
+    console.error('Error processing task completion webhook:', error);
     return {
       statusCode: 500,
+      headers: { 'Access-Control-Allow-Origin': '*' },
       body: JSON.stringify({ error: 'Internal server error' })
     };
   }
