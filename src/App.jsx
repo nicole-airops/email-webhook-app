@@ -13,7 +13,7 @@ function App() {
   const [showHistory, setShowHistory] = useState(false);
   
   const EMAIL_WEBHOOK_URL = 'https://app.airops.com/public_api/airops_apps/73407/webhook_async_execute?auth_token=pxaMrQO7aOUSOXe6gSiLNz4cF1r-E9fOS4E378ws12BBD8SPt-OIVu500KEh';
-  const TASK_WEBHOOK_URL = 'https://app.airops.com/public_api/airops_apps/84946/webhook_async_execute?auth_token=pxaMrQO7aOUSOXe6gSiLNz4cF1r-E9fOS4E378ws12BBD8SPt-OIVu500KEh';
+  const TASK_WEBHOOK_URL = 'https://app.airops.com/public_api/airops_apps/a628c7d4-6b22-42af-9ded-fb01839d5e06/webhook_async_execute?auth_token=pxaMrQO7aOUSOXe6gSiLNz4cF1r-E9fOS4E378ws12BBD8SPt-OIVu500KEh';
   const AIROPS_LOGO_URL = 'https://app.ashbyhq.com/api/images/org-theme-logo/78d1f89f-3e5a-4a8b-b6b5-a91acb030fed/aba001ed-b5b5-4a1b-8bd6-dfb86392876e/d8e6228c-ea82-4061-b660-d7b6c502f155.png';
   
   useEffect(() => {
@@ -109,11 +109,13 @@ function App() {
       const webhookUrl = mode === 'email' ? EMAIL_WEBHOOK_URL : TASK_WEBHOOK_URL;
       
       const payload = {
-        frontData: conversationData,
-        contextType: context.type,
-        userComment: comment,
-        mode: mode,
-        ...(mode === 'task' && { outputFormat: outputFormat })
+        "Front Webhook Payload": {
+          frontData: conversationData,
+          contextType: context.type,
+          userComment: comment,
+          mode: mode,
+          ...(mode === 'task' && { outputFormat: outputFormat })
+        }
       };
       
       const response = await fetch(webhookUrl, {
