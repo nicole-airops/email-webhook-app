@@ -5,25 +5,15 @@ import {
   AccordionSection,
   Button,
   ButtonGroup,
-  FormFieldContainer,
-  Input,
-  Textarea,
+  FormField,
+  Select,
+  SelectItem,
   Task,
   ActionMenu,
   ActionMenuItem,
   ActionMenuItemSpacer,
-  PluginLayout,
-  PluginHeader,
-  PluginFooter,
-  Heading,
-  Paragraph,
-  DropdownCoordinator,
-  DropdownButton,
-  Dropdown,
-  DropdownItem,
-  IconButton
+  Tooltip
 } from '@frontapp/ui-kit';
-import { grey, palette, fontStyles } from '@frontapp/ui-kit';
 import {
   SuccessIcon,
   WarningIcon,
@@ -34,7 +24,9 @@ import {
   ViewIcon,
   UploadIcon,
   DocumentIcon,
-  InsertIcon
+  InsertIcon,
+  CheckmarkIcon,
+  CrossIcon
 } from './CustomIcons';
 import './App.css';
 
@@ -51,25 +43,30 @@ function App() {
   const [taskResults, setTaskResults] = useState([]);
   const [pollingTasks, setPollingTasks] = useState(new Set());
   
+  // Auto-resize state
+  const [cardSize, setCardSize] = useState({ width: 340, height: 420 });
+  const [isResizing, setIsResizing] = useState(false);
+  const [textareaHeight, setTextareaHeight] = useState(80);
+  const [isTextareaResizing, setIsTextareaResizing] = useState(false);
+  const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
+  
   // Refs for functionality
-  const isProcessingRef = useRef<boolean>(false);
-  const lastCallTimeRef = useRef<number>(0);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const isProcessingRef = useRef(false);
+  const lastCallTimeRef = useRef(0);
+  const fileInputRef = useRef(null);
+  const cardRef = useRef(null);
+  const textareaContainerRef = useRef(null);
   
-  // UPDATED URLs with correct UUID format
+  // WEBHOOK URLs - Single definition
   const EMAIL_WEBHOOK_URL = 'https://app.airops.com/public_api/airops_apps/f124518f-2185-4e62-9520-c6ff0fc3fcb0/webhook_async_execute?auth_token=pxaMrQO7aOUSOXe6gSiLNz4cF1r-E9fOS4E378ws12BBD8SPt-OIVu500KEh';
   const TASK_WEBHOOK_URL = 'https://app.airops.com/public_api/airops_apps/a628c7d4-6b22-42af-9ded-fb01839d5e06/webhook_async_execute?auth_token=pxaMrQO7aOUSOXe6gSiLNz4cF1r-E9fOS4E378ws12BBD8SPt-OIVu500KEh';
   const AIROPS_LOGO_URL = 'https://app.ashbyhq.com/api/images/org-theme-logo/78d1f89f-3e5a-4a8b-b6b5-a91acb030fed/aba001ed-b5b5-4a1b-8bd6-dfb86392876e/d8e6228c-ea82-4061-b660-d7b6c502f155.png';
   
-  // UPDATED URLs with correct UUID format
-  const EMAIL_WEBHOOK_URL = 'https://app.airops.com/public_api/airops_apps/f124518f-2185-4e62-9520-c6ff0fc3fcb0/webhook_async_execute?auth_token=pxaMrQO7aOUSOXe6gSiLNz4cF1r-E9fOS4E378ws12BBD8SPt-OIVu500KEh';
-  const TASK_WEBHOOK_URL = 'https://app.airops.com/public_api/airops_apps/a628c7d4-6b22-42af-9ded-fb01839d5e06/webhook_async_execute?auth_token=pxaMrQO7aOUSOXe6gSiLNz4cF1r-E9fOS4E378ws12BBD8SPt-OIVu500KEh';
-  const AIROPS_LOGO_URL = 'https://app.ashbyhq.com/api/images/org-theme-logo/78d1f89f-3e5a-4a8b-b6b5-a91acb030fed/aba001ed-b5b5-4a1b-8bd6-dfb86392876e/d8e6228c-ea82-4061-b660-d7b6c502f155.png';
-  
-  // UPDATED URLs with correct UUID format
-  const EMAIL_WEBHOOK_URL = 'https://app.airops.com/public_api/airops_apps/f124518f-2185-4e62-9520-c6ff0fc3fcb0/webhook_async_execute?auth_token=pxaMrQO7aOUSOXe6gSiLNz4cF1r-E9fOS4E378ws12BBD8SPt-OIVu500KEh';
-  const TASK_WEBHOOK_URL = 'https://app.airops.com/public_api/airops_apps/a628c7d4-6b22-42af-9ded-fb01839d5e06/webhook_async_execute?auth_token=pxaMrQO7aOUSOXe6gSiLNz4cF1r-E9fOS4E378ws12BBD8SPt-OIVu500KEh';
-  const AIROPS_LOGO_URL = 'https://app.ashbyhq.com/api/images/org-theme-logo/78d1f89f-3e5a-4a8b-b6b5-a91acb030fed/aba001ed-b5b5-4a1b-8bd6-dfb86392876e/d8e6228c-ea82-4061-b660-d7b6c502f155.png';
+  // Mode options for ButtonGroup
+  const modeOptions = [
+    { title: 'Email', value: 'email' },
+    { title: 'Task', value: 'task' }
+  ];
   
   // Format options for Select
   const formatOptions = [
@@ -77,6 +74,40 @@ function App() {
     { value: 'text', label: 'Text' },
     { value: 'table', label: 'Table' }
   ];
+
+  // Styling configuration
+  const styles = {
+    fontSize: {
+      base: 12,
+      small: 11,
+      tiny: 10,
+      header: 14
+    },
+    colors: {
+      primary: '#1f2937',
+      secondary: '#4b5563',
+      tertiary: '#9ca3af',
+      background: '#f9fafb',
+      border: '#e5e7eb',
+      error: '#ef4444',
+      success: '#10b981',
+      warning: '#f59e0b',
+      info: '#3b82f6'
+    }
+  };
+
+  // Adaptive text size based on card size
+  const getAdaptiveTextSize = () => {
+    const baseSize = Math.max(11, Math.min(14, cardSize.width / 28));
+    return {
+      base: `${baseSize}px`,
+      small: `${baseSize - 1}px`,
+      tiny: `${baseSize - 2}px`,
+      header: `${baseSize + 1}px`
+    };
+  };
+
+  const textSizes = getAdaptiveTextSize();
 
   // Detect container size changes and auto-resize card responsively
   useEffect(() => {
@@ -134,36 +165,11 @@ function App() {
     return cleanup;
   }, []);
 
-  // Detect if we're in composer or sidebar
-  const isComposer = context?.type === 'messageComposer';
-  const containerStyle = isComposer ? 'composer' : 'sidebar';
-
-  // Styling configuration using Front's design system
-  const styles = {
-    fontSize: {
-      base: 12,
-      small: 11,
-      tiny: 10,
-      header: 14
-    },
-    colors: {
-      primary: grey.darkest,
-      secondary: grey.dark,
-      tertiary: grey.base,
-      background: grey.lightest,
-      border: grey.lighter,
-      error: palette.red.base,
-      success: palette.green.base,
-      warning: palette.orange.base,
-      info: palette.blue.base
-    }
-  };
-
-  // Manual drag resize functionality with smooth adaptation
+  // Manual drag resize functionality
   useEffect(() => {
     const handleMouseMove = (e) => {
       if (isResizing && !isTextareaResizing) {
-        const parent = cardRef.current.parentElement;
+        const parent = cardRef.current?.parentElement;
         if (!parent) return;
         
         const parentRect = parent.getBoundingClientRect();
@@ -177,9 +183,11 @@ function App() {
       }
       
       if (isTextareaResizing) {
-        const rect = textareaContainerRef.current.getBoundingClientRect();
-        const newHeight = Math.max(40, Math.min(200, e.clientY - rect.top));
-        setTextareaHeight(newHeight);
+        const rect = textareaContainerRef.current?.getBoundingClientRect();
+        if (rect) {
+          const newHeight = Math.max(40, Math.min(200, e.clientY - rect.top));
+          setTextareaHeight(newHeight);
+        }
       }
     };
 
@@ -272,8 +280,7 @@ function App() {
     return false; // Task still pending
   };
 
-  // Reduced polling frequency since webhooks handle most updates
-  // Smart polling: more frequent for new tasks, less frequent for older ones
+  // Smart polling system
   useEffect(() => {
     if (pollingTasks.size > 0) {
       const checkAllTasks = async () => {
@@ -288,7 +295,7 @@ function App() {
       // Initial check after 5 seconds
       const initialTimeout = setTimeout(checkAllTasks, 5000);
       
-      // Then check every 15 seconds (faster than before)
+      // Then check every 15 seconds
       const interval = setInterval(checkAllTasks, 15000);
       
       return () => {
@@ -296,7 +303,7 @@ function App() {
         clearInterval(interval);
       };
     }
-  }, [pollingTasks, taskResults]); // Added taskResults dependency
+  }, [pollingTasks, taskResults]);
 
   useEffect(() => {
     if (selectedFormat) {
@@ -324,10 +331,10 @@ function App() {
     return combinedText;
   };
 
-  // COMPLETE NESTED PAYLOAD CREATOR with SEPARATE output_format and attachment
+  // COMPLETE NESTED PAYLOAD CREATOR
   const createCompletePayload = async (combinedInstructions, taskId = null) => {
     const timestamp = new Date().toISOString();
-    const callbackUrl = taskId ? `${window.location.origin}/api/task-completion-webhook` : null;
+    const callbackUrl = taskId ? `${window.location.origin}/.netlify/functions/task-completion-webhook` : null;
     
     // Gather ALL conversation data
     let conversationData = {};
@@ -402,7 +409,7 @@ function App() {
       timezone: context.teammate.timezone
     } : null;
     
-    // Create the COMPLETE nested payload with SEPARATE output_format and attachment
+    // Create the COMPLETE nested payload
     const completePayload = {
       airops_request: {
         // Primary instruction combining everything
@@ -805,33 +812,29 @@ function App() {
 
   if (!context) {
     return (
-      <PluginLayout>
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          height: '200px',
-          color: grey.base
-        }}>
-          Loading context...
-        </div>
-      </PluginLayout>
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        height: '200px',
+        color: styles.colors.tertiary,
+        fontSize: textSizes.base
+      }}>
+        Loading context...
+      </div>
     );
   }
 
   if (context.type === 'messageComposer' && !context.conversation) {
     return (
-      <PluginLayout>
-        <div style={{
-          padding: '16px',
-          color: grey.dark,
-          textAlign: 'center'
-        }}>
-          <Paragraph color={grey.dark}>
-            Select a conversation to use this plugin
-          </Paragraph>
-        </div>
-      </PluginLayout>
+      <div style={{
+        padding: '16px',
+        color: styles.colors.secondary,
+        textAlign: 'center',
+        fontSize: textSizes.base
+      }}>
+        Select a conversation to use this plugin
+      </div>
     );
   }
 
@@ -842,7 +845,6 @@ function App() {
       style={{
         width: `${cardSize.width}px`,
         height: `${cardSize.height}px`,
-        ...fontStyles.base,
         position: 'relative',
         overflow: 'hidden',
         display: 'flex',
@@ -851,15 +853,16 @@ function App() {
         minHeight: '350px',
         maxWidth: '100%',
         maxHeight: '100%',
+        background: 'white',
+        border: `1px solid ${styles.colors.border}`,
+        borderRadius: '8px',
+        padding: '12px',
+        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
+        fontSize: textSizes.base,
+        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
         transition: isResizing ? 'none' : 'width 0.1s ease, height 0.1s ease'
       }}
     >
-      {/* Hidden Keyboard Shortcuts */}
-      <ShortcutHandler
-        handlers={shortcutHandlers}
-        hidden
-      />
-
       {/* Header */}
       <div style={{
         display: 'flex',
@@ -867,7 +870,7 @@ function App() {
         marginBottom: '12px',
         fontSize: textSizes.header,
         fontWeight: '600',
-        color: grey.darkest
+        color: styles.colors.primary
       }}>
         <img 
           src={AIROPS_LOGO_URL} 
@@ -895,21 +898,28 @@ function App() {
       }}>
         {/* Instructions Input */}
         <div ref={textareaContainerRef} style={{ position: 'relative', marginBottom: '12px' }}>
-          <FormFieldContainer
-            label="Instructions"
-            required
-          >
-            <TextInput
+          <FormField label="Instructions" required>
+            <textarea
               value={comment}
-              onChangeText={setComment}
+              onChange={(e) => setComment(e.target.value)}
               placeholder={mode === 'email' ? "How should we respond?" : "What do you need?"}
-              multiline
               style={{
+                width: '100%',
                 height: `${textareaHeight}px`,
-                paddingBottom: '20px'
+                padding: '8px 12px',
+                border: `1px solid ${styles.colors.border}`,
+                borderRadius: '6px',
+                fontSize: textSizes.base,
+                fontFamily: 'inherit',
+                resize: 'none',
+                paddingBottom: '20px',
+                background: 'white',
+                color: styles.colors.primary
               }}
+              onFocus={(e) => e.target.style.borderColor = styles.colors.info}
+              onBlur={(e) => e.target.style.borderColor = styles.colors.border}
             />
-          </FormFieldContainer>
+          </FormField>
           
           {/* Textarea drag resize handle */}
           <div
@@ -922,7 +932,7 @@ function App() {
               left: '8px',
               height: '12px',
               cursor: 'ns-resize',
-              background: `linear-gradient(90deg, transparent 30%, ${grey.light} 30%, ${grey.light} 35%, transparent 35%, transparent 65%, ${grey.light} 65%, ${grey.light} 70%, transparent 70%)`,
+              background: `linear-gradient(90deg, transparent 30%, ${styles.colors.border} 30%, ${styles.colors.border} 35%, transparent 35%, transparent 65%, ${styles.colors.border} 65%, ${styles.colors.border} 70%, transparent 70%)`,
               backgroundSize: '8px 2px',
               opacity: 0.3,
               borderRadius: '0 0 4px 4px',
@@ -936,7 +946,7 @@ function App() {
             <div style={{
               width: '20px',
               height: '3px',
-              background: grey.base,
+              background: styles.colors.tertiary,
               borderRadius: '2px'
             }} />
           </div>
@@ -945,22 +955,20 @@ function App() {
         {/* Task Mode Controls */}
         {mode === 'task' && (
           <div style={{ marginBottom: '12px' }}>
-            <FormFieldContainer
-              label="Output Format"
-              required
-            >
+            <FormField label="Output Format" required>
               <select
                 value={selectedFormat}
                 onChange={(e) => setSelectedFormat(e.target.value)}
                 style={{
                   width: '100%',
                   padding: '8px 12px',
-                  border: `1px solid ${grey.light}`,
+                  border: `1px solid ${styles.colors.border}`,
                   borderRadius: '6px',
                   fontSize: textSizes.base,
                   fontFamily: 'inherit',
                   background: 'white',
-                  cursor: 'pointer'
+                  cursor: 'pointer',
+                  color: styles.colors.primary
                 }}
               >
                 {formatOptions.map(option => (
@@ -969,15 +977,15 @@ function App() {
                   </option>
                 ))}
               </select>
-            </FormFieldContainer>
+            </FormField>
 
             {/* File Upload */}
             <div style={{
-              border: `1px dashed ${grey.light}`,
+              border: `1px dashed ${styles.colors.border}`,
               borderRadius: '6px',
               padding: '12px',
               textAlign: 'center',
-              background: grey.lightest,
+              background: styles.colors.background,
               marginTop: '8px'
             }}>
               <input
@@ -991,21 +999,26 @@ function App() {
               {!uploadedFile ? (
                 <div>
                   <Button
-                    type="default"
+                    type="secondary"
                     onPress={() => fileInputRef.current?.click()}
                     style={{ 
                       background: 'none',
                       border: 'none',
-                      color: palette.blue.base,
+                      color: styles.colors.info,
                       textDecoration: 'underline',
+                      fontSize: textSizes.base,
                       display: 'flex',
                       alignItems: 'center'
                     }}
                   >
-                    <UploadIcon color={palette.blue.base} size={14} />
-                    <span style={{ marginLeft: '6px' }}>Upload reference file</span>
+                    <UploadIcon size={14} color={styles.colors.info} style={{ marginRight: '6px' }} />
+                    Upload reference file
                   </Button>
-                  <div style={{ fontSize: textSizes.small, color: grey.base, marginTop: '4px' }}>
+                  <div style={{ 
+                    fontSize: textSizes.small, 
+                    color: styles.colors.tertiary, 
+                    marginTop: '4px' 
+                  }}>
                     CSV, JSON, TXT, DOC, PDF, images (max 2MB)
                   </div>
                 </div>
@@ -1013,27 +1026,27 @@ function App() {
                 <div>
                   <div style={{ 
                     fontSize: textSizes.base, 
-                    color: grey.darkest, 
+                    color: styles.colors.primary, 
                     marginBottom: '6px',
                     display: 'flex',
-                    alignItems: 'center'
+                    alignItems: 'center',
+                    justifyContent: 'center'
                   }}>
-                    <AttachmentIcon color={grey.base} size={14} />
-                    <span style={{ marginLeft: '6px' }}>
-                      {uploadedFile.name} ({(uploadedFile.size / 1024).toFixed(1)}KB)
-                    </span>
+                    <AttachmentIcon size={14} color={styles.colors.secondary} style={{ marginRight: '6px' }} />
+                    {uploadedFile.name} ({(uploadedFile.size / 1024).toFixed(1)}KB)
                   </div>
                   <Button
                     type="danger"
                     onPress={removeFile}
                     style={{
+                      fontSize: textSizes.small,
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center'
                     }}
                   >
-                    <span>×</span>
-                    <span style={{ marginLeft: '6px' }}>Remove</span>
+                    <CrossIcon size={12} color="white" style={{ marginRight: '4px' }} />
+                    Remove
                   </Button>
                 </div>
               )}
@@ -1051,37 +1064,222 @@ function App() {
               >
                 <div>
                   {taskResults.slice(0, 3).map((task) => (
-                    <Task
+                    <div
                       key={task.id}
-                      type="icon"
-                      icon={task.status === 'pending' ? undefined : "check"}
-                      label={`${task.selectedFormat ? formatOptions.find(f => f.value === task.selectedFormat)?.label || task.outputFormat : task.outputFormat}${task.hasFile ? ' 📎' : ''}`}
-                      isLoading={task.status === 'pending'}
                       style={{
-                        marginBottom: '6px'
+                        background: styles.colors.background,
+                        border: `1px solid ${styles.colors.border}`,
+                        borderRadius: '8px',
+                        padding: '12px',
+                        marginBottom: '8px',
+                        fontSize: textSizes.small
                       }}
                     >
+                      {/* Task Header */}
+                      <div style={{ 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        justifyContent: 'space-between',
+                        marginBottom: '8px' 
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', flex: 1 }}>
+                          {task.status === 'pending' ? (
+                            <div style={{ 
+                              width: '16px', 
+                              height: '16px', 
+                              marginRight: '8px',
+                              border: `2px solid ${styles.colors.info}`,
+                              borderTop: '2px solid transparent',
+                              borderRadius: '50%',
+                              animation: 'spin 1s linear infinite'
+                            }} />
+                          ) : task.status === 'completed' ? (
+                            <CheckmarkIcon size={16} color={styles.colors.success} style={{ marginRight: '8px' }} />
+                          ) : (
+                            <WarningIcon size={16} color={styles.colors.error} style={{ marginRight: '8px' }} />
+                          )}
+                          
+                          <div style={{ flex: 1 }}>
+                            <div style={{ 
+                              color: styles.colors.primary,
+                              fontWeight: '500',
+                              fontSize: textSizes.base
+                            }}>
+                              {task.selectedFormat ? 
+                                formatOptions.find(f => f.value === task.selectedFormat)?.label || task.outputFormat 
+                                : task.outputFormat
+                              }
+                              {task.hasFile && (
+                                <AttachmentIcon 
+                                  size={12} 
+                                  color={styles.colors.tertiary} 
+                                  style={{ marginLeft: '6px' }} 
+                                />
+                              )}
+                            </div>
+                            <div style={{ 
+                              color: styles.colors.tertiary, 
+                              fontSize: textSizes.tiny,
+                              marginTop: '2px'
+                            }}>
+                              {formatDate(task.createdAt)} • {task.user}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Task Status */}
+                      <div style={{
+                        padding: '6px 8px',
+                        background: task.status === 'completed' ? 
+                          `${styles.colors.success}15` : 
+                          task.status === 'failed' ? 
+                          `${styles.colors.error}15` : 
+                          `${styles.colors.info}15`,
+                        border: `1px solid ${
+                          task.status === 'completed' ? 
+                          styles.colors.success : 
+                          task.status === 'failed' ? 
+                          styles.colors.error : 
+                          styles.colors.info
+                        }`,
+                        borderRadius: '4px',
+                        fontSize: textSizes.tiny,
+                        color: task.status === 'completed' ? 
+                          styles.colors.success : 
+                          task.status === 'failed' ? 
+                          styles.colors.error : 
+                          styles.colors.info,
+                        marginBottom: task.result ? '8px' : '0'
+                      }}>
+                        {task.status === 'pending' && 'Processing your request...'}
+                        {task.status === 'completed' && 'Task completed successfully'}
+                        {task.status === 'failed' && 'Task failed to complete'}
+                      </div>
+
+                      {/* Task Result Content */}
                       {task.result && (
-                        <ActionMenu>
-                          <ActionMenuItem
-                            onPress={() => copyToClipboard(task.result)}
-                          >
-                            Copy to Clipboard
-                          </ActionMenuItem>
-                          <ActionMenuItem
-                            onPress={() => insertIntoDraft(task.result.replace(/<[^>]*>/g, ''))}
-                          >
-                            Insert into Draft
-                          </ActionMenuItem>
-                          <ActionMenuItemSpacer />
-                          <ActionMenuItem
-                            onPress={() => window.open(`https://app.airops.com/airops-2/workflows/84946/results?taskId=${task.id}`, '_blank')}
-                          >
-                            View Full Result
-                          </ActionMenuItem>
-                        </ActionMenu>
+                        <div>
+                          <div style={{
+                            background: 'white',
+                            border: `1px solid ${styles.colors.border}`,
+                            borderRadius: '6px',
+                            padding: '12px',
+                            marginBottom: '8px',
+                            maxHeight: '200px',
+                            overflowY: 'auto',
+                            fontSize: textSizes.small,
+                            lineHeight: '1.4'
+                          }}>
+                            <div 
+                              dangerouslySetInnerHTML={{ __html: task.result }}
+                              style={{ 
+                                color: styles.colors.primary,
+                                '& h1, & h2, & h3, & h4, & h5, & h6': {
+                                  marginTop: '8px',
+                                  marginBottom: '4px',
+                                  fontWeight: '600'
+                                },
+                                '& p': {
+                                  marginBottom: '8px'
+                                },
+                                '& ul, & ol': {
+                                  marginLeft: '16px',
+                                  marginBottom: '8px'
+                                },
+                                '& li': {
+                                  marginBottom: '2px'
+                                }
+                              }}
+                            />
+                          </div>
+                          
+                          {/* Action Buttons */}
+                          <div style={{ 
+                            display: 'flex', 
+                            gap: '8px',
+                            flexWrap: 'wrap'
+                          }}>
+                            <Button
+                              type="secondary"
+                              onPress={() => copyToClipboard(task.result)}
+                              style={{
+                                padding: '6px 12px',
+                                fontSize: textSizes.small,
+                                minHeight: 'auto',
+                                display: 'flex',
+                                alignItems: 'center'
+                              }}
+                            >
+                              <CopyIcon size={12} color={styles.colors.secondary} style={{ marginRight: '4px' }} />
+                              Copy
+                            </Button>
+                            <Button
+                              type="secondary"
+                              onPress={() => insertIntoDraft(task.result.replace(/<[^>]*>/g, ''))}
+                              style={{
+                                padding: '6px 12px',
+                                fontSize: textSizes.small,
+                                minHeight: 'auto',
+                                display: 'flex',
+                                alignItems: 'center'
+                              }}
+                            >
+                              <InsertIcon size={12} color={styles.colors.secondary} style={{ marginRight: '4px' }} />
+                              Insert
+                            </Button>
+                            <Button
+                              type="secondary"
+                              onPress={() => {
+                                // Show full result in a modal or expanded view
+                                const newWindow = window.open('', '_blank');
+                                newWindow.document.write(`
+                                  <html>
+                                    <head>
+                                      <title>AirOps Task Result</title>
+                                      <style>
+                                        body { 
+                                          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
+                                          max-width: 800px; 
+                                          margin: 40px auto; 
+                                          padding: 20px; 
+                                          line-height: 1.6; 
+                                        }
+                                        h1, h2, h3 { color: #1f2937; }
+                                        p { margin-bottom: 16px; }
+                                        ul, ol { margin-left: 20px; margin-bottom: 16px; }
+                                        li { margin-bottom: 4px; }
+                                        table { border-collapse: collapse; width: 100%; margin-bottom: 16px; }
+                                        th, td { border: 1px solid #e5e7eb; padding: 8px 12px; text-align: left; }
+                                        th { background-color: #f9fafb; font-weight: 600; }
+                                      </style>
+                                    </head>
+                                    <body>
+                                      <h1>AirOps Task Result</h1>
+                                      <p><strong>Format:</strong> ${task.outputFormat}</p>
+                                      <p><strong>Created:</strong> ${formatDate(task.createdAt)}</p>
+                                      <hr style="margin: 20px 0; border: none; border-top: 1px solid #e5e7eb;">
+                                      ${task.result}
+                                    </body>
+                                  </html>
+                                `);
+                                newWindow.document.close();
+                              }}
+                              style={{
+                                padding: '6px 12px',
+                                fontSize: textSizes.small,
+                                minHeight: 'auto',
+                                display: 'flex',
+                                alignItems: 'center'
+                              }}
+                            >
+                              <ViewIcon size={12} color={styles.colors.secondary} style={{ marginRight: '4px' }} />
+                              Expand
+                            </Button>
+                          </div>
+                        </div>
                       )}
-                    </Task>
+                    </div>
                   ))}
                 </div>
               </AccordionSection>
@@ -1096,14 +1294,14 @@ function App() {
                   {commentHistory.slice(0, 3).map((entry, index) => (
                     <div key={index} style={{
                       padding: '6px',
-                      background: grey.lightest,
-                      border: `1px solid ${grey.lighter}`,
+                      background: styles.colors.background,
+                      border: `1px solid ${styles.colors.border}`,
                       borderRadius: '4px',
                       marginBottom: '4px',
                       fontSize: textSizes.small
                     }}>
                       <div style={{ 
-                        color: grey.base, 
+                        color: styles.colors.tertiary, 
                         marginBottom: '2px',
                         fontSize: textSizes.tiny,
                         fontWeight: '500',
@@ -1111,18 +1309,20 @@ function App() {
                         alignItems: 'center'
                       }}>
                         <span>{formatDate(entry.timestamp)} • </span>
-                        {entry.mode === 'email' ? (
-                          <EmailIcon color={grey.base} size={12} style={{ margin: '0 4px' }} />
-                        ) : (
-                          <TaskIcon color={grey.base} size={12} style={{ margin: '0 4px' }} />
-                        )}
+                        <span style={{ margin: '0 4px', display: 'flex', alignItems: 'center' }}>
+                          {entry.mode === 'email' ? (
+                            <EmailIcon size={12} color={styles.colors.tertiary} />
+                          ) : (
+                            <TaskIcon size={12} color={styles.colors.tertiary} />
+                          )}
+                        </span>
                         <span>• {entry.user}</span>
                         {entry.hasFile && (
-                          <AttachmentIcon color={grey.base} size={12} style={{ marginLeft: '4px' }} />
+                          <AttachmentIcon size={12} color={styles.colors.tertiary} style={{ marginLeft: '4px' }} />
                         )}
                       </div>
                       <div style={{ 
-                        color: grey.dark, 
+                        color: styles.colors.secondary, 
                         lineHeight: 1.3,
                         fontSize: textSizes.small
                       }}>
@@ -1131,11 +1331,14 @@ function App() {
                       {entry.outputFormat && (
                         <div style={{ 
                           fontSize: textSizes.tiny,
-                          color: grey.base,
+                          color: styles.colors.tertiary,
                           fontStyle: 'italic',
                           marginTop: '2px'
                         }}>
-                          Format: {entry.selectedFormat ? formatOptions.find(f => f.value === entry.selectedFormat)?.label || entry.outputFormat : entry.outputFormat}
+                          Format: {entry.selectedFormat ? 
+                            formatOptions.find(f => f.value === entry.selectedFormat)?.label || entry.outputFormat 
+                            : entry.outputFormat
+                          }
                         </div>
                       )}
                     </div>
@@ -1149,7 +1352,7 @@ function App() {
 
       {/* Bottom Section - Send Button and Status */}
       <div style={{
-        borderTop: `1px solid ${grey.lighter}`,
+        borderTop: `1px solid ${styles.colors.border}`,
         paddingTop: '12px'
       }}>
         <Button
@@ -1158,7 +1361,8 @@ function App() {
           disabled={isSending}
           style={{
             width: '100%',
-            marginBottom: '8px'
+            marginBottom: '8px',
+            fontSize: textSizes.base
           }}
         >
           {isSending ? 'Processing...' : 'Send'}
@@ -1167,21 +1371,30 @@ function App() {
         {status && (
           <div style={{
             padding: '6px 8px',
-            background: grey.lightest,
-            border: `1px solid ${grey.lighter}`,
+            background: styles.colors.background,
+            border: `1px solid ${styles.colors.border}`,
             borderRadius: '4px',
             fontSize: textSizes.small,
-            color: status.includes('Error') || status.includes('failed') ? palette.red.base : grey.dark,
+            color: status.includes('Error') || status.includes('failed') ? 
+              styles.colors.error : styles.colors.secondary,
             textAlign: 'center',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center'
           }}>
             {(status.includes('Error') || status.includes('failed')) && (
-              <WarningIcon color={palette.red.base} size={14} style={{ marginRight: '6px' }} />
+              <WarningIcon 
+                size={14} 
+                color={styles.colors.error} 
+                style={{ marginRight: '6px' }} 
+              />
             )}
             {(status.includes('success') || status.includes('completed') || status.includes('saved')) && (
-              <SuccessIcon color={palette.green.base} size={14} style={{ marginRight: '6px' }} />
+              <SuccessIcon 
+                size={14} 
+                color={styles.colors.success} 
+                style={{ marginRight: '6px' }} 
+              />
             )}
             {status}
           </div>
@@ -1199,7 +1412,7 @@ function App() {
           width: '20px',
           height: '20px',
           cursor: 'nw-resize',
-          background: `linear-gradient(-45deg, transparent 30%, ${grey.base} 30%, ${grey.base} 35%, transparent 35%, transparent 65%, ${grey.base} 65%, ${grey.base} 70%, transparent 70%)`,
+          background: `linear-gradient(-45deg, transparent 30%, ${styles.colors.tertiary} 30%, ${styles.colors.tertiary} 35%, transparent 35%, transparent 65%, ${styles.colors.tertiary} 65%, ${styles.colors.tertiary} 70%, transparent 70%)`,
           backgroundSize: '6px 6px',
           opacity: 0.5,
           borderRadius: '0 0 8px 0',
@@ -1214,7 +1427,7 @@ function App() {
           width: '8px',
           height: '8px',
           background: 'transparent',
-          border: `1px solid ${grey.base}`,
+          border: `1px solid ${styles.colors.tertiary}`,
           borderRadius: '1px',
           opacity: 0.7
         }} />
