@@ -10,9 +10,7 @@ import {
   Task,
   ActionMenu,
   ActionMenuItem,
-  ActionMenuItemSpacer,
-  ShortcutHandler,
-  ShortcutEnums
+  ActionMenuItemSpacer
 } from '@frontapp/ui-kit';
 import { 
   SuccessIcon,
@@ -77,18 +75,6 @@ function App() {
     { value: 'text', label: 'Text' },
     { value: 'table', label: 'Table' }
   ];
-
-  // Keyboard shortcuts
-  const shortcutHandlers = {
-    [ShortcutEnums.ENTER]: () => {
-      if (comment.trim() && !isSending) {
-        processRequest();
-      }
-    },
-    [ShortcutEnums.ESC]: () => {
-      setComment('');
-    }
-  };
 
   // Detect container size changes and auto-resize card responsively
   useEffect(() => {
@@ -854,12 +840,6 @@ function App() {
         transition: isResizing ? 'none' : 'width 0.1s ease, height 0.1s ease'
       }}
     >
-      {/* Hidden Keyboard Shortcuts */}
-      <ShortcutHandler
-        handlers={shortcutHandlers}
-        hidden
-      />
-
       {/* Header */}
       <div style={{
         display: 'flex',
