@@ -6,13 +6,25 @@ import {
   Button,
   ButtonGroup,
   FormFieldContainer,
-  TextInput,
+  Input,
+  Textarea,
   Task,
   ActionMenu,
   ActionMenuItem,
-  ActionMenuItemSpacer
+  ActionMenuItemSpacer,
+  PluginLayout,
+  PluginHeader,
+  PluginFooter,
+  Heading,
+  Paragraph,
+  DropdownCoordinator,
+  DropdownButton,
+  Dropdown,
+  DropdownItem,
+  IconButton
 } from '@frontapp/ui-kit';
-import { 
+import { grey, palette, fontStyles } from '@frontapp/ui-kit';
+import {
   SuccessIcon,
   WarningIcon,
   TaskIcon,
@@ -20,13 +32,10 @@ import {
   AttachmentIcon,
   CopyIcon,
   ViewIcon,
-  UploadIcon,  
+  UploadIcon,
   DocumentIcon,
-  InsertIcon,
-  CheckmarkIcon,
-  CrossIcon
+  InsertIcon
 } from './CustomIcons';
-import { grey, palette, fontStyles } from '@frontapp/ui-kit';
 import './App.css';
 
 function App() {
@@ -42,33 +51,21 @@ function App() {
   const [taskResults, setTaskResults] = useState([]);
   const [pollingTasks, setPollingTasks] = useState(new Set());
   
-  // Prevent multiple calls
-  const isProcessingRef = useRef(false);
-  const lastCallTimeRef = useRef(0);
-  
-  // Auto-resize state
-  const [cardSize, setCardSize] = useState({ width: 340, height: 420 });
-  const [isResizing, setIsResizing] = useState(false);
-  const [textareaHeight, setTextareaHeight] = useState(60);
-  const [isTextareaResizing, setIsTextareaResizing] = useState(false);
-  const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
-  
-  const cardRef = useRef(null);
-  const textareaRef = useRef(null);
-  const textareaContainerRef = useRef(null);
-  const fileInputRef = useRef(null);
+  // Refs for functionality
+  const isProcessingRef = useRef<boolean>(false);
+  const lastCallTimeRef = useRef<number>(0);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   
   // UPDATED URLs with correct UUID format
   const EMAIL_WEBHOOK_URL = 'https://app.airops.com/public_api/airops_apps/f124518f-2185-4e62-9520-c6ff0fc3fcb0/webhook_async_execute?auth_token=pxaMrQO7aOUSOXe6gSiLNz4cF1r-E9fOS4E378ws12BBD8SPt-OIVu500KEh';
   const TASK_WEBHOOK_URL = 'https://app.airops.com/public_api/airops_apps/a628c7d4-6b22-42af-9ded-fb01839d5e06/webhook_async_execute?auth_token=pxaMrQO7aOUSOXe6gSiLNz4cF1r-E9fOS4E378ws12BBD8SPt-OIVu500KEh';
   const AIROPS_LOGO_URL = 'https://app.ashbyhq.com/api/images/org-theme-logo/78d1f89f-3e5a-4a8b-b6b5-a91acb030fed/aba001ed-b5b5-4a1b-8bd6-dfb86392876e/d8e6228c-ea82-4061-b660-d7b6c502f155.png';
   
-  // Format options for ButtonGroup
-  const modeOptions = [
-    { title: 'Email', value: 'email' },
-    { title: 'Task', value: 'task' }
-  ];
-
+  // UPDATED URLs with correct UUID format
+  const EMAIL_WEBHOOK_URL = 'https://app.airops.com/public_api/airops_apps/f124518f-2185-4e62-9520-c6ff0fc3fcb0/webhook_async_execute?auth_token=pxaMrQO7aOUSOXe6gSiLNz4cF1r-E9fOS4E378ws12BBD8SPt-OIVu500KEh';
+  const TASK_WEBHOOK_URL = 'https://app.airops.com/public_api/airops_apps/a628c7d4-6b22-42af-9ded-fb01839d5e06/webhook_async_execute?auth_token=pxaMrQO7aOUSOXe6gSiLNz4cF1r-E9fOS4E378ws12BBD8SPt-OIVu500KEh';
+  const AIROPS_LOGO_URL = 'https://app.ashbyhq.com/api/images/org-theme-logo/78d1f89f-3e5a-4a8b-b6b5-a91acb030fed/aba001ed-b5b5-4a1b-8bd6-dfb86392876e/d8e6228c-ea82-4061-b660-d7b6c502f155.png';
+  
   // Format options for Select
   const formatOptions = [
     { value: '', label: 'Select format...' },
@@ -136,18 +133,26 @@ function App() {
   const isComposer = context?.type === 'messageComposer';
   const containerStyle = isComposer ? 'composer' : 'sidebar';
 
-  // Adaptive text size based on card size
-  const getAdaptiveTextSize = () => {
-    const baseSize = Math.max(11, Math.min(14, cardSize.width / 28));
-    return {
-      base: `${baseSize}px`,
-      small: `${baseSize - 1}px`,
-      tiny: `${baseSize - 2}px`,
-      header: `${baseSize + 1}px`
-    };
+  // Styling configuration using Front's design system
+  const styles = {
+    fontSize: {
+      base: 12,
+      small: 11,
+      tiny: 10,
+      header: 14
+    },
+    colors: {
+      primary: grey.darkest,
+      secondary: grey.dark,
+      tertiary: grey.base,
+      background: grey.lightest,
+      border: grey.lighter,
+      error: palette.red.base,
+      success: palette.green.base,
+      warning: palette.orange.base,
+      info: palette.blue.base
+    }
   };
-
-  const textSizes = getAdaptiveTextSize();
 
   // Manual drag resize functionality with smooth adaptation
   useEffect(() => {
@@ -795,29 +800,33 @@ function App() {
 
   if (!context) {
     return (
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        height: '200px',
-        fontSize: textSizes.base,
-        color: grey.base
-      }}>
-        Loading context...
-      </div> 
+      <PluginLayout>
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          height: '200px',
+          color: grey.base
+        }}>
+          Loading context...
+        </div>
+      </PluginLayout>
     );
   }
 
   if (context.type === 'messageComposer' && !context.conversation) {
     return (
-      <div style={{
-        padding: '16px',
-        fontSize: textSizes.base,
-        color: grey.dark,
-        textAlign: 'center'
-      }}>
-        Select a conversation to use this plugin
-      </div>
+      <PluginLayout>
+        <div style={{
+          padding: '16px',
+          color: grey.dark,
+          textAlign: 'center'
+        }}>
+          <Paragraph color={grey.dark}>
+            Select a conversation to use this plugin
+          </Paragraph>
+        </div>
+      </PluginLayout>
     );
   }
 
@@ -840,6 +849,12 @@ function App() {
         transition: isResizing ? 'none' : 'width 0.1s ease, height 0.1s ease'
       }}
     >
+      {/* Hidden Keyboard Shortcuts */}
+      <ShortcutHandler
+        handlers={shortcutHandlers}
+        hidden
+      />
+
       {/* Header */}
       <div style={{
         display: 'flex',
@@ -978,14 +993,12 @@ function App() {
                       border: 'none',
                       color: palette.blue.base,
                       textDecoration: 'underline',
-                      padding: '4px 8px',
                       display: 'flex',
-                      alignItems: 'center',
-                      gap: '4px'
+                      alignItems: 'center'
                     }}
                   >
                     <UploadIcon color={palette.blue.base} size={14} />
-                    Upload reference file
+                    <span style={{ marginLeft: '6px' }}>Upload reference file</span>
                   </Button>
                   <div style={{ fontSize: textSizes.small, color: grey.base, marginTop: '4px' }}>
                     CSV, JSON, TXT, DOC, PDF, images (max 2MB)
@@ -998,11 +1011,12 @@ function App() {
                     color: grey.darkest, 
                     marginBottom: '6px',
                     display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px'
+                    alignItems: 'center'
                   }}>
                     <AttachmentIcon color={grey.base} size={14} />
-                    {uploadedFile.name} ({(uploadedFile.size / 1024).toFixed(1)}KB)
+                    <span style={{ marginLeft: '6px' }}>
+                      {uploadedFile.name} ({(uploadedFile.size / 1024).toFixed(1)}KB)
+                    </span>
                   </div>
                   <Button
                     type="danger"
@@ -1010,12 +1024,11 @@ function App() {
                     style={{
                       display: 'flex',
                       alignItems: 'center',
-                      gap: '4px',
-                      padding: '4px 8px'
+                      justifyContent: 'center'
                     }}
                   >
-                    <CrossIcon color="white" size={12} />
-                    Remove
+                    <span>×</span>
+                    <span style={{ marginLeft: '6px' }}>Remove</span>
                   </Button>
                 </div>
               )}
@@ -1090,15 +1103,18 @@ function App() {
                         fontSize: textSizes.tiny,
                         fontWeight: '500',
                         display: 'flex',
-                        alignItems: 'center',
-                        gap: '4px'
+                        alignItems: 'center'
                       }}>
-                        <span>{formatDate(entry.timestamp)}</span>
-                        <span>•</span>
-                        {entry.mode === 'email' ? <EmailIcon color={grey.base} size={12} /> : <TaskIcon color={grey.base} size={12} />}
-                        <span>•</span>
-                        <span>{entry.user}</span>
-                        {entry.hasFile && <AttachmentIcon color={grey.base} size={10} />}
+                        <span>{formatDate(entry.timestamp)} • </span>
+                        {entry.mode === 'email' ? (
+                          <EmailIcon color={grey.base} size={12} style={{ margin: '0 4px' }} />
+                        ) : (
+                          <TaskIcon color={grey.base} size={12} style={{ margin: '0 4px' }} />
+                        )}
+                        <span>• {entry.user}</span>
+                        {entry.hasFile && (
+                          <AttachmentIcon color={grey.base} size={12} style={{ marginLeft: '4px' }} />
+                        )}
                       </div>
                       <div style={{ 
                         color: grey.dark, 
@@ -1150,16 +1166,19 @@ function App() {
             border: `1px solid ${grey.lighter}`,
             borderRadius: '4px',
             fontSize: textSizes.small,
-            color: status.includes('Error') ? palette.red.base : grey.dark,
+            color: status.includes('Error') || status.includes('failed') ? palette.red.base : grey.dark,
             textAlign: 'center',
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'center',
-            gap: '6px'
+            justifyContent: 'center'
           }}>
-            {status.includes('Error') && <WarningIcon color={palette.red.base} size={14} />}
-            {status.includes('success') && <SuccessIcon color={palette.green.base} size={14} />}
-            <span>{status}</span>
+            {(status.includes('Error') || status.includes('failed')) && (
+              <WarningIcon color={palette.red.base} size={14} style={{ marginRight: '6px' }} />
+            )}
+            {(status.includes('success') || status.includes('completed') || status.includes('saved')) && (
+              <SuccessIcon color={palette.green.base} size={14} style={{ marginRight: '6px' }} />
+            )}
+            {status}
           </div>
         )}
       </div>
