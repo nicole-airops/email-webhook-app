@@ -1,4 +1,4 @@
-// netlify/functions/task-status.js
+// netlify/functions/get-conversation-history.js
 const { getStore } = require('@netlify/blobs');
 
 exports.handler = async (event, context) => {
@@ -25,56 +25,49 @@ exports.handler = async (event, context) => {
     };
   }
 
-  const { taskId } = event.queryStringParameters || {};
+  const { conversationId } = event.queryStringParameters || {};
   
-  if (!taskId) {
+  if (!conversationId) {
     return {
       statusCode: 400,
       headers: {
         'Access-Control-Allow-Origin': '*'
       },
-      body: JSON.stringify({ error: 'taskId is required' })
+      body: JSON.stringify({ error: 'conversationId is required' })
     };
   }
 
   try {
-    console.log(`🔍 Checking status for task: ${taskId}`);
+    console.log(`🔍 Loading history for conversation: ${conversationId}`);
     
-    const store = getStore('tasks');
-    const taskData = await store.get(taskId);
+    const store = getStore('conversation-history');
+    const historyData = await store.get(conversationId);
     
-    if (!taskData) {
-      console.log(`❌ Task ${taskId} not found`);
+    if (!historyData) {
+      console.log(`📝 No history found for conversation: ${conversationId}`);
       return {
-        statusCode: 404,
+        statusCode: 200,
         headers: {
+          'Content-Type': 'application/json',
           'Access-Control-Allow-Origin': '*'
         },
-        body: JSON.stringify({ error: 'Task not found' })
+        body: JSON.stringify({ history: [] })
       };
     }
 
-    const task = JSON.parse(taskData);
-    console.log(`✅ Task ${taskId} status: ${task.status}`);
-    
-    const response = {
-      status: task.status || 'pending',
-      data: task.result || null,
-      completedAt: task.completedAt || null,
-      error: task.error || null
-    };
+    const history = JSON.parse(historyData);
+    console.log(`✅ Found ${history.length} history entries for conversation: ${conversationId}`);
     
     return {
       statusCode: 200,
       headers: {
         'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-        'Cache-Control': 'no-cache, no-store, must-revalidate'
+        'Access-Control-Allow-Origin': '*'
       },
-      body: JSON.stringify(response)
+      body: JSON.stringify({ history })
     };
   } catch (error) {
-    console.error('💥 Error fetching task status:', error);
+    console.error('💥 Error loading conversation history:', error);
     return {
       statusCode: 500,
       headers: {

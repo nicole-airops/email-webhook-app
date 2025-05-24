@@ -1,5 +1,6 @@
+// netlify/functions/airops-callback.js
 exports.handler = async (event, context) => {
-  // Handle OPTIONS request for CORS
+  // Handle CORS preflight
   if (event.httpMethod === 'OPTIONS') {
     return {
       statusCode: 200,
@@ -24,10 +25,11 @@ exports.handler = async (event, context) => {
 
   try {
     const payload = JSON.parse(event.body);
-    console.log('AirOps callback received:', payload);
+    console.log('📥 AirOps callback received:', JSON.stringify(payload, null, 2));
     
     // Process the callback data
-    // This is where you'd handle the response from AirOps
+    // This is where you'd handle any additional processing from AirOps
+    // For now, we just log and acknowledge
     
     return {
       statusCode: 200,
@@ -37,11 +39,12 @@ exports.handler = async (event, context) => {
       },
       body: JSON.stringify({ 
         success: true,
-        message: 'Callback processed successfully' 
+        message: 'AirOps callback processed successfully',
+        timestamp: new Date().toISOString()
       })
     };
   } catch (error) {
-    console.error('Error processing AirOps callback:', error);
+    console.error('💥 Error processing AirOps callback:', error);
     return {
       statusCode: 500,
       headers: {

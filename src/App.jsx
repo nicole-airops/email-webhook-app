@@ -1,6 +1,34 @@
 import { useState, useEffect, useRef } from 'react';
 import { useFrontContext } from './providers/frontContext';
-import { Accordion, AccordionSection } from '@frontapp/ui-kit';
+import { 
+  Accordion, 
+  AccordionSection,
+  Button,
+  ButtonGroup,
+  FormFieldContainer,
+  TextInput,
+  Task,
+  ActionMenu,
+  ActionMenuItem,
+  ActionMenuItemSpacer,
+  ShortcutHandler,
+  ShortcutEnums
+} from '@frontapp/ui-kit';
+import { 
+  SuccessIcon,
+  WarningIcon,
+  TaskIcon,
+  EmailIcon,
+  AttachmentIcon,
+  CopyIcon,
+  ViewIcon,
+  UploadIcon,  
+  DocumentIcon,
+  InsertIcon,
+  CheckmarkIcon,
+  CrossIcon
+} from './CustomIcons';
+import { grey, palette, fontStyles } from '@frontapp/ui-kit';
 import './App.css';
 
 function App() {
@@ -37,12 +65,30 @@ function App() {
   const TASK_WEBHOOK_URL = 'https://app.airops.com/public_api/airops_apps/a628c7d4-6b22-42af-9ded-fb01839d5e06/webhook_async_execute?auth_token=pxaMrQO7aOUSOXe6gSiLNz4cF1r-E9fOS4E378ws12BBD8SPt-OIVu500KEh';
   const AIROPS_LOGO_URL = 'https://app.ashbyhq.com/api/images/org-theme-logo/78d1f89f-3e5a-4a8b-b6b5-a91acb030fed/aba001ed-b5b5-4a1b-8bd6-dfb86392876e/d8e6228c-ea82-4061-b660-d7b6c502f155.png';
   
-  // Format options - ONLY Text and Table (FIXED!)
+  // Format options for ButtonGroup
+  const modeOptions = [
+    { title: 'Email', value: 'email' },
+    { title: 'Task', value: 'task' }
+  ];
+
+  // Format options for Select
   const formatOptions = [
     { value: '', label: 'Select format...' },
     { value: 'text', label: 'Text' },
     { value: 'table', label: 'Table' }
   ];
+
+  // Keyboard shortcuts
+  const shortcutHandlers = {
+    [ShortcutEnums.ENTER]: () => {
+      if (comment.trim() && !isSending) {
+        processRequest();
+      }
+    },
+    [ShortcutEnums.ESC]: () => {
+      setComment('');
+    }
+  };
 
   // Detect container size changes and auto-resize card responsively
   useEffect(() => {
@@ -87,7 +133,7 @@ function App() {
         const handleResize = () => requestAnimationFrame(updateSize);
         window.addEventListener('resize', handleResize);
         
-        const interval = setInterval(updateSize, 100); // More frequent for better responsiveness
+        const interval = setInterval(updateSize, 100);
         
         return () => {
           window.removeEventListener('resize', handleResize);
@@ -183,7 +229,7 @@ function App() {
   // Check for completed tasks from webhook notifications
   const checkTaskStatus = async (taskId) => {
     try {
-      const response = await fetch(`/api/task-status?taskId=${taskId}`);
+      const response = await fetch(`/.netlify/functions/task-status?taskId=${taskId}`);
       if (response.ok) {
         const result = await response.json();
         
@@ -231,14 +277,30 @@ function App() {
   };
 
   // Reduced polling frequency since webhooks handle most updates
+  // Smart polling: more frequent for new tasks, less frequent for older ones
   useEffect(() => {
     if (pollingTasks.size > 0) {
-      const interval = setInterval(() => {
-        pollingTasks.forEach(taskId => checkTaskStatus(taskId));
-      }, 30000); // Check every 30 seconds instead of 5 (webhook handles real-time)
-      return () => clearInterval(interval);
+      const checkAllTasks = async () => {
+        const tasksToCheck = Array.from(pollingTasks);
+        console.log(`🔄 Checking ${tasksToCheck.length} tasks for updates...`);
+        
+        // Check all tasks concurrently
+        const promises = tasksToCheck.map(taskId => checkTaskStatus(taskId));
+        await Promise.all(promises);
+      };
+      
+      // Initial check after 5 seconds
+      const initialTimeout = setTimeout(checkAllTasks, 5000);
+      
+      // Then check every 15 seconds (faster than before)
+      const interval = setInterval(checkAllTasks, 15000);
+      
+      return () => {
+        clearTimeout(initialTimeout);
+        clearInterval(interval);
+      };
     }
-  }, [pollingTasks]);
+  }, [pollingTasks, taskResults]); // Added taskResults dependency
 
   useEffect(() => {
     if (selectedFormat) {
@@ -502,7 +564,7 @@ function App() {
   // Load history from Netlify Blobs storage
   const loadHistoryFromNetlify = async (conversationId) => {
     try {
-      const response = await fetch(`/api/get-conversation-history?conversationId=${conversationId}`);
+      const response = await fetch(`/.netlify/functions/get-conversation-history?conversationId=${conversationId}`);
       if (response.ok) {
         const { history } = await response.json();
         setCommentHistory(history || []);
@@ -518,7 +580,7 @@ function App() {
   // Save history to Netlify Blobs storage
   const saveHistoryToNetlify = async (conversationId, entry) => {
     try {
-      const response = await fetch('/api/save-conversation-history', {
+      const response = await fetch('/.netlify/functions/save-conversation-history', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ conversationId, entry })
@@ -583,6 +645,28 @@ function App() {
         setStatus('Copy failed');
       });
     }
+  };
+
+  const copyToClipboard = (content) => {
+    // Strip HTML tags and get clean text
+    const cleanContent = content.replace(/<[^>]*>/g, '');
+    
+    navigator.clipboard.writeText(cleanContent).then(() => {
+      setStatus('Copied to clipboard!');
+    }).catch(() => {
+      // Fallback for older browsers
+      try {
+        const textArea = document.createElement('textarea');
+        textArea.value = cleanContent;
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+        setStatus('Copied to clipboard!');
+      } catch (err) {
+        setStatus('Copy failed');
+      }
+    });
   };
 
   const processRequest = async () => {
@@ -655,7 +739,7 @@ function App() {
           setTaskResults(updatedTasks);
           
           try {
-            await fetch('/api/store-task', {
+            await fetch('/.netlify/functions/store-task', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ taskId, task: newTask })
@@ -690,7 +774,8 @@ function App() {
       if (mode === 'email') {
         setStatus('Email sent successfully!');
       } else {
-        setStatus('Task created successfully!');
+        setStatus(`Task created successfully! (ID: ${taskId?.substring(0, 8)}...)`);
+        console.log(`✅ Task created: ${taskId}`);
       }
       
       setComment('');
@@ -730,7 +815,7 @@ function App() {
         justifyContent: 'center',
         height: '200px',
         fontSize: textSizes.base,
-        color: '#9ca3af'
+        color: grey.base
       }}>
         Loading context...
       </div> 
@@ -742,7 +827,7 @@ function App() {
       <div style={{
         padding: '16px',
         fontSize: textSizes.base,
-        color: '#64748b',
+        color: grey.dark,
         textAlign: 'center'
       }}>
         Select a conversation to use this plugin
@@ -753,18 +838,13 @@ function App() {
   return (
     <div 
       ref={cardRef}
+      className="airops-plugin-card"
       style={{
         width: `${cardSize.width}px`,
         height: `${cardSize.height}px`,
-        background: 'white',
-        border: '1px solid #e5e7eb',
-        borderRadius: '8px',
-        padding: '12px',
-        fontSize: textSizes.base,
-        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+        ...fontStyles.base,
         position: 'relative',
         overflow: 'hidden',
-        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
         display: 'flex',
         flexDirection: 'column',
         minWidth: '280px',
@@ -774,6 +854,12 @@ function App() {
         transition: isResizing ? 'none' : 'width 0.1s ease, height 0.1s ease'
       }}
     >
+      {/* Hidden Keyboard Shortcuts */}
+      <ShortcutHandler
+        handlers={shortcutHandlers}
+        hidden
+      />
+
       {/* Header */}
       <div style={{
         display: 'flex',
@@ -781,7 +867,7 @@ function App() {
         marginBottom: '12px',
         fontSize: textSizes.header,
         fontWeight: '600',
-        color: '#111827'
+        color: grey.darkest
       }}>
         <img 
           src={AIROPS_LOGO_URL} 
@@ -791,48 +877,13 @@ function App() {
         <span>Send to AirOps</span>
       </div>
 
-      {/* Mode Tabs */}
-      <div style={{
-        display: 'flex',
-        marginBottom: '12px',
-        background: '#f1f5f9',
-        borderRadius: '6px',
-        padding: '2px'
-      }}>
-        <button 
-          onClick={() => setMode('email')}
-          style={{
-            flex: 1,
-            padding: '6px 12px',
-            border: 'none',
-            borderRadius: '4px',
-            fontSize: textSizes.base,
-            fontWeight: '500',
-            cursor: 'pointer',
-            background: mode === 'email' ? 'white' : 'transparent',
-            color: mode === 'email' ? '#1e293b' : '#64748b',
-            boxShadow: mode === 'email' ? '0 1px 2px rgba(0, 0, 0, 0.05)' : 'none'
-          }}
-        >
-          Email
-        </button>
-        <button 
-          onClick={() => setMode('task')}
-          style={{
-            flex: 1,
-            padding: '6px 12px',
-            border: 'none',
-            borderRadius: '4px',
-            fontSize: textSizes.base,
-            fontWeight: '500',
-            cursor: 'pointer',
-            background: mode === 'task' ? 'white' : 'transparent',
-            color: mode === 'task' ? '#1e293b' : '#64748b',
-            boxShadow: mode === 'task' ? '0 1px 2px rgba(0, 0, 0, 0.05)' : 'none'
-          }}
-        >
-          Task
-        </button>
+      {/* Mode Selection */}
+      <div style={{ marginBottom: '12px' }}>
+        <ButtonGroup
+          items={modeOptions}
+          value={mode}
+          onItemSelected={setMode}
+        />
       </div>
       
       {/* Scrollable Content Area */}
@@ -842,32 +893,28 @@ function App() {
         paddingRight: '4px',
         marginBottom: '12px'
       }}>
-        {/* Instructions Textarea with drag resize */}
-        <div ref={textareaContainerRef} style={{ position: 'relative', marginBottom: '8px' }}>
-          <textarea
-            ref={textareaRef}
-            value={comment}
-            onChange={(e) => setComment(e.target.value)}
-            placeholder={mode === 'email' ? "How should we respond?" : "What do you need?"}
-            style={{
-              width: '100%',
-              height: `${textareaHeight}px`,
-              padding: '8px 12px',
-              border: '1px solid #d1d5db',
-              borderRadius: '6px',
-              fontSize: textSizes.base,
-              fontFamily: 'inherit',
-              resize: 'none',
-              transition: 'border-color 0.15s ease',
-              paddingBottom: '20px'
-            }}
-            onFocus={(e) => e.target.style.borderColor = '#6366f1'}
-            onBlur={(e) => e.target.style.borderColor = '#d1d5db'}
-          />
+        {/* Instructions Input */}
+        <div ref={textareaContainerRef} style={{ position: 'relative', marginBottom: '12px' }}>
+          <FormFieldContainer
+            label="Instructions"
+            required
+          >
+            <TextInput
+              value={comment}
+              onChangeText={setComment}
+              placeholder={mode === 'email' ? "How should we respond?" : "What do you need?"}
+              multiline
+              style={{
+                height: `${textareaHeight}px`,
+                paddingBottom: '20px'
+              }}
+            />
+          </FormFieldContainer>
           
           {/* Textarea drag resize handle */}
           <div
             onMouseDown={handleTextareaResizeStart}
+            className="textarea-resize-handle"
             style={{
               position: 'absolute',
               bottom: '2px',
@@ -875,7 +922,7 @@ function App() {
               left: '8px',
               height: '12px',
               cursor: 'ns-resize',
-              background: 'linear-gradient(90deg, transparent 30%, #d1d5db 30%, #d1d5db 35%, transparent 35%, transparent 65%, #d1d5db 65%, #d1d5db 70%, transparent 70%)',
+              background: `linear-gradient(90deg, transparent 30%, ${grey.light} 30%, ${grey.light} 35%, transparent 35%, transparent 65%, ${grey.light} 65%, ${grey.light} 70%, transparent 70%)`,
               backgroundSize: '8px 2px',
               opacity: 0.3,
               borderRadius: '0 0 4px 4px',
@@ -884,51 +931,54 @@ function App() {
               alignItems: 'center',
               justifyContent: 'center'
             }}
-            onMouseEnter={(e) => e.target.style.opacity = '0.7'}
-            onMouseLeave={(e) => e.target.style.opacity = '0.3'}
             title="Drag to resize"
           >
             <div style={{
               width: '20px',
               height: '3px',
-              background: '#9ca3af',
+              background: grey.base,
               borderRadius: '2px'
             }} />
           </div>
         </div>
 
-        {/* Task Mode Controls - ONLY Text and Table options */}
+        {/* Task Mode Controls */}
         {mode === 'task' && (
           <div style={{ marginBottom: '12px' }}>
-            <select
-              value={selectedFormat}
-              onChange={(e) => setSelectedFormat(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '8px 12px',
-                border: '1px solid #d1d5db',
-                borderRadius: '6px',
-                fontSize: textSizes.base,
-                fontFamily: 'inherit',
-                marginBottom: '8px',
-                background: 'white',
-                cursor: 'pointer'
-              }}
+            <FormFieldContainer
+              label="Output Format"
+              required
             >
-              {formatOptions.map(option => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
+              <select
+                value={selectedFormat}
+                onChange={(e) => setSelectedFormat(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '8px 12px',
+                  border: `1px solid ${grey.light}`,
+                  borderRadius: '6px',
+                  fontSize: textSizes.base,
+                  fontFamily: 'inherit',
+                  background: 'white',
+                  cursor: 'pointer'
+                }}
+              >
+                {formatOptions.map(option => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </FormFieldContainer>
 
             {/* File Upload */}
             <div style={{
-              border: '1px dashed #d1d5db',
+              border: `1px dashed ${grey.light}`,
               borderRadius: '6px',
               padding: '12px',
               textAlign: 'center',
-              background: '#fafafa'
+              background: grey.lightest,
+              marginTop: '8px'
             }}>
               <input
                 ref={fileInputRef}
@@ -940,42 +990,53 @@ function App() {
               
               {!uploadedFile ? (
                 <div>
-                  <button
-                    onClick={() => fileInputRef.current?.click()}
-                    style={{
+                  <Button
+                    type="default"
+                    onPress={() => fileInputRef.current?.click()}
+                    style={{ 
                       background: 'none',
                       border: 'none',
-                      color: '#6366f1',
-                      fontSize: textSizes.base,
-                      cursor: 'pointer',
-                      textDecoration: 'underline'
+                      color: palette.blue.base,
+                      textDecoration: 'underline',
+                      padding: '4px 8px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px'
                     }}
                   >
-                    📎 Upload reference file
-                  </button>
-                  <div style={{ fontSize: textSizes.small, color: '#94a3b8', marginTop: '4px' }}>
+                    <UploadIcon color={palette.blue.base} size={14} />
+                    Upload reference file
+                  </Button>
+                  <div style={{ fontSize: textSizes.small, color: grey.base, marginTop: '4px' }}>
                     CSV, JSON, TXT, DOC, PDF, images (max 2MB)
                   </div>
                 </div>
               ) : (
                 <div>
-                  <div style={{ fontSize: textSizes.base, color: '#374151', marginBottom: '6px' }}>
-                    📎 {uploadedFile.name} ({(uploadedFile.size / 1024).toFixed(1)}KB)
+                  <div style={{ 
+                    fontSize: textSizes.base, 
+                    color: grey.darkest, 
+                    marginBottom: '6px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}>
+                    <AttachmentIcon color={grey.base} size={14} />
+                    {uploadedFile.name} ({(uploadedFile.size / 1024).toFixed(1)}KB)
                   </div>
-                  <button
-                    onClick={removeFile}
+                  <Button
+                    type="danger"
+                    onPress={removeFile}
                     style={{
-                      background: '#ef4444',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '4px',
-                      fontSize: textSizes.small,
-                      padding: '4px 8px',
-                      cursor: 'pointer'
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      padding: '4px 8px'
                     }}
                   >
+                    <CrossIcon color="white" size={12} />
                     Remove
-                  </button>
+                  </Button>
                 </div>
               )}
             </div>
@@ -992,59 +1053,37 @@ function App() {
               >
                 <div>
                   {taskResults.slice(0, 3).map((task) => (
-                    <div key={task.id} style={{
-                      background: '#f8fafc',
-                      border: '1px solid #f1f5f9',
-                      borderRadius: '6px',
-                      padding: '8px',
-                      marginBottom: '6px',
-                      fontSize: textSizes.small
-                    }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
-                        <span>{task.status === 'pending' ? '⏳' : '✅'}</span>
-                        <span style={{ flex: 1, color: '#475569', fontWeight: '500' }}>
-                          {task.selectedFormat ? formatOptions.find(f => f.value === task.selectedFormat)?.label || task.outputFormat : task.outputFormat}
-                          {task.hasFile && ' 📎'}
-                        </span>
-                        <span style={{ color: '#94a3b8', fontSize: textSizes.tiny }}>
-                          {formatDate(task.createdAt)}
-                        </span>
-                      </div>
+                    <Task
+                      key={task.id}
+                      type="icon"
+                      icon={task.status === 'pending' ? undefined : "check"}
+                      label={`${task.selectedFormat ? formatOptions.find(f => f.value === task.selectedFormat)?.label || task.outputFormat : task.outputFormat}${task.hasFile ? ' 📎' : ''}`}
+                      isLoading={task.status === 'pending'}
+                      style={{
+                        marginBottom: '6px'
+                      }}
+                    >
                       {task.result && (
-                        <div style={{ position: 'relative' }}>
-                          <div 
-                            style={{
-                              fontSize: textSizes.small,
-                              color: '#475569',
-                              background: 'white',
-                              padding: '6px',
-                              borderRadius: '4px',
-                              border: '1px solid #e2e8f0',
-                              maxHeight: '80px',
-                              overflow: 'auto'
-                            }}
-                            dangerouslySetInnerHTML={{ __html: task.result }}
-                          />
-                          <button 
-                            onClick={() => insertIntoDraft(task.result.replace(/<[^>]*>/g, ''))}
-                            style={{
-                              position: 'absolute',
-                              top: '2px',
-                              right: '2px',
-                              background: '#64748b',
-                              color: 'white',
-                              border: 'none',
-                              borderRadius: '3px',
-                              fontSize: textSizes.tiny,
-                              padding: '2px 6px',
-                              cursor: 'pointer'
-                            }}
+                        <ActionMenu>
+                          <ActionMenuItem
+                            onPress={() => copyToClipboard(task.result)}
                           >
-                            Insert
-                          </button>
-                        </div>
+                            Copy to Clipboard
+                          </ActionMenuItem>
+                          <ActionMenuItem
+                            onPress={() => insertIntoDraft(task.result.replace(/<[^>]*>/g, ''))}
+                          >
+                            Insert into Draft
+                          </ActionMenuItem>
+                          <ActionMenuItemSpacer />
+                          <ActionMenuItem
+                            onPress={() => window.open(`https://app.airops.com/airops-2/workflows/84946/results?taskId=${task.id}`, '_blank')}
+                          >
+                            View Full Result
+                          </ActionMenuItem>
+                        </ActionMenu>
                       )}
-                    </div>
+                    </Task>
                   ))}
                 </div>
               </AccordionSection>
@@ -1059,23 +1098,30 @@ function App() {
                   {commentHistory.slice(0, 3).map((entry, index) => (
                     <div key={index} style={{
                       padding: '6px',
-                      background: '#f8fafc',
-                      border: '1px solid #f1f5f9',
+                      background: grey.lightest,
+                      border: `1px solid ${grey.lighter}`,
                       borderRadius: '4px',
                       marginBottom: '4px',
                       fontSize: textSizes.small
                     }}>
                       <div style={{ 
-                        color: '#94a3b8', 
+                        color: grey.base, 
                         marginBottom: '2px',
                         fontSize: textSizes.tiny,
-                        fontWeight: '500'
+                        fontWeight: '500',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px'
                       }}>
-                        {formatDate(entry.timestamp)} • {entry.mode === 'email' ? '✉️' : '📋'} • {entry.user}
-                        {entry.hasFile && ' 📎'}
+                        <span>{formatDate(entry.timestamp)}</span>
+                        <span>•</span>
+                        {entry.mode === 'email' ? <EmailIcon color={grey.base} size={12} /> : <TaskIcon color={grey.base} size={12} />}
+                        <span>•</span>
+                        <span>{entry.user}</span>
+                        {entry.hasFile && <AttachmentIcon color={grey.base} size={10} />}
                       </div>
                       <div style={{ 
-                        color: '#475569', 
+                        color: grey.dark, 
                         lineHeight: 1.3,
                         fontSize: textSizes.small
                       }}>
@@ -1084,7 +1130,7 @@ function App() {
                       {entry.outputFormat && (
                         <div style={{ 
                           fontSize: textSizes.tiny,
-                          color: '#94a3b8',
+                          color: grey.base,
                           fontStyle: 'italic',
                           marginTop: '2px'
                         }}>
@@ -1102,46 +1148,38 @@ function App() {
 
       {/* Bottom Section - Send Button and Status */}
       <div style={{
-        borderTop: '1px solid #f1f5f9',
+        borderTop: `1px solid ${grey.lighter}`,
         paddingTop: '12px'
       }}>
-        <button
-          onClick={processRequest}
+        <Button
+          type="primary"
+          onPress={processRequest}
           disabled={isSending}
           style={{
             width: '100%',
-            background: isSending ? '#9ca3af' : '#1f2937',
-            color: 'white',
-            border: 'none',
-            borderRadius: '6px',
-            padding: '10px',
-            fontSize: textSizes.base,
-            fontWeight: '500',
-            cursor: isSending ? 'not-allowed' : 'pointer',
-            marginBottom: '8px',
-            transition: 'background-color 0.15s ease'
-          }}
-          onMouseEnter={(e) => {
-            if (!isSending) e.target.style.background = '#374151';
-          }}
-          onMouseLeave={(e) => {
-            if (!isSending) e.target.style.background = '#1f2937';
+            marginBottom: '8px'
           }}
         >
           {isSending ? 'Processing...' : 'Send'}
-        </button>
+        </Button>
         
         {status && (
           <div style={{
             padding: '6px 8px',
-            background: '#f8fafc',
-            border: '1px solid #e2e8f0',
+            background: grey.lightest,
+            border: `1px solid ${grey.lighter}`,
             borderRadius: '4px',
             fontSize: textSizes.small,
-            color: '#64748b',
-            textAlign: 'center'
+            color: status.includes('Error') ? palette.red.base : grey.dark,
+            textAlign: 'center',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '6px'
           }}>
-            {status}
+            {status.includes('Error') && <WarningIcon color={palette.red.base} size={14} />}
+            {status.includes('success') && <SuccessIcon color={palette.green.base} size={14} />}
+            <span>{status}</span>
           </div>
         )}
       </div>
@@ -1149,6 +1187,7 @@ function App() {
       {/* Enhanced Card Resize Handle */}
       <div
         onMouseDown={handleCardResizeStart}
+        className="card-resize-handle"
         style={{
           position: 'absolute',
           bottom: '0px',
@@ -1156,7 +1195,7 @@ function App() {
           width: '20px',
           height: '20px',
           cursor: 'nw-resize',
-          background: 'linear-gradient(-45deg, transparent 30%, #9ca3af 30%, #9ca3af 35%, transparent 35%, transparent 65%, #9ca3af 65%, #9ca3af 70%, transparent 70%)',
+          background: `linear-gradient(-45deg, transparent 30%, ${grey.base} 30%, ${grey.base} 35%, transparent 35%, transparent 65%, ${grey.base} 65%, ${grey.base} 70%, transparent 70%)`,
           backgroundSize: '6px 6px',
           opacity: 0.5,
           borderRadius: '0 0 8px 0',
@@ -1165,22 +1204,13 @@ function App() {
           alignItems: 'center',
           justifyContent: 'center'
         }}
-        onMouseEnter={(e) => {
-          e.target.style.opacity = '1';
-          e.target.style.background = 'linear-gradient(-45deg, transparent 30%, #6366f1 30%, #6366f1 35%, transparent 35%, transparent 65%, #6366f1 65%, #6366f1 70%, transparent 70%)';
-        }}
-        onMouseLeave={(e) => {
-          e.target.style.opacity = '0.5';
-          e.target.style.background = 'linear-gradient(-45deg, transparent 30%, #9ca3af 30%, #9ca3af 35%, transparent 35%, transparent 65%, #9ca3af 65%, #9ca3af 70%, transparent 70%)';
-        }}
         title="Drag to resize"
       >
-        {/* Small visual indicator */}
         <div style={{
           width: '8px',
           height: '8px',
           background: 'transparent',
-          border: '1px solid currentColor',
+          border: `1px solid ${grey.base}`,
           borderRadius: '1px',
           opacity: 0.7
         }} />
