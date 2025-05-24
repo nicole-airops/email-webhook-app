@@ -42,10 +42,10 @@ function App() {
   const [taskResults, setTaskResults] = useState([]);
   const [pollingTasks, setPollingTasks] = useState(new Set());
   
-  // Auto-resize state - Much smaller minimum sizes
-  const [cardSize, setCardSize] = useState({ width: 240, height: 300 });
+  // Auto-resize state - Small minimum, reasonable default, large maximum
+  const [cardSize, setCardSize] = useState({ width: 320, height: 380 });
   const [isResizing, setIsResizing] = useState(false);
-  const [textareaHeight, setTextareaHeight] = useState(50);
+  const [textareaHeight, setTextareaHeight] = useState(60);
   const [isTextareaResizing, setIsTextareaResizing] = useState(false);
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
   
@@ -89,14 +89,14 @@ function App() {
     }
   };
 
-  // Adaptive text size based on card size - Optimized for smaller cards
+  // Adaptive text size based on card size - Scales from small to large
   const getAdaptiveTextSize = () => {
-    const baseSize = Math.max(10, Math.min(14, cardSize.width / 20));
+    const baseSize = Math.max(9, Math.min(16, cardSize.width / 22));
     return {
       base: `${baseSize}px`,
-      small: `${baseSize - 1}px`,
-      tiny: `${baseSize - 2}px`,
-      header: `${baseSize + 1}px`
+      small: `${Math.max(8, baseSize - 1)}px`,
+      tiny: `${Math.max(7, baseSize - 2)}px`,
+      header: `${Math.min(18, baseSize + 2)}px`
     };
   };
 
@@ -115,9 +115,9 @@ function App() {
         const containerWidth = rect.width;
         const containerHeight = rect.height;
         
-        // Auto-resize card to fit container with padding - Much smaller minimums
-        const newWidth = Math.max(180, containerWidth - 8);
-        const newHeight = Math.max(200, containerHeight - 8);
+        // Smart auto-resize: use available space but don't force tiny sizes
+        const newWidth = Math.max(180, Math.min(500, containerWidth - 8));
+        const newHeight = Math.max(200, Math.min(600, containerHeight - 8));
         
         setContainerSize({ width: containerWidth, height: containerHeight });
         setCardSize({ width: newWidth, height: newHeight });
@@ -158,9 +158,10 @@ function App() {
     return cleanup;
   }, []);
 
-  // Manual drag resize functionality
+  // Manual drag resize functionality with proper cleanup
   useEffect(() => {
     const handleMouseMove = (e) => {
+      e.preventDefault();
       if (isResizing && !isTextareaResizing) {
         const parent = cardRef.current?.parentElement;
         if (!parent) return;
@@ -168,9 +169,9 @@ function App() {
         const parentRect = parent.getBoundingClientRect();
         const cardRect = cardRef.current.getBoundingClientRect();
         
-        // Calculate new size based on mouse position relative to card start - Smaller minimums
-        const newWidth = Math.max(180, Math.min(parentRect.width - 8, e.clientX - cardRect.left));
-        const newHeight = Math.max(200, Math.min(parentRect.height - 8, e.clientY - cardRect.top));
+        // Calculate new size based on mouse position - Allow much larger sizes
+        const newWidth = Math.max(180, Math.min(1200, e.clientX - cardRect.left));
+        const newHeight = Math.max(200, Math.min(800, e.clientY - cardRect.top));
         
         setCardSize({ width: newWidth, height: newHeight });
       }
@@ -178,34 +179,42 @@ function App() {
       if (isTextareaResizing) {
         const rect = textareaContainerRef.current?.getBoundingClientRect();
         if (rect) {
-          const newHeight = Math.max(30, Math.min(150, e.clientY - rect.top));
+          const newHeight = Math.max(30, Math.min(300, e.clientY - rect.top));
           setTextareaHeight(newHeight);
         }
       }
     };
 
-    const handleMouseUp = () => {
+    const handleMouseUp = (e) => {
+      e.preventDefault();
       setIsResizing(false);
       setIsTextareaResizing(false);
       document.body.style.cursor = '';
       document.body.style.userSelect = '';
     };
 
+    // Only add listeners when actively resizing
     if (isResizing || isTextareaResizing) {
-      document.addEventListener('mousemove', handleMouseMove);
-      document.addEventListener('mouseup', handleMouseUp);
+      document.addEventListener('mousemove', handleMouseMove, { passive: false });
+      document.addEventListener('mouseup', handleMouseUp, { passive: false });
+      document.addEventListener('mouseleave', handleMouseUp, { passive: false }); // Handle mouse leaving window
       document.body.style.cursor = isTextareaResizing ? 'ns-resize' : 'nw-resize';
       document.body.style.userSelect = 'none';
     }
 
+    // Cleanup function
     return () => {
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
+      document.removeEventListener('mouseleave', handleMouseUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
     };
   }, [isResizing, isTextareaResizing]);
 
   const handleCardResizeStart = (e) => {
     e.preventDefault();
+    e.stopPropagation();
     setIsResizing(true);
   };
 
@@ -311,10 +320,12 @@ function App() {
     let combinedText = comment.trim();
     
     if (mode === 'task') {
+      // Output format is optional - only add if specified
       if (outputFormat.trim()) {
         combinedText += `\n\nOutput Format: ${outputFormat.trim()}`;
       }
       
+      // File attachment is optional - only add if uploaded
       if (uploadedFile) {
         combinedText += `\n\nReference File: ${uploadedFile.name} (${uploadedFile.type}, ${(uploadedFile.size / 1024).toFixed(1)}KB)`;
         combinedText += `\nFile Content Preview: ${uploadedFile.preview || 'Binary file - see attachment'}`;
@@ -677,10 +688,7 @@ function App() {
       return;
     }
 
-    if (mode === 'task' && !selectedFormat) {
-      setStatus('Select output format');
-      return;
-    }
+    // Note: Output format and file attachment are now optional for tasks
     
     // Set processing flags
     isProcessingRef.current = true;
@@ -844,6 +852,8 @@ function App() {
         flexDirection: 'column',
         minWidth: '180px',
         minHeight: '200px',
+        maxWidth: '1200px',
+        maxHeight: '800px',
         maxWidth: '100%',
         maxHeight: '100%',
         background: 'white',
@@ -856,11 +866,11 @@ function App() {
         transition: isResizing ? 'none' : 'width 0.1s ease, height 0.1s ease'
       }}
     >
-      {/* Header - Compact for small cards */}
+      {/* Header - Responsive for both small and large cards */}
       <div style={{
         display: 'flex',
         alignItems: 'center',
-        marginBottom: cardSize.width < 220 ? '8px' : '12px',
+        marginBottom: cardSize.width < 220 ? '8px' : cardSize.width > 400 ? '16px' : '12px',
         fontSize: textSizes.header,
         fontWeight: '600',
         color: styles.colors.primary
@@ -869,34 +879,23 @@ function App() {
           src={AIROPS_LOGO_URL} 
           alt="" 
           style={{ 
-            width: cardSize.width < 220 ? '12px' : '16px', 
-            height: cardSize.width < 220 ? '12px' : '16px', 
-            marginRight: cardSize.width < 220 ? '4px' : '8px' 
+            width: cardSize.width < 220 ? '12px' : cardSize.width > 400 ? '20px' : '16px', 
+            height: cardSize.width < 220 ? '12px' : cardSize.width > 400 ? '20px' : '16px', 
+            marginRight: cardSize.width < 220 ? '4px' : cardSize.width > 400 ? '12px' : '8px' 
           }}
         />
-        <span>{cardSize.width < 220 ? 'AirOps' : 'Send to AirOps'}</span>
-        {/* Debug: Show current mode - Hide when very small */}
-        {cardSize.width > 200 && (
-          <span style={{
-            marginLeft: '8px',
-            fontSize: textSizes.tiny,
-            color: styles.colors.tertiary,
-            background: styles.colors.background,
-            padding: '2px 6px',
-            borderRadius: '3px'
-          }}>
-            {mode}
-          </span>
-        )}
+        <span>
+          {cardSize.width < 220 ? 'AirOps' : cardSize.width > 500 ? 'Send to AirOps ✨' : 'Send to AirOps'}
+        </span>
       </div>
 
-      {/* Mode Selection - Responsive sizing */}
-      <div style={{ marginBottom: cardSize.width < 220 ? '8px' : '12px' }}>
+      {/* Mode Selection - Responsive for all sizes */}
+      <div style={{ marginBottom: cardSize.width < 220 ? '8px' : cardSize.width > 400 ? '16px' : '12px' }}>
         <div style={{
           display: 'flex',
           background: styles.colors.background,
-          borderRadius: cardSize.width < 220 ? '4px' : '6px',
-          padding: '2px',
+          borderRadius: cardSize.width < 220 ? '4px' : cardSize.width > 400 ? '8px' : '6px',
+          padding: cardSize.width > 400 ? '3px' : '2px',
           border: `1px solid ${styles.colors.border}`
         }}>
           <button
@@ -916,7 +915,7 @@ function App() {
             }}
             style={{
               flex: 1,
-              padding: cardSize.width < 220 ? '6px 8px' : '8px 12px',
+              padding: cardSize.width < 220 ? '6px 8px' : cardSize.width > 400 ? '10px 16px' : '8px 12px',
               border: 'none',
               borderRadius: '4px',
               fontSize: textSizes.base,
@@ -932,9 +931,9 @@ function App() {
             }}
           >
             <EmailIcon 
-              size={cardSize.width < 220 ? 12 : 14} 
+              size={cardSize.width < 220 ? 12 : cardSize.width > 400 ? 16 : 14} 
               color={mode === 'email' ? styles.colors.primary : styles.colors.tertiary} 
-              style={{ marginRight: cardSize.width < 220 ? '3px' : '6px' }} 
+              style={{ marginRight: cardSize.width < 220 ? '3px' : cardSize.width > 400 ? '8px' : '6px' }} 
             />
             {cardSize.width < 200 ? 'E' : 'Email'}
           </button>
@@ -955,7 +954,7 @@ function App() {
             }}
             style={{
               flex: 1,
-              padding: cardSize.width < 220 ? '6px 8px' : '8px 12px',
+              padding: cardSize.width < 220 ? '6px 8px' : cardSize.width > 400 ? '10px 16px' : '8px 12px',
               border: 'none',
               borderRadius: '4px',
               fontSize: textSizes.base,
@@ -971,33 +970,46 @@ function App() {
             }}
           >
             <TaskIcon 
-              size={cardSize.width < 220 ? 12 : 14} 
+              size={cardSize.width < 220 ? 12 : cardSize.width > 400 ? 16 : 14} 
               color={mode === 'task' ? styles.colors.primary : styles.colors.tertiary} 
-              style={{ marginRight: cardSize.width < 220 ? '3px' : '6px' }} 
+              style={{ marginRight: cardSize.width < 220 ? '3px' : cardSize.width > 400 ? '8px' : '6px' }} 
             />
             {cardSize.width < 200 ? 'T' : 'Task'}
           </button>
         </div>
       </div>
       
-      {/* Scrollable Content Area */}
+      {/* Scrollable Content Area - Responsive for all sizes */}
       <div style={{
         flex: 1,
         overflowY: 'auto',
-        paddingRight: cardSize.width < 200 ? '2px' : '4px',
-        marginBottom: cardSize.width < 220 ? '8px' : '12px'
+        paddingRight: cardSize.width < 200 ? '2px' : cardSize.width > 400 ? '8px' : '4px',
+        marginBottom: cardSize.width < 220 ? '8px' : cardSize.width > 400 ? '16px' : '12px'
       }}>
-        {/* Instructions Input */}
+        {/* Instructions Input - Contextual and adaptive */}
         <div ref={textareaContainerRef} style={{ position: 'relative', marginBottom: '12px' }}>
-          <FormField label="Instructions" required>
+          <FormField 
+            label={
+              cardSize.width < 220 ? 
+                (mode === 'email' ? 'Email' : 'Task') :
+                cardSize.width < 300 ? 
+                  (mode === 'email' ? 'Email Request' : 'Task Request') :
+                  (mode === 'email' ? 'How should we respond?' : 'What do you need?')
+            } 
+            required
+          >
             <textarea
               value={comment}
               onChange={(e) => setComment(e.target.value)}
-              placeholder={mode === 'email' ? "How should we respond?" : "What do you need?"}
+              placeholder={
+                cardSize.width < 220 ?
+                  (mode === 'email' ? "Reply instructions..." : "Task details...") :
+                  (mode === 'email' ? "Describe how we should respond to this conversation" : "Describe what you need AirOps to create or analyze")
+              }
               style={{
                 width: '100%',
                 height: `${textareaHeight}px`,
-                padding: '8px 12px',
+                padding: cardSize.width < 220 ? '6px 8px' : '8px 12px',
                 border: `1px solid ${styles.colors.border}`,
                 borderRadius: '6px',
                 fontSize: textSizes.base,
@@ -1012,15 +1024,18 @@ function App() {
             />
           </FormField>
           
-          {/* Debug: Show current mode functionality - Only show on larger cards */}
-          {cardSize.width > 240 && (
+          {/* Helpful context text - adaptive */}
+          {cardSize.width > 280 && (
             <div style={{
               fontSize: textSizes.tiny,
               color: styles.colors.tertiary,
-              marginTop: '4px'
+              marginTop: '4px',
+              fontStyle: 'italic'
             }}>
-              Current mode: {mode} | 
-              Task controls visible: {mode === 'task' ? 'YES' : 'NO'}
+              {mode === 'email' ? 
+                'AI will draft a response based on the full conversation context' : 
+                'AI will create content based on your requirements and optional attachments'
+              }
             </div>
           )}
           
@@ -1074,7 +1089,7 @@ function App() {
             )}
             
             <div style={{ marginBottom: '12px' }}>
-              <FormField label="Output Format" required>
+              <FormField label="Output Format (Optional)">
                 <select
                   value={selectedFormat}
                   onChange={(e) => setSelectedFormat(e.target.value)}
@@ -1098,7 +1113,7 @@ function App() {
                 </select>
               </FormField>
 
-              {/* File Upload */}
+              {/* File Upload - Optional */}
               <div style={{
                 border: `1px dashed ${styles.colors.border}`,
                 borderRadius: '6px',
@@ -1131,7 +1146,7 @@ function App() {
                       }}
                     >
                       <UploadIcon size={14} color={styles.colors.info} style={{ marginRight: '6px' }} />
-                      Upload reference file
+                      Upload reference file (optional)
                     </Button>
                     <div style={{ 
                       fontSize: textSizes.small, 
@@ -1472,10 +1487,10 @@ function App() {
         )}
       </div>
 
-      {/* Bottom Section - Send Button and Status - Responsive */}
+      {/* Bottom Section - Send Button and Status - Fully responsive */}
       <div style={{
         borderTop: `1px solid ${styles.colors.border}`,
-        paddingTop: cardSize.width < 220 ? '8px' : '12px'
+        paddingTop: cardSize.width < 220 ? '8px' : cardSize.width > 400 ? '16px' : '12px'
       }}>
         <Button
           type="primary"
@@ -1483,9 +1498,9 @@ function App() {
           disabled={isSending}
           style={{
             width: '100%',
-            marginBottom: cardSize.width < 220 ? '6px' : '8px',
+            marginBottom: cardSize.width < 220 ? '6px' : cardSize.width > 400 ? '12px' : '8px',
             fontSize: textSizes.base,
-            padding: cardSize.width < 220 ? '8px' : '10px'
+            padding: cardSize.width < 220 ? '8px' : cardSize.width > 400 ? '12px' : '10px'
           }}
         >
           {isSending ? 'Processing...' : 'Send'}
