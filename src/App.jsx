@@ -4,14 +4,7 @@ import {
   Accordion, 
   AccordionSection,
   Button,
-  FormField,
-  Select,
-  SelectItem,
-  Task,
-  ActionMenu,
-  ActionMenuItem,
-  ActionMenuItemSpacer,
-  Tooltip
+  ButtonGroup
 } from '@frontapp/ui-kit';
 import {
   SuccessIcon,
@@ -335,7 +328,7 @@ function App() {
     return combinedText;
   };
 
-  // COMPLETE NESTED PAYLOAD CREATOR
+  // ✅ SINGLE NESTED PAYLOAD CREATOR - This creates ONE object with all data nested inside
   const createCompletePayload = async (combinedInstructions, taskId = null) => {
     const timestamp = new Date().toISOString();
     const callbackUrl = taskId ? `${window.location.origin}/.netlify/functions/task-completion-webhook` : null;
@@ -413,8 +406,8 @@ function App() {
       timezone: context.teammate.timezone
     } : null;
     
-    // Create the COMPLETE nested payload
-    const completePayload = {
+    // ✅ CREATE SINGLE NESTED OBJECT - Everything is inside airops_request
+    const singleNestedPayload = {
       airops_request: {
         // Primary instruction combining everything
         combined_instructions: combinedInstructions,
@@ -521,7 +514,13 @@ function App() {
       }
     };
     
-    return completePayload;
+    console.log('📦 SINGLE NESTED PAYLOAD CREATED:', {
+      total_size: JSON.stringify(singleNestedPayload).length,
+      top_level_keys: Object.keys(singleNestedPayload),
+      nested_keys: Object.keys(singleNestedPayload.airops_request)
+    });
+    
+    return singleNestedPayload;
   };
 
   const handleFileUpload = async (event) => {
@@ -654,6 +653,7 @@ function App() {
     }
   };
 
+  // ✅ ENHANCED COPY TO CLIPBOARD FUNCTION
   const copyToClipboard = (content) => {
     // Strip HTML tags and get clean text
     const cleanContent = content.replace(/<[^>]*>/g, '');
@@ -701,8 +701,8 @@ function App() {
       
       const combinedInstructions = createCombinedInstructions();
       
-      // Create COMPLETE nested payload with ALL context
-      const completePayload = await createCompletePayload(combinedInstructions, taskId);
+      // ✅ CREATE SINGLE NESTED PAYLOAD with ALL context
+      const singleNestedPayload = await createCompletePayload(combinedInstructions, taskId);
       
       // Save request to Netlify storage
       if (context?.conversation) {
@@ -758,14 +758,15 @@ function App() {
       
       const webhookUrl = mode === 'email' ? EMAIL_WEBHOOK_URL : TASK_WEBHOOK_URL;
       
-      // Send the complete nested payload
+      // ✅ SEND SINGLE NESTED PAYLOAD to webhook
+      console.log('🚀 SENDING SINGLE PAYLOAD TO:', webhookUrl);
       const response = await fetch(webhookUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json'
         },
-        body: JSON.stringify(completePayload)
+        body: JSON.stringify(singleNestedPayload)
       });
       
       if (!response.ok) {
@@ -774,6 +775,7 @@ function App() {
       }
       
       const responseData = await response.json();
+      console.log('✅ WEBHOOK RESPONSE:', responseData);
       
       if (mode === 'email') {
         setStatus('Email sent successfully!');
@@ -818,8 +820,8 @@ function App() {
         alignItems: 'center',
         justifyContent: 'center',
         height: '200px',
-        color: styles.colors.tertiary,
-        fontSize: textSizes.base
+        fontSize: textSizes.base,
+        color: styles.colors.tertiary
       }}>
         Loading context...
       </div>
@@ -830,9 +832,9 @@ function App() {
     return (
       <div style={{
         padding: '16px',
+        fontSize: textSizes.base,
         color: styles.colors.secondary,
-        textAlign: 'center',
-        fontSize: textSizes.base
+        textAlign: 'center'
       }}>
         Select a conversation to use this plugin
       </div>
@@ -846,23 +848,21 @@ function App() {
       style={{
         width: `${cardSize.width}px`,
         height: `${cardSize.height}px`,
+        background: 'white',
+        border: `1px solid ${styles.colors.border}`,
+        borderRadius: '8px',
+        padding: cardSize.width < 220 ? '8px' : '12px',
+        fontSize: textSizes.base,
+        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
         position: 'relative',
         overflow: 'hidden',
+        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
         display: 'flex',
         flexDirection: 'column',
         minWidth: '180px',
         minHeight: '200px',
-        maxWidth: '1200px',
-        maxHeight: '800px',
         maxWidth: '100%',
         maxHeight: '100%',
-        background: 'white',
-        border: `1px solid ${styles.colors.border}`,
-        borderRadius: '8px',
-        padding: '12px',
-        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
-        fontSize: textSizes.base,
-        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
         transition: isResizing ? 'none' : 'width 0.1s ease, height 0.1s ease'
       }}
     >
@@ -890,11 +890,13 @@ function App() {
       </div>
 
       {/* Mode Selection - Responsive for all sizes */}
-      <div style={{ marginBottom: cardSize.width < 220 ? '8px' : cardSize.width > 400 ? '16px' : '12px' }}>
+      <div style={{ 
+        marginBottom: cardSize.width < 220 ? '8px' : cardSize.width > 400 ? '16px' : '12px' 
+      }}>
         <div style={{
           display: 'flex',
           background: styles.colors.background,
-          borderRadius: cardSize.width < 220 ? '4px' : cardSize.width > 400 ? '8px' : '6px',
+          borderRadius: cardSize.width > 400 ? '8px' : '6px',
           padding: cardSize.width > 400 ? '3px' : '2px',
           border: `1px solid ${styles.colors.border}`
         }}>
@@ -983,46 +985,43 @@ function App() {
       <div style={{
         flex: 1,
         overflowY: 'auto',
-        paddingRight: cardSize.width < 200 ? '2px' : cardSize.width > 400 ? '8px' : '4px',
+        paddingRight: cardSize.width < 220 ? '2px' : cardSize.width > 400 ? '8px' : '4px',
         marginBottom: cardSize.width < 220 ? '8px' : cardSize.width > 400 ? '16px' : '12px'
       }}>
         {/* Instructions Input - Contextual and adaptive */}
         <div ref={textareaContainerRef} style={{ position: 'relative', marginBottom: '12px' }}>
-          <FormField 
-            label={
-              cardSize.width < 220 ? 
-                (mode === 'email' ? 'Email' : 'Task') :
-                cardSize.width < 300 ? 
-                  (mode === 'email' ? 'Email Request' : 'Task Request') :
-                  (mode === 'email' ? 'How should we respond?' : 'What do you need?')
-            } 
-            required
-          >
-            <textarea
-              value={comment}
-              onChange={(e) => setComment(e.target.value)}
-              placeholder={
-                cardSize.width < 220 ?
-                  (mode === 'email' ? "Reply instructions..." : "Task details...") :
-                  (mode === 'email' ? "Describe how we should respond to this conversation" : "Describe what you need AirOps to create or analyze")
-              }
-              style={{
-                width: '100%',
-                height: `${textareaHeight}px`,
-                padding: cardSize.width < 220 ? '6px 8px' : '8px 12px',
-                border: `1px solid ${styles.colors.border}`,
-                borderRadius: '6px',
-                fontSize: textSizes.base,
-                fontFamily: 'inherit',
-                resize: 'none',
-                paddingBottom: '20px',
-                background: 'white',
-                color: styles.colors.primary
-              }}
-              onFocus={(e) => e.target.style.borderColor = styles.colors.info}
-              onBlur={(e) => e.target.style.borderColor = styles.colors.border}
-            />
-          </FormField>
+          <div style={{
+            marginBottom: '4px',
+            fontSize: textSizes.small,
+            fontWeight: '500',
+            color: styles.colors.primary
+          }}>
+            Instructions <span style={{ color: styles.colors.error }}>*</span>
+          </div>
+          <textarea
+            value={comment}
+            onChange={(e) => setComment(e.target.value)}
+            placeholder={
+              cardSize.width < 220 ?
+                (mode === 'email' ? "Reply instructions..." : "Task details...") :
+                (mode === 'email' ? "Describe how we should respond to this conversation" : "Describe what you need AirOps to create or analyze")
+            }
+            style={{
+              width: '100%',
+              height: `${textareaHeight}px`,
+              padding: cardSize.width < 220 ? '6px 8px' : '8px 12px',
+              border: `1px solid ${styles.colors.border}`,
+              borderRadius: '6px',
+              fontSize: textSizes.base,
+              fontFamily: 'inherit',
+              resize: 'none',
+              paddingBottom: '20px',
+              background: 'white',
+              color: styles.colors.primary
+            }}
+            onFocus={(e) => e.target.style.borderColor = styles.colors.info}
+            onBlur={(e) => e.target.style.borderColor = styles.colors.border}
+          />
           
           {/* Helpful context text - adaptive */}
           {cardSize.width > 280 && (
@@ -1072,121 +1071,118 @@ function App() {
 
         {/* Task Mode Controls */}
         {mode === 'task' && (
-          <>
-            {/* Debug: Task mode controls are rendering - Only show on larger cards */}
-            {cardSize.width > 240 && (
-              <div style={{
-                background: '#e0f2fe',
-                border: '1px solid #0284c7',
-                borderRadius: '4px',
-                padding: '8px',
-                marginBottom: '8px',
-                fontSize: textSizes.tiny,
-                color: '#0284c7'
-              }}>
-                🔧 TASK MODE ACTIVE - Controls should be visible below
-              </div>
-            )}
-            
-            <div style={{ marginBottom: '12px' }}>
-              <FormField label="Output Format (Optional)">
-                <select
-                  value={selectedFormat}
-                  onChange={(e) => setSelectedFormat(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '8px 12px',
-                    border: `1px solid ${styles.colors.border}`,
-                    borderRadius: '6px',
-                    fontSize: textSizes.base,
-                    fontFamily: 'inherit',
-                    background: 'white',
-                    cursor: 'pointer',
-                    color: styles.colors.primary
-                  }}
-                >
-                  {formatOptions.map(option => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </FormField>
-
-              {/* File Upload - Optional */}
-              <div style={{
-                border: `1px dashed ${styles.colors.border}`,
+          <div style={{ marginBottom: '12px' }}>
+            <div style={{
+              marginBottom: '4px',
+              fontSize: textSizes.small,
+              fontWeight: '500',
+              color: styles.colors.primary
+            }}>
+              Output Format (Optional)
+            </div>
+            <select
+              value={selectedFormat}
+              onChange={(e) => setSelectedFormat(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '8px 12px',
+                border: `1px solid ${styles.colors.border}`,
                 borderRadius: '6px',
-                padding: '12px',
-                textAlign: 'center',
-                background: styles.colors.background,
-                marginTop: '8px'
-              }}>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  onChange={handleFileUpload}
-                  accept=".txt,.csv,.json,.doc,.docx,.pdf,.png,.jpg,.jpeg"
-                  style={{ display: 'none' }}
-                />
-                
-                {!uploadedFile ? (
-                  <div>
-                    <Button
-                      type="secondary"
-                      onPress={() => fileInputRef.current?.click()}
-                      style={{ 
-                        background: 'none',
-                        border: 'none',
-                        color: styles.colors.info,
-                        textDecoration: 'underline',
-                        fontSize: textSizes.base,
-                        display: 'flex',
-                        alignItems: 'center'
-                      }}
-                    >
-                      <UploadIcon size={14} color={styles.colors.info} style={{ marginRight: '6px' }} />
-                      Upload reference file (optional)
-                    </Button>
-                    <div style={{ 
-                      fontSize: textSizes.small, 
-                      color: styles.colors.tertiary, 
-                      marginTop: '4px' 
-                    }}>
-                      CSV, JSON, TXT, DOC, PDF, images (max 2MB)
-                    </div>
-                  </div>
-                ) : (
-                  <div>
-                    <div style={{ 
-                      fontSize: textSizes.base, 
-                      color: styles.colors.primary, 
-                      marginBottom: '6px',
+                fontSize: textSizes.base,
+                fontFamily: 'inherit',
+                background: 'white',
+                cursor: 'pointer',
+                color: styles.colors.primary
+              }}
+            >
+              {formatOptions.map(option => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+
+            {/* File Upload - Optional */}
+            <div style={{
+              border: `1px dashed ${styles.colors.border}`,
+              borderRadius: '6px',
+              padding: '12px',
+              textAlign: 'center',
+              background: styles.colors.background,
+              marginTop: '8px'
+            }}>
+              <input
+                ref={fileInputRef}
+                type="file"
+                onChange={handleFileUpload}
+                accept=".txt,.csv,.json,.doc,.docx,.pdf,.png,.jpg,.jpeg"
+                style={{ display: 'none' }}
+              />
+              
+              {!uploadedFile ? (
+                <div>
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    style={{ 
+                      background: 'none',
+                      border: 'none',
+                      color: styles.colors.info,
+                      textDecoration: 'underline',
+                      fontSize: textSizes.base,
                       display: 'flex',
                       alignItems: 'center',
-                      justifyContent: 'center'
-                    }}>
-                      <AttachmentIcon size={14} color={styles.colors.secondary} style={{ marginRight: '6px' }} />
-                      {uploadedFile.name} ({(uploadedFile.size / 1024).toFixed(1)}KB)
-                    </div>
-                    <Button
-                      type="danger"
-                      onPress={removeFile}
-                      style={{
-                        fontSize: textSizes.small,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center'
-                      }}
-                    >
-                      <CrossIcon size={12} color="white" style={{ marginRight: '4px' }} />
-                      Remove
-                    </Button>
+                      justifyContent: 'center',
+                      cursor: 'pointer',
+                      width: '100%'
+                    }}
+                  >
+                    <UploadIcon size={14} color={styles.colors.info} style={{ marginRight: '6px' }} />
+                    Upload reference file (optional)
+                  </button>
+                  <div style={{ 
+                    fontSize: textSizes.small, 
+                    color: styles.colors.tertiary, 
+                    marginTop: '4px' 
+                  }}>
+                    CSV, JSON, TXT, DOC, PDF, images (max 2MB)
                   </div>
-                )}
-              </div>
+                </div>
+              ) : (
+                <div>
+                  <div style={{ 
+                    fontSize: textSizes.base, 
+                    color: styles.colors.primary, 
+                    marginBottom: '6px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}>
+                    <AttachmentIcon size={14} color={styles.colors.secondary} style={{ marginRight: '6px' }} />
+                    {uploadedFile.name} ({(uploadedFile.size / 1024).toFixed(1)}KB)
+                  </div>
+                  <button
+                    onClick={removeFile}
+                    style={{
+                      background: styles.colors.error,
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '4px',
+                      fontSize: textSizes.small,
+                      padding: '4px 8px',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      margin: '0 auto'
+                    }}
+                  >
+                    <CrossIcon size={12} color="white" style={{ marginRight: '4px' }} />
+                    Remove
+                  </button>
+                </div>
+              )}
             </div>
-          </>
+          </div>
         )}
 
         {/* Results using Accordion */}
@@ -1309,64 +1305,56 @@ function App() {
                             <div 
                               dangerouslySetInnerHTML={{ __html: task.result }}
                               style={{ 
-                                color: styles.colors.primary,
-                                '& h1, & h2, & h3, & h4, & h5, & h6': {
-                                  marginTop: '8px',
-                                  marginBottom: '4px',
-                                  fontWeight: '600'
-                                },
-                                '& p': {
-                                  marginBottom: '8px'
-                                },
-                                '& ul, & ol': {
-                                  marginLeft: '16px',
-                                  marginBottom: '8px'
-                                },
-                                '& li': {
-                                  marginBottom: '2px'
-                                }
+                                color: styles.colors.primary
                               }}
                             />
                           </div>
                           
-                          {/* Action Buttons - Responsive layout */}
+                          {/* ✅ ACTION BUTTONS WITH COPY FUNCTIONALITY */}
                           <div style={{ 
                             display: 'flex', 
                             gap: cardSize.width < 220 ? '4px' : '8px',
                             flexWrap: 'wrap'
                           }}>
-                            <Button
-                              type="secondary"
-                              onPress={() => copyToClipboard(task.result)}
+                            <button
+                              onClick={() => copyToClipboard(task.result)}
                               style={{
                                 padding: cardSize.width < 220 ? '4px 8px' : '6px 12px',
                                 fontSize: textSizes.small,
                                 minHeight: 'auto',
                                 display: 'flex',
-                                alignItems: 'center'
+                                alignItems: 'center',
+                                background: styles.colors.background,
+                                border: `1px solid ${styles.colors.border}`,
+                                borderRadius: '4px',
+                                cursor: 'pointer',
+                                color: styles.colors.secondary
                               }}
                             >
                               <CopyIcon size={10} color={styles.colors.secondary} style={{ marginRight: '3px' }} />
                               {cardSize.width < 200 ? 'Copy' : 'Copy'}
-                            </Button>
-                            <Button
-                              type="secondary"
-                              onPress={() => insertIntoDraft(task.result.replace(/<[^>]*>/g, ''))}
+                            </button>
+                            <button
+                              onClick={() => insertIntoDraft(task.result.replace(/<[^>]*>/g, ''))}
                               style={{
                                 padding: cardSize.width < 220 ? '4px 8px' : '6px 12px',
                                 fontSize: textSizes.small,
                                 minHeight: 'auto',
                                 display: 'flex',
-                                alignItems: 'center'
+                                alignItems: 'center',
+                                background: styles.colors.background,
+                                border: `1px solid ${styles.colors.border}`,
+                                borderRadius: '4px',
+                                cursor: 'pointer',
+                                color: styles.colors.secondary
                               }}
                             >
                               <InsertIcon size={10} color={styles.colors.secondary} style={{ marginRight: '3px' }} />
                               {cardSize.width < 200 ? 'Ins' : 'Insert'}
-                            </Button>
+                            </button>
                             {cardSize.width > 200 && (
-                              <Button
-                                type="secondary"
-                                onPress={() => {
+                              <button
+                                onClick={() => {
                                   // Show full result in a modal or expanded view
                                   const newWindow = window.open('', '_blank');
                                   newWindow.document.write(`
@@ -1406,12 +1394,17 @@ function App() {
                                   fontSize: textSizes.small,
                                   minHeight: 'auto',
                                   display: 'flex',
-                                  alignItems: 'center'
+                                  alignItems: 'center',
+                                  background: styles.colors.background,
+                                  border: `1px solid ${styles.colors.border}`,
+                                  borderRadius: '4px',
+                                  cursor: 'pointer',
+                                  color: styles.colors.secondary
                                 }}
                               >
                                 <ViewIcon size={10} color={styles.colors.secondary} style={{ marginRight: '3px' }} />
                                 Expand
-                              </Button>
+                              </button>
                             )}
                           </div>
                         </div>
@@ -1492,19 +1485,25 @@ function App() {
         borderTop: `1px solid ${styles.colors.border}`,
         paddingTop: cardSize.width < 220 ? '8px' : cardSize.width > 400 ? '16px' : '12px'
       }}>
-        <Button
-          type="primary"
-          onPress={processRequest}
+        <button
+          onClick={processRequest}
           disabled={isSending}
           style={{
             width: '100%',
             marginBottom: cardSize.width < 220 ? '6px' : cardSize.width > 400 ? '12px' : '8px',
             fontSize: textSizes.base,
-            padding: cardSize.width < 220 ? '8px' : cardSize.width > 400 ? '12px' : '10px'
+            padding: cardSize.width < 220 ? '8px' : cardSize.width > 400 ? '12px' : '10px',
+            background: isSending ? styles.colors.tertiary : styles.colors.primary,
+            color: 'white',
+            border: 'none',
+            borderRadius: '6px',
+            fontWeight: '500',
+            cursor: isSending ? 'not-allowed' : 'pointer',
+            transition: 'background-color 0.15s ease'
           }}
         >
           {isSending ? 'Processing...' : 'Send'}
-        </Button>
+        </button>
         
         {status && (
           <div style={{
@@ -1574,7 +1573,10 @@ function App() {
           borderRadius: '1px',
           opacity: 0.7
         }} />
-      </div>
+      </div>git add .
+git commit -m "Add missing Netlify functions and fix CORS"
+git push
+netlify deploy --prod
     </div>
   );
 }
