@@ -4,7 +4,6 @@ import {
   Accordion, 
   AccordionSection,
   Button,
-  ButtonGroup,
   FormField,
   Select,
   SelectItem,
@@ -43,10 +42,10 @@ function App() {
   const [taskResults, setTaskResults] = useState([]);
   const [pollingTasks, setPollingTasks] = useState(new Set());
   
-  // Auto-resize state
-  const [cardSize, setCardSize] = useState({ width: 340, height: 420 });
+  // Auto-resize state - Much smaller minimum sizes
+  const [cardSize, setCardSize] = useState({ width: 240, height: 300 });
   const [isResizing, setIsResizing] = useState(false);
-  const [textareaHeight, setTextareaHeight] = useState(80);
+  const [textareaHeight, setTextareaHeight] = useState(50);
   const [isTextareaResizing, setIsTextareaResizing] = useState(false);
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
   
@@ -61,12 +60,6 @@ function App() {
   const EMAIL_WEBHOOK_URL = 'https://app.airops.com/public_api/airops_apps/f124518f-2185-4e62-9520-c6ff0fc3fcb0/webhook_async_execute?auth_token=pxaMrQO7aOUSOXe6gSiLNz4cF1r-E9fOS4E378ws12BBD8SPt-OIVu500KEh';
   const TASK_WEBHOOK_URL = 'https://app.airops.com/public_api/airops_apps/a628c7d4-6b22-42af-9ded-fb01839d5e06/webhook_async_execute?auth_token=pxaMrQO7aOUSOXe6gSiLNz4cF1r-E9fOS4E378ws12BBD8SPt-OIVu500KEh';
   const AIROPS_LOGO_URL = 'https://app.ashbyhq.com/api/images/org-theme-logo/78d1f89f-3e5a-4a8b-b6b5-a91acb030fed/aba001ed-b5b5-4a1b-8bd6-dfb86392876e/d8e6228c-ea82-4061-b660-d7b6c502f155.png';
-  
-  // Mode options for ButtonGroup
-  const modeOptions = [
-    { title: 'Email', value: 'email' },
-    { title: 'Task', value: 'task' }
-  ];
   
   // Format options for Select
   const formatOptions = [
@@ -96,9 +89,9 @@ function App() {
     }
   };
 
-  // Adaptive text size based on card size
+  // Adaptive text size based on card size - Optimized for smaller cards
   const getAdaptiveTextSize = () => {
-    const baseSize = Math.max(11, Math.min(14, cardSize.width / 28));
+    const baseSize = Math.max(10, Math.min(14, cardSize.width / 20));
     return {
       base: `${baseSize}px`,
       small: `${baseSize - 1}px`,
@@ -122,9 +115,9 @@ function App() {
         const containerWidth = rect.width;
         const containerHeight = rect.height;
         
-        // Auto-resize card to fit container with padding
-        const newWidth = Math.max(280, containerWidth - 8);
-        const newHeight = Math.max(350, containerHeight - 8);
+        // Auto-resize card to fit container with padding - Much smaller minimums
+        const newWidth = Math.max(180, containerWidth - 8);
+        const newHeight = Math.max(200, containerHeight - 8);
         
         setContainerSize({ width: containerWidth, height: containerHeight });
         setCardSize({ width: newWidth, height: newHeight });
@@ -175,9 +168,9 @@ function App() {
         const parentRect = parent.getBoundingClientRect();
         const cardRect = cardRef.current.getBoundingClientRect();
         
-        // Calculate new size based on mouse position relative to card start
-        const newWidth = Math.max(280, Math.min(parentRect.width - 8, e.clientX - cardRect.left));
-        const newHeight = Math.max(350, Math.min(parentRect.height - 8, e.clientY - cardRect.top));
+        // Calculate new size based on mouse position relative to card start - Smaller minimums
+        const newWidth = Math.max(180, Math.min(parentRect.width - 8, e.clientX - cardRect.left));
+        const newHeight = Math.max(200, Math.min(parentRect.height - 8, e.clientY - cardRect.top));
         
         setCardSize({ width: newWidth, height: newHeight });
       }
@@ -185,7 +178,7 @@ function App() {
       if (isTextareaResizing) {
         const rect = textareaContainerRef.current?.getBoundingClientRect();
         if (rect) {
-          const newHeight = Math.max(40, Math.min(200, e.clientY - rect.top));
+          const newHeight = Math.max(30, Math.min(150, e.clientY - rect.top));
           setTextareaHeight(newHeight);
         }
       }
@@ -849,8 +842,8 @@ function App() {
         overflow: 'hidden',
         display: 'flex',
         flexDirection: 'column',
-        minWidth: '280px',
-        minHeight: '350px',
+        minWidth: '180px',
+        minHeight: '200px',
         maxWidth: '100%',
         maxHeight: '100%',
         background: 'white',
@@ -863,11 +856,11 @@ function App() {
         transition: isResizing ? 'none' : 'width 0.1s ease, height 0.1s ease'
       }}
     >
-      {/* Header */}
+      {/* Header - Compact for small cards */}
       <div style={{
         display: 'flex',
         alignItems: 'center',
-        marginBottom: '12px',
+        marginBottom: cardSize.width < 220 ? '8px' : '12px',
         fontSize: textSizes.header,
         fontWeight: '600',
         color: styles.colors.primary
@@ -875,26 +868,124 @@ function App() {
         <img 
           src={AIROPS_LOGO_URL} 
           alt="" 
-          style={{ width: '16px', height: '16px', marginRight: '8px' }}
+          style={{ 
+            width: cardSize.width < 220 ? '12px' : '16px', 
+            height: cardSize.width < 220 ? '12px' : '16px', 
+            marginRight: cardSize.width < 220 ? '4px' : '8px' 
+          }}
         />
-        <span>Send to AirOps</span>
+        <span>{cardSize.width < 220 ? 'AirOps' : 'Send to AirOps'}</span>
+        {/* Debug: Show current mode - Hide when very small */}
+        {cardSize.width > 200 && (
+          <span style={{
+            marginLeft: '8px',
+            fontSize: textSizes.tiny,
+            color: styles.colors.tertiary,
+            background: styles.colors.background,
+            padding: '2px 6px',
+            borderRadius: '3px'
+          }}>
+            {mode}
+          </span>
+        )}
       </div>
 
-      {/* Mode Selection */}
-      <div style={{ marginBottom: '12px' }}>
-        <ButtonGroup
-          items={modeOptions}
-          value={mode}
-          onItemSelected={setMode}
-        />
+      {/* Mode Selection - Responsive sizing */}
+      <div style={{ marginBottom: cardSize.width < 220 ? '8px' : '12px' }}>
+        <div style={{
+          display: 'flex',
+          background: styles.colors.background,
+          borderRadius: cardSize.width < 220 ? '4px' : '6px',
+          padding: '2px',
+          border: `1px solid ${styles.colors.border}`
+        }}>
+          <button
+            onClick={() => {
+              console.log('Switching to email mode');
+              setMode('email');
+            }}
+            onMouseEnter={(e) => {
+              if (mode !== 'email') {
+                e.target.style.background = '#f3f4f6';
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (mode !== 'email') {
+                e.target.style.background = 'transparent';
+              }
+            }}
+            style={{
+              flex: 1,
+              padding: cardSize.width < 220 ? '6px 8px' : '8px 12px',
+              border: 'none',
+              borderRadius: '4px',
+              fontSize: textSizes.base,
+              fontWeight: '500',
+              cursor: 'pointer',
+              background: mode === 'email' ? 'white' : 'transparent',
+              color: mode === 'email' ? styles.colors.primary : styles.colors.tertiary,
+              boxShadow: mode === 'email' ? '0 1px 2px rgba(0, 0, 0, 0.05)' : 'none',
+              transition: 'all 0.15s ease',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
+          >
+            <EmailIcon 
+              size={cardSize.width < 220 ? 12 : 14} 
+              color={mode === 'email' ? styles.colors.primary : styles.colors.tertiary} 
+              style={{ marginRight: cardSize.width < 220 ? '3px' : '6px' }} 
+            />
+            {cardSize.width < 200 ? 'E' : 'Email'}
+          </button>
+          <button
+            onClick={() => {
+              console.log('Switching to task mode');
+              setMode('task');
+            }}
+            onMouseEnter={(e) => {
+              if (mode !== 'task') {
+                e.target.style.background = '#f3f4f6';
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (mode !== 'task') {
+                e.target.style.background = 'transparent';
+              }
+            }}
+            style={{
+              flex: 1,
+              padding: cardSize.width < 220 ? '6px 8px' : '8px 12px',
+              border: 'none',
+              borderRadius: '4px',
+              fontSize: textSizes.base,
+              fontWeight: '500',
+              cursor: 'pointer',
+              background: mode === 'task' ? 'white' : 'transparent',
+              color: mode === 'task' ? styles.colors.primary : styles.colors.tertiary,
+              boxShadow: mode === 'task' ? '0 1px 2px rgba(0, 0, 0, 0.05)' : 'none',
+              transition: 'all 0.15s ease',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
+          >
+            <TaskIcon 
+              size={cardSize.width < 220 ? 12 : 14} 
+              color={mode === 'task' ? styles.colors.primary : styles.colors.tertiary} 
+              style={{ marginRight: cardSize.width < 220 ? '3px' : '6px' }} 
+            />
+            {cardSize.width < 200 ? 'T' : 'Task'}
+          </button>
+        </div>
       </div>
       
       {/* Scrollable Content Area */}
       <div style={{
         flex: 1,
         overflowY: 'auto',
-        paddingRight: '4px',
-        marginBottom: '12px'
+        paddingRight: cardSize.width < 200 ? '2px' : '4px',
+        marginBottom: cardSize.width < 220 ? '8px' : '12px'
       }}>
         {/* Instructions Input */}
         <div ref={textareaContainerRef} style={{ position: 'relative', marginBottom: '12px' }}>
@@ -920,6 +1011,18 @@ function App() {
               onBlur={(e) => e.target.style.borderColor = styles.colors.border}
             />
           </FormField>
+          
+          {/* Debug: Show current mode functionality - Only show on larger cards */}
+          {cardSize.width > 240 && (
+            <div style={{
+              fontSize: textSizes.tiny,
+              color: styles.colors.tertiary,
+              marginTop: '4px'
+            }}>
+              Current mode: {mode} | 
+              Task controls visible: {mode === 'task' ? 'YES' : 'NO'}
+            </div>
+          )}
           
           {/* Textarea drag resize handle */}
           <div
@@ -954,104 +1057,121 @@ function App() {
 
         {/* Task Mode Controls */}
         {mode === 'task' && (
-          <div style={{ marginBottom: '12px' }}>
-            <FormField label="Output Format" required>
-              <select
-                value={selectedFormat}
-                onChange={(e) => setSelectedFormat(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '8px 12px',
-                  border: `1px solid ${styles.colors.border}`,
-                  borderRadius: '6px',
-                  fontSize: textSizes.base,
-                  fontFamily: 'inherit',
-                  background: 'white',
-                  cursor: 'pointer',
-                  color: styles.colors.primary
-                }}
-              >
-                {formatOptions.map(option => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </FormField>
+          <>
+            {/* Debug: Task mode controls are rendering - Only show on larger cards */}
+            {cardSize.width > 240 && (
+              <div style={{
+                background: '#e0f2fe',
+                border: '1px solid #0284c7',
+                borderRadius: '4px',
+                padding: '8px',
+                marginBottom: '8px',
+                fontSize: textSizes.tiny,
+                color: '#0284c7'
+              }}>
+                🔧 TASK MODE ACTIVE - Controls should be visible below
+              </div>
+            )}
+            
+            <div style={{ marginBottom: '12px' }}>
+              <FormField label="Output Format" required>
+                <select
+                  value={selectedFormat}
+                  onChange={(e) => setSelectedFormat(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    border: `1px solid ${styles.colors.border}`,
+                    borderRadius: '6px',
+                    fontSize: textSizes.base,
+                    fontFamily: 'inherit',
+                    background: 'white',
+                    cursor: 'pointer',
+                    color: styles.colors.primary
+                  }}
+                >
+                  {formatOptions.map(option => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </FormField>
 
-            {/* File Upload */}
-            <div style={{
-              border: `1px dashed ${styles.colors.border}`,
-              borderRadius: '6px',
-              padding: '12px',
-              textAlign: 'center',
-              background: styles.colors.background,
-              marginTop: '8px'
-            }}>
-              <input
-                ref={fileInputRef}
-                type="file"
-                onChange={handleFileUpload}
-                accept=".txt,.csv,.json,.doc,.docx,.pdf,.png,.jpg,.jpeg"
-                style={{ display: 'none' }}
-              />
-              
-              {!uploadedFile ? (
-                <div>
-                  <Button
-                    type="secondary"
-                    onPress={() => fileInputRef.current?.click()}
-                    style={{ 
-                      background: 'none',
-                      border: 'none',
-                      color: styles.colors.info,
-                      textDecoration: 'underline',
-                      fontSize: textSizes.base,
-                      display: 'flex',
-                      alignItems: 'center'
-                    }}
-                  >
-                    <UploadIcon size={14} color={styles.colors.info} style={{ marginRight: '6px' }} />
-                    Upload reference file
-                  </Button>
-                  <div style={{ 
-                    fontSize: textSizes.small, 
-                    color: styles.colors.tertiary, 
-                    marginTop: '4px' 
-                  }}>
-                    CSV, JSON, TXT, DOC, PDF, images (max 2MB)
+              {/* File Upload */}
+              <div style={{
+                border: `1px dashed ${styles.colors.border}`,
+                borderRadius: '6px',
+                padding: '12px',
+                textAlign: 'center',
+                background: styles.colors.background,
+                marginTop: '8px'
+              }}>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  onChange={handleFileUpload}
+                  accept=".txt,.csv,.json,.doc,.docx,.pdf,.png,.jpg,.jpeg"
+                  style={{ display: 'none' }}
+                />
+                
+                {!uploadedFile ? (
+                  <div>
+                    <Button
+                      type="secondary"
+                      onPress={() => fileInputRef.current?.click()}
+                      style={{ 
+                        background: 'none',
+                        border: 'none',
+                        color: styles.colors.info,
+                        textDecoration: 'underline',
+                        fontSize: textSizes.base,
+                        display: 'flex',
+                        alignItems: 'center'
+                      }}
+                    >
+                      <UploadIcon size={14} color={styles.colors.info} style={{ marginRight: '6px' }} />
+                      Upload reference file
+                    </Button>
+                    <div style={{ 
+                      fontSize: textSizes.small, 
+                      color: styles.colors.tertiary, 
+                      marginTop: '4px' 
+                    }}>
+                      CSV, JSON, TXT, DOC, PDF, images (max 2MB)
+                    </div>
                   </div>
-                </div>
-              ) : (
-                <div>
-                  <div style={{ 
-                    fontSize: textSizes.base, 
-                    color: styles.colors.primary, 
-                    marginBottom: '6px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center'
-                  }}>
-                    <AttachmentIcon size={14} color={styles.colors.secondary} style={{ marginRight: '6px' }} />
-                    {uploadedFile.name} ({(uploadedFile.size / 1024).toFixed(1)}KB)
-                  </div>
-                  <Button
-                    type="danger"
-                    onPress={removeFile}
-                    style={{
-                      fontSize: textSizes.small,
+                ) : (
+                  <div>
+                    <div style={{ 
+                      fontSize: textSizes.base, 
+                      color: styles.colors.primary, 
+                      marginBottom: '6px',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center'
-                    }}
-                  >
-                    <CrossIcon size={12} color="white" style={{ marginRight: '4px' }} />
-                    Remove
-                  </Button>
-                </div>
-              )}
+                    }}>
+                      <AttachmentIcon size={14} color={styles.colors.secondary} style={{ marginRight: '6px' }} />
+                      {uploadedFile.name} ({(uploadedFile.size / 1024).toFixed(1)}KB)
+                    </div>
+                    <Button
+                      type="danger"
+                      onPress={removeFile}
+                      style={{
+                        fontSize: textSizes.small,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}
+                    >
+                      <CrossIcon size={12} color="white" style={{ marginRight: '4px' }} />
+                      Remove
+                    </Button>
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
+          </>
         )}
 
         {/* Results using Accordion */}
@@ -1069,9 +1189,9 @@ function App() {
                       style={{
                         background: styles.colors.background,
                         border: `1px solid ${styles.colors.border}`,
-                        borderRadius: '8px',
-                        padding: '12px',
-                        marginBottom: '8px',
+                        borderRadius: cardSize.width < 220 ? '6px' : '8px',
+                        padding: cardSize.width < 220 ? '8px' : '12px',
+                        marginBottom: cardSize.width < 220 ? '6px' : '8px',
                         fontSize: textSizes.small
                       }}
                     >
@@ -1194,88 +1314,90 @@ function App() {
                             />
                           </div>
                           
-                          {/* Action Buttons */}
+                          {/* Action Buttons - Responsive layout */}
                           <div style={{ 
                             display: 'flex', 
-                            gap: '8px',
+                            gap: cardSize.width < 220 ? '4px' : '8px',
                             flexWrap: 'wrap'
                           }}>
                             <Button
                               type="secondary"
                               onPress={() => copyToClipboard(task.result)}
                               style={{
-                                padding: '6px 12px',
+                                padding: cardSize.width < 220 ? '4px 8px' : '6px 12px',
                                 fontSize: textSizes.small,
                                 minHeight: 'auto',
                                 display: 'flex',
                                 alignItems: 'center'
                               }}
                             >
-                              <CopyIcon size={12} color={styles.colors.secondary} style={{ marginRight: '4px' }} />
-                              Copy
+                              <CopyIcon size={10} color={styles.colors.secondary} style={{ marginRight: '3px' }} />
+                              {cardSize.width < 200 ? 'Copy' : 'Copy'}
                             </Button>
                             <Button
                               type="secondary"
                               onPress={() => insertIntoDraft(task.result.replace(/<[^>]*>/g, ''))}
                               style={{
-                                padding: '6px 12px',
+                                padding: cardSize.width < 220 ? '4px 8px' : '6px 12px',
                                 fontSize: textSizes.small,
                                 minHeight: 'auto',
                                 display: 'flex',
                                 alignItems: 'center'
                               }}
                             >
-                              <InsertIcon size={12} color={styles.colors.secondary} style={{ marginRight: '4px' }} />
-                              Insert
+                              <InsertIcon size={10} color={styles.colors.secondary} style={{ marginRight: '3px' }} />
+                              {cardSize.width < 200 ? 'Ins' : 'Insert'}
                             </Button>
-                            <Button
-                              type="secondary"
-                              onPress={() => {
-                                // Show full result in a modal or expanded view
-                                const newWindow = window.open('', '_blank');
-                                newWindow.document.write(`
-                                  <html>
-                                    <head>
-                                      <title>AirOps Task Result</title>
-                                      <style>
-                                        body { 
-                                          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
-                                          max-width: 800px; 
-                                          margin: 40px auto; 
-                                          padding: 20px; 
-                                          line-height: 1.6; 
-                                        }
-                                        h1, h2, h3 { color: #1f2937; }
-                                        p { margin-bottom: 16px; }
-                                        ul, ol { margin-left: 20px; margin-bottom: 16px; }
-                                        li { margin-bottom: 4px; }
-                                        table { border-collapse: collapse; width: 100%; margin-bottom: 16px; }
-                                        th, td { border: 1px solid #e5e7eb; padding: 8px 12px; text-align: left; }
-                                        th { background-color: #f9fafb; font-weight: 600; }
-                                      </style>
-                                    </head>
-                                    <body>
-                                      <h1>AirOps Task Result</h1>
-                                      <p><strong>Format:</strong> ${task.outputFormat}</p>
-                                      <p><strong>Created:</strong> ${formatDate(task.createdAt)}</p>
-                                      <hr style="margin: 20px 0; border: none; border-top: 1px solid #e5e7eb;">
-                                      ${task.result}
-                                    </body>
-                                  </html>
-                                `);
-                                newWindow.document.close();
-                              }}
-                              style={{
-                                padding: '6px 12px',
-                                fontSize: textSizes.small,
-                                minHeight: 'auto',
-                                display: 'flex',
-                                alignItems: 'center'
-                              }}
-                            >
-                              <ViewIcon size={12} color={styles.colors.secondary} style={{ marginRight: '4px' }} />
-                              Expand
-                            </Button>
+                            {cardSize.width > 200 && (
+                              <Button
+                                type="secondary"
+                                onPress={() => {
+                                  // Show full result in a modal or expanded view
+                                  const newWindow = window.open('', '_blank');
+                                  newWindow.document.write(`
+                                    <html>
+                                      <head>
+                                        <title>AirOps Task Result</title>
+                                        <style>
+                                          body { 
+                                            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
+                                            max-width: 800px; 
+                                            margin: 40px auto; 
+                                            padding: 20px; 
+                                            line-height: 1.6; 
+                                          }
+                                          h1, h2, h3 { color: #1f2937; }
+                                          p { margin-bottom: 16px; }
+                                          ul, ol { margin-left: 20px; margin-bottom: 16px; }
+                                          li { margin-bottom: 4px; }
+                                          table { border-collapse: collapse; width: 100%; margin-bottom: 16px; }
+                                          th, td { border: 1px solid #e5e7eb; padding: 8px 12px; text-align: left; }
+                                          th { background-color: #f9fafb; font-weight: 600; }
+                                        </style>
+                                      </head>
+                                      <body>
+                                        <h1>AirOps Task Result</h1>
+                                        <p><strong>Format:</strong> ${task.outputFormat}</p>
+                                        <p><strong>Created:</strong> ${formatDate(task.createdAt)}</p>
+                                        <hr style="margin: 20px 0; border: none; border-top: 1px solid #e5e7eb;">
+                                        ${task.result}
+                                      </body>
+                                    </html>
+                                  `);
+                                  newWindow.document.close();
+                                }}
+                                style={{
+                                  padding: cardSize.width < 220 ? '4px 8px' : '6px 12px',
+                                  fontSize: textSizes.small,
+                                  minHeight: 'auto',
+                                  display: 'flex',
+                                  alignItems: 'center'
+                                }}
+                              >
+                                <ViewIcon size={10} color={styles.colors.secondary} style={{ marginRight: '3px' }} />
+                                Expand
+                              </Button>
+                            )}
                           </div>
                         </div>
                       )}
@@ -1350,10 +1472,10 @@ function App() {
         )}
       </div>
 
-      {/* Bottom Section - Send Button and Status */}
+      {/* Bottom Section - Send Button and Status - Responsive */}
       <div style={{
         borderTop: `1px solid ${styles.colors.border}`,
-        paddingTop: '12px'
+        paddingTop: cardSize.width < 220 ? '8px' : '12px'
       }}>
         <Button
           type="primary"
@@ -1361,8 +1483,9 @@ function App() {
           disabled={isSending}
           style={{
             width: '100%',
-            marginBottom: '8px',
-            fontSize: textSizes.base
+            marginBottom: cardSize.width < 220 ? '6px' : '8px',
+            fontSize: textSizes.base,
+            padding: cardSize.width < 220 ? '8px' : '10px'
           }}
         >
           {isSending ? 'Processing...' : 'Send'}
@@ -1370,7 +1493,7 @@ function App() {
         
         {status && (
           <div style={{
-            padding: '6px 8px',
+            padding: cardSize.width < 220 ? '4px 6px' : '6px 8px',
             background: styles.colors.background,
             border: `1px solid ${styles.colors.border}`,
             borderRadius: '4px',
@@ -1384,24 +1507,29 @@ function App() {
           }}>
             {(status.includes('Error') || status.includes('failed')) && (
               <WarningIcon 
-                size={14} 
+                size={cardSize.width < 220 ? 12 : 14} 
                 color={styles.colors.error} 
-                style={{ marginRight: '6px' }} 
+                style={{ marginRight: cardSize.width < 220 ? '4px' : '6px' }} 
               />
             )}
             {(status.includes('success') || status.includes('completed') || status.includes('saved')) && (
               <SuccessIcon 
-                size={14} 
+                size={cardSize.width < 220 ? 12 : 14} 
                 color={styles.colors.success} 
-                style={{ marginRight: '6px' }} 
+                style={{ marginRight: cardSize.width < 220 ? '4px' : '6px' }} 
               />
             )}
-            {status}
+            <span style={{ fontSize: cardSize.width < 200 ? textSizes.tiny : textSizes.small }}>
+              {cardSize.width < 200 && status.length > 20 ? 
+                status.substring(0, 20) + '...' : 
+                status
+              }
+            </span>
           </div>
         )}
       </div>
 
-      {/* Enhanced Card Resize Handle */}
+      {/* Enhanced Card Resize Handle - Responsive size */}
       <div
         onMouseDown={handleCardResizeStart}
         className="card-resize-handle"
@@ -1409,11 +1537,11 @@ function App() {
           position: 'absolute',
           bottom: '0px',
           right: '0px',
-          width: '20px',
-          height: '20px',
+          width: cardSize.width < 220 ? '16px' : '20px',
+          height: cardSize.width < 220 ? '16px' : '20px',
           cursor: 'nw-resize',
           background: `linear-gradient(-45deg, transparent 30%, ${styles.colors.tertiary} 30%, ${styles.colors.tertiary} 35%, transparent 35%, transparent 65%, ${styles.colors.tertiary} 65%, ${styles.colors.tertiary} 70%, transparent 70%)`,
-          backgroundSize: '6px 6px',
+          backgroundSize: cardSize.width < 220 ? '4px 4px' : '6px 6px',
           opacity: 0.5,
           borderRadius: '0 0 8px 0',
           transition: 'opacity 0.2s ease, background-color 0.2s ease',
@@ -1424,8 +1552,8 @@ function App() {
         title="Drag to resize"
       >
         <div style={{
-          width: '8px',
-          height: '8px',
+          width: cardSize.width < 220 ? '6px' : '8px',
+          height: cardSize.width < 220 ? '6px' : '8px',
           background: 'transparent',
           border: `1px solid ${styles.colors.tertiary}`,
           borderRadius: '1px',
