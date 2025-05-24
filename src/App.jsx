@@ -1573,10 +1573,7 @@ function App() {
           borderRadius: '1px',
           opacity: 0.7
         }} />
-      </div>git add .
-git commit -m "Add missing Netlify functions and fix CORS"
-git push
-netlify deploy --prod
+      </div>
     </div>
   );
 }
