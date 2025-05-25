@@ -7,12 +7,12 @@ export default async (request, context) => {
       headers: {
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Headers': 'Content-Type',
-        'Access-Control-Allow-Methods': 'GET, OPTIONS'
+        'Access-Control-Allow-Methods': 'POST, OPTIONS'
       }
     });
   }
 
-  if (request.method !== 'GET') {
+  if (request.method !== 'POST') {
     return new Response(JSON.stringify({ error: 'Method not allowed' }), {
       status: 405,
       headers: {
@@ -22,26 +22,12 @@ export default async (request, context) => {
     });
   }
 
-  const url = new URL(request.url);
-  const taskId = url.searchParams.get('taskId');
-  
-  if (!taskId) {
-    return new Response(JSON.stringify({ error: 'taskId is required' }), {
-      status: 400,
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Content-Type': 'application/json'
-      }
-    });
-  }
-
   try {
-    const store = getStore('tasks');
-    const taskData = await store.get(taskId);
+    const { conversationId, tasks } = await request.json();
     
-    if (!taskData) {
-      return new Response(JSON.stringify({ error: 'Task not found' }), {
-        status: 404,
+    if (!conversationId || !Array.isArray(tasks)) {
+      return new Response(JSON.stringify({ error: 'conversationId and tasks array are required' }), {
+        status: 400,
         headers: {
           'Access-Control-Allow-Origin': '*',
           'Content-Type': 'application/json'
@@ -49,15 +35,17 @@ export default async (request, context) => {
       });
     }
 
-    const task = JSON.parse(taskData);
+    const store = getStore('conversation-tasks');
     
-    console.log(`📋 Task status check for ${taskId}: ${task.status || 'pending'}`);
+    // Keep only last 50 tasks
+    const limitedTasks = tasks.slice(0, 50);
     
-    return new Response(JSON.stringify({
-      status: task.status || 'pending',
-      data: task.result || null,
-      completedAt: task.completedAt || null
-    }), {
+    // Save tasks
+    await store.set(conversationId, JSON.stringify(limitedTasks));
+    
+    console.log(`💾 Saved ${limitedTasks.length} tasks for conversation ${conversationId}`);
+    
+    return new Response(JSON.stringify({ success: true, count: limitedTasks.length }), {
       status: 200,
       headers: {
         'Content-Type': 'application/json',
@@ -65,7 +53,7 @@ export default async (request, context) => {
       }
     });
   } catch (error) {
-    console.error('Error fetching task status:', error);
+    console.error('Error saving conversation tasks:', error);
     return new Response(JSON.stringify({ error: 'Internal server error' }), {
       status: 500,
       headers: {

@@ -23,7 +23,7 @@ export default async (request, context) => {
   }
 
   try {
-    const { conversationId, entry, clear } = await request.json();
+    const { conversationId, entry, history, clearAll } = await request.json();
     
     if (!conversationId) {
       return new Response(JSON.stringify({ error: 'conversationId is required' }), {
@@ -37,12 +37,16 @@ export default async (request, context) => {
 
     const store = getStore('conversation-history');
     
-    // Handle clear all history
-    if (clear) {
-      await store.delete(conversationId);
-      console.log('🗑️ Cleared all history for conversation:', conversationId);
+    // Handle clearing all history
+    if (clearAll || (history && Array.isArray(history) && history.length === 0)) {
+      console.log(`🗑️ Clearing all history for conversation ${conversationId}`);
+      await store.set(conversationId, JSON.stringify([]));
       
-      return new Response(JSON.stringify({ success: true, message: 'History cleared' }), {
+      return new Response(JSON.stringify({ 
+        success: true, 
+        message: 'History cleared',
+        count: 0 
+      }), {
         status: 200,
         headers: {
           'Content-Type': 'application/json',
@@ -51,45 +55,66 @@ export default async (request, context) => {
       });
     }
     
-    // Handle adding new entry
-    if (!entry) {
-      return new Response(JSON.stringify({ error: 'entry is required when not clearing' }), {
-        status: 400,
+    // Handle setting complete history array (for clearing or bulk updates)
+    if (history && Array.isArray(history)) {
+      console.log(`📚 Setting complete history for conversation ${conversationId}: ${history.length} entries`);
+      await store.set(conversationId, JSON.stringify(history.slice(0, 50))); // Limit to 50 entries
+      
+      return new Response(JSON.stringify({ 
+        success: true, 
+        count: history.length 
+      }), {
+        status: 200,
         headers: {
-          'Access-Control-Allow-Origin': '*',
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*'
         }
       });
     }
     
-    // Get existing history
-    const existingData = await store.get(conversationId);
-    const history = existingData ? JSON.parse(existingData) : [];
+    // Handle adding single entry (original functionality)
+    if (entry) {
+      console.log(`📚 Adding history entry for conversation ${conversationId}`);
+      
+      // Get existing history
+      const existingData = await store.get(conversationId);
+      const currentHistory = existingData ? JSON.parse(existingData) : [];
+      
+      // Add new entry at the beginning
+      currentHistory.unshift(entry);
+      
+      // Keep only last 50 entries
+      const limitedHistory = currentHistory.slice(0, 50);
+      
+      // Save updated history
+      await store.set(conversationId, JSON.stringify(limitedHistory));
+      
+      console.log(`✅ History entry saved. Total entries: ${limitedHistory.length}`);
+      
+      return new Response(JSON.stringify({ 
+        success: true, 
+        count: limitedHistory.length 
+      }), {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*'
+        }
+      });
+    }
     
-    // Add new entry at the beginning
-    history.unshift(entry);
-    
-    // Keep only last 50 entries
-    const limitedHistory = history.slice(0, 50);
-    
-    // Save updated history
-    await store.set(conversationId, JSON.stringify(limitedHistory));
-    
-    console.log('💾 Conversation history saved:', conversationId);
-    
-    return new Response(JSON.stringify({ success: true }), {
-      status: 200,
+    // If we get here, no valid operation was specified
+    return new Response(JSON.stringify({ error: 'No valid operation specified' }), {
+      status: 400,
       headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*'
+        'Access-Control-Allow-Origin': '*',
+        'Content-Type': 'application/json'
       }
     });
+    
   } catch (error) {
-    console.error('❌ Error saving conversation history:', error);
-    return new Response(JSON.stringify({ 
-      error: 'Internal server error',
-      details: error.message 
-    }), {
+    console.error('Error processing conversation history:', error);
+    return new Response(JSON.stringify({ error: 'Internal server error' }), {
       status: 500,
       headers: {
         'Access-Control-Allow-Origin': '*',

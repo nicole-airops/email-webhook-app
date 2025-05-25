@@ -18,7 +18,8 @@ import {
   UploadIcon,
   DocumentIcon,
   InsertIcon,
-  CheckmarkIcon
+  CheckmarkIcon,
+  CrossIcon
 } from './CustomIcons';
 import './App.css';
 
@@ -35,10 +36,10 @@ function App() {
   const [taskResults, setTaskResults] = useState([]);
   const [pollingTasks, setPollingTasks] = useState(new Set());
   
-  // Auto-resize state - More compact for Front's UI
-  const [cardSize, setCardSize] = useState({ width: 280, height: 380 });
+  // Compact auto-resize state - 0.5" thinner (≈36px) from original 280px = 244px
+  const [cardSize, setCardSize] = useState({ width: 244, height: 360 });
   const [isResizing, setIsResizing] = useState(false);
-  const [textareaHeight, setTextareaHeight] = useState(60);
+  const [textareaHeight, setTextareaHeight] = useState(55);
   const [isTextareaResizing, setIsTextareaResizing] = useState(false);
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
   
@@ -49,35 +50,19 @@ function App() {
   const cardRef = useRef(null);
   const textareaContainerRef = useRef(null);
   
-  // WEBHOOK URLs - Single definition
+  // WEBHOOK URLs
   const EMAIL_WEBHOOK_URL = 'https://app.airops.com/public_api/airops_apps/f124518f-2185-4e62-9520-c6ff0fc3fcb0/webhook_async_execute?auth_token=pxaMrQO7aOUSOXe6gSiLNz4cF1r-E9fOS4E378ws12BBD8SPt-OIVu500KEh';
   const TASK_WEBHOOK_URL = 'https://app.airops.com/public_api/airops_apps/a628c7d4-6b22-42af-9ded-fb01839d5e06/webhook_async_execute?auth_token=pxaMrQO7aOUSOXe6gSiLNz4cF1r-E9fOS4E378ws12BBD8SPt-OIVu500KEh';
   const AIROPS_LOGO_URL = 'https://app.ashbyhq.com/api/images/org-theme-logo/78d1f89f-3e5a-4a8b-b6b5-a91acb030fed/aba001ed-b5b5-4a1b-8bd6-dfb86392876e/d8e6228c-ea82-4061-b660-d7b6c502f155.png';
   
-  // Format options for Select
+  // Format options
   const formatOptions = [
     { value: '', label: 'Select format...' },
     { value: 'text', label: 'Text' },
     { value: 'table', label: 'Table' }
   ];
 
-  // Safe Front Trash Icon - tries Front's Icon component first, falls back to simple text
-  const SafeTrashIcon = ({ size = 12 }) => {
-    try {
-      return (
-        <Icon 
-          name="Trash" 
-          size={size} 
-          shouldDisableColor={true}
-        />
-      );
-    } catch (e) {
-      // Fallback to simple text if Icon component fails
-      return <span style={{ fontSize: `${size}px` }}>🗑️</span>;
-    }
-  };
-
-  // Compact, consistent styling configuration
+  // Ultra-compact theme
   const theme = {
     colors: {
       primary: '#0f172a',
@@ -94,23 +79,23 @@ function App() {
       accent: '#6366f1'
     },
     spacing: {
-      xs: '3px',
-      sm: '6px',
-      md: '9px',
-      lg: '12px',
-      xl: '16px'
+      xs: '2px',
+      sm: '4px',
+      md: '6px',
+      lg: '8px',
+      xl: '12px'
     },
     borderRadius: {
       sm: '3px',
-      md: '5px',
-      lg: '6px'
+      md: '4px',
+      lg: '5px'
     },
     fontSize: {
       xs: '9px',
       sm: '10px',
       base: '11px',
       lg: '12px',
-      xl: '14px'
+      xl: '13px'
     },
     shadows: {
       sm: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
@@ -119,7 +104,7 @@ function App() {
     }
   };
 
-  // Detect container size changes and auto-resize card responsively
+  // Container size detection
   useEffect(() => {
     const observeContainerSize = () => {
       if (!cardRef.current) return;
@@ -132,25 +117,21 @@ function App() {
         const containerWidth = rect.width;
         const containerHeight = rect.height;
         
-        // Compact auto-resize for Front's UI constraints
-        const newWidth = Math.max(240, Math.min(320, containerWidth - 12));
-        const newHeight = Math.max(300, Math.min(500, containerHeight - 12));
+        // Even more compact constraints - 0.5" thinner than original 280px
+        const newWidth = Math.max(200, Math.min(260, containerWidth - 10));
+        const newHeight = Math.max(280, Math.min(480, containerHeight - 10));
         
         setContainerSize({ width: containerWidth, height: containerHeight });
         setCardSize({ width: newWidth, height: newHeight });
       };
       
-      // Initial size
       updateSize();
       
-      // Use ResizeObserver for real-time responsiveness
       if (window.ResizeObserver) {
         const resizeObserver = new ResizeObserver(() => {
           requestAnimationFrame(updateSize);
         });
         resizeObserver.observe(parent);
-        
-        // Also listen to window resize
         window.addEventListener('resize', updateSize);
         
         return () => {
@@ -158,10 +139,8 @@ function App() {
           window.removeEventListener('resize', updateSize);
         };
       } else {
-        // Fallback with frequent polling for older browsers
         const handleResize = () => requestAnimationFrame(updateSize);
         window.addEventListener('resize', handleResize);
-        
         const interval = setInterval(updateSize, 100);
         
         return () => {
@@ -175,7 +154,7 @@ function App() {
     return cleanup;
   }, []);
 
-  // Manual drag resize functionality with proper cleanup
+  // Resize handling
   useEffect(() => {
     const handleMouseMove = (e) => {
       e.preventDefault();
@@ -186,9 +165,8 @@ function App() {
         const parentRect = parent.getBoundingClientRect();
         const cardRect = cardRef.current.getBoundingClientRect();
         
-        // Compact manual resize constraints
-        const newWidth = Math.max(240, Math.min(360, e.clientX - cardRect.left));
-        const newHeight = Math.max(300, Math.min(550, e.clientY - cardRect.top));
+        const newWidth = Math.max(200, Math.min(300, e.clientX - cardRect.left));
+        const newHeight = Math.max(280, Math.min(520, e.clientY - cardRect.top));
         
         setCardSize({ width: newWidth, height: newHeight });
       }
@@ -196,7 +174,7 @@ function App() {
       if (isTextareaResizing) {
         const rect = textareaContainerRef.current?.getBoundingClientRect();
         if (rect) {
-          const newHeight = Math.max(40, Math.min(300, e.clientY - rect.top));
+          const newHeight = Math.max(35, Math.min(200, e.clientY - rect.top));
           setTextareaHeight(newHeight);
         }
       }
@@ -210,16 +188,14 @@ function App() {
       document.body.style.userSelect = '';
     };
 
-    // Only add listeners when actively resizing
     if (isResizing || isTextareaResizing) {
       document.addEventListener('mousemove', handleMouseMove, { passive: false });
       document.addEventListener('mouseup', handleMouseUp, { passive: false });
-      document.addEventListener('mouseleave', handleMouseUp, { passive: false }); // Handle mouse leaving window
+      document.addEventListener('mouseleave', handleMouseUp, { passive: false });
       document.body.style.cursor = isTextareaResizing ? 'ns-resize' : 'nw-resize';
       document.body.style.userSelect = 'none';
     }
 
-    // Cleanup function
     return () => {
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
@@ -243,83 +219,66 @@ function App() {
 
   useEffect(() => {
     const conversationId = context?.conversation?.id;
-    console.log(`🔄 Context changed, conversation ID: ${conversationId}`);
     
     if (conversationId) {
-      console.log('📋 Loading history and tasks for conversation:', conversationId);
+      console.log('📋 Loading data for conversation:', conversationId);
       loadHistoryFromNetlify(conversationId);
       loadTaskResultsFromNetlify(conversationId);
+    } else {
+      console.log('❌ No conversation ID available');
+      setTaskResults([]);
+      setCommentHistory([]);
     }
   }, [context]);
 
-  // ✅ DELETE FUNCTIONALITY: Delete individual tasks or clear all
-  const deleteTask = async (taskId) => {
-    if (!context?.conversation?.id) return;
-    
-    console.log(`🗑️ Deleting task: ${taskId}`);
-    try {
-      const response = await fetch(`/.netlify/functions/save-conversation-tasks?conversationId=${context.conversation.id}&taskId=${taskId}`, {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' }
-      });
-      
-      if (response.ok) {
-        // Remove from local state
-        const updatedTasks = taskResults.filter(task => task.id !== taskId);
-        setTaskResults(updatedTasks);
-        setStatus('Task deleted');
-        console.log(`✅ Task ${taskId} deleted successfully`);
-      } else {
-        console.error('❌ Failed to delete task');
-        setStatus('Failed to delete task');
-      }
-    } catch (error) {
-      console.error('❌ Error deleting task:', error);
-      setStatus('Error deleting task');
-    }
-  };
-
+  // ✅ FIXED: Clear all tasks properly
   const clearAllTasks = async () => {
     if (!context?.conversation?.id) return;
     
-    if (!confirm('Are you sure you want to delete all task history? This cannot be undone.')) {
-      return;
-    }
+    if (!confirm('Delete all tasks? This cannot be undone.')) return;
     
     console.log('🗑️ Clearing all tasks');
     try {
-      const response = await fetch(`/.netlify/functions/save-conversation-tasks?conversationId=${context.conversation.id}`, {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' }
+      const response = await fetch('/.netlify/functions/save-conversation-tasks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          conversationId: context.conversation.id, 
+          tasks: [] 
+        })
       });
       
       if (response.ok) {
         setTaskResults([]);
-        setStatus('All tasks cleared');
+        setPollingTasks(new Set());
+        setStatus('Tasks cleared');
         console.log('✅ All tasks cleared successfully');
       } else {
-        console.error('❌ Failed to clear tasks');
-        setStatus('Failed to clear tasks');
+        const errorText = await response.text();
+        console.error('❌ Failed to clear tasks:', errorText);
+        setStatus('Failed to clear');
       }
     } catch (error) {
       console.error('❌ Error clearing tasks:', error);
-      setStatus('Error clearing tasks');
+      setStatus('Clear failed');
     }
   };
 
+  // ✅ FIXED: Clear history properly  
   const clearHistory = async () => {
     if (!context?.conversation?.id) return;
     
-    if (!confirm('Are you sure you want to delete all plugin history? This cannot be undone.')) {
-      return;
-    }
+    if (!confirm('Delete all history? This cannot be undone.')) return;
     
-    console.log('🗑️ Clearing plugin history');
+    console.log('🗑️ Clearing history');
     try {
-      const response = await fetch(`/.netlify/functions/save-conversation-history`, {
+      const response = await fetch('/.netlify/functions/save-conversation-history', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ conversationId: context.conversation.id, entry: null, clear: true })
+        body: JSON.stringify({ 
+          conversationId: context.conversation.id, 
+          clearAll: true
+        })
       });
       
       if (response.ok) {
@@ -327,18 +286,56 @@ function App() {
         setStatus('History cleared');
         console.log('✅ History cleared successfully');
       } else {
-        console.error('❌ Failed to clear history');
-        setStatus('Failed to clear history');
+        const errorText = await response.text();
+        console.error('❌ Failed to clear history:', errorText);
+        setStatus('Failed to clear');
       }
     } catch (error) {
       console.error('❌ Error clearing history:', error);
-      setStatus('Error clearing history');
+      setStatus('Clear failed');
     }
   };
 
-  // ✅ FIXED: Save task results to Netlify storage with debugging
+  // ✅ FIXED: Delete individual task
+  const deleteTask = async (taskId) => {
+    if (!context?.conversation?.id) return;
+    
+    console.log(`🗑️ Deleting task: ${taskId}`);
+    try {
+      const updatedTasks = taskResults.filter(task => task.id !== taskId);
+      
+      const response = await fetch('/.netlify/functions/save-conversation-tasks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          conversationId: context.conversation.id, 
+          tasks: updatedTasks 
+        })
+      });
+      
+      if (response.ok) {
+        setTaskResults(updatedTasks);
+        setPollingTasks(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(taskId);
+          return newSet;
+        });
+        setStatus('Task deleted');
+        console.log(`✅ Task ${taskId} deleted successfully`);
+      } else {
+        const errorText = await response.text();
+        console.error('❌ Failed to delete task:', errorText);
+        setStatus('Delete failed');
+      }
+    } catch (error) {
+      console.error('❌ Error deleting task:', error);
+      setStatus('Delete failed');
+    }
+  };
+
+  // ✅ FIXED: Save task results properly
   const saveTaskResultsToNetlify = async (conversationId, tasks) => {
-    console.log(`💾 Saving ${tasks.length} tasks to conversation ${conversationId}`);
+    console.log(`💾 Saving ${tasks.length} tasks for conversation ${conversationId}`);
     try {
       const response = await fetch('/.netlify/functions/save-conversation-tasks', {
         method: 'POST',
@@ -348,26 +345,28 @@ function App() {
       
       if (response.ok) {
         const result = await response.json();
-        console.log(`✅ Task results saved to Netlify:`, result);
+        console.log('✅ Tasks saved successfully:', result);
+        return true;
       } else {
         const errorText = await response.text();
-        console.error(`❌ Failed to save task results to Netlify: ${response.status} - ${errorText}`);
+        console.error('❌ Failed to save tasks:', errorText);
+        return false;
       }
     } catch (error) {
-      console.error('❌ Error saving task results to Netlify:', error);
+      console.error('❌ Error saving tasks:', error);
+      return false;
     }
   };
 
-  // ✅ FIXED: Check for completed tasks and save results properly
+  // ✅ FIXED: Check task status and save results
   const checkTaskStatus = async (taskId) => {
     try {
       const response = await fetch(`/.netlify/functions/task-status?taskId=${taskId}`);
       if (response.ok) {
         const result = await response.json();
-        console.log(`📋 Task ${taskId} status check:`, result);
+        console.log(`📋 Task ${taskId} status:`, result.status);
         
         if (result.status === 'completed' || result.status === 'failed') {
-          // Update task results
           const updatedTasks = taskResults.map(task => 
             task.id === taskId 
               ? { ...task, status: result.status, result: result.data, completedAt: result.completedAt }
@@ -375,50 +374,16 @@ function App() {
           );
           
           setTaskResults(updatedTasks);
-          console.log(`✅ Updated task ${taskId} to ${result.status}`);
+          console.log(`✅ Updated task ${taskId} locally`);
           
-          // ✅ CRITICAL: Save updated tasks to conversation storage
+          // ✅ CRITICAL: Save updated tasks immediately
           if (context?.conversation?.id) {
-            console.log(`💾 Saving task results to conversation ${context.conversation.id}`);
-            await saveTaskResultsToNetlify(context.conversation.id, updatedTasks);
-            
-            // Also save to history for persistence
-            const historyEntry = {
-              text: `Task completed: ${updatedTasks.find(t => t.id === taskId)?.comment || 'Task'}`,
-              mode: 'task',
-              outputFormat: updatedTasks.find(t => t.id === taskId)?.outputFormat,
-              selectedFormat: updatedTasks.find(t => t.id === taskId)?.selectedFormat,
-              hasFile: updatedTasks.find(t => t.id === taskId)?.hasFile,
-              fileName: updatedTasks.find(t => t.id === taskId)?.fileName,
-              timestamp: new Date().toISOString(),
-              user: context.teammate ? context.teammate.name : 'Unknown user',
-              taskId: taskId,
-              taskResult: result.data?.substring(0, 200) + (result.data?.length > 200 ? '...' : ''),
-              taskStatus: result.status
-            };
-            
-            await saveHistoryToNetlify(context.conversation.id, historyEntry);
-            setCommentHistory(prev => [historyEntry, ...prev]);
-          }
-          
-          // Save completed task link to Front
-          try {
-            if (context.addLink && context.conversation) {
-              const completedTask = updatedTasks.find(t => t.id === taskId);
-              const linkUrl = `https://app.airops.com/airops-2/workflows/84946/results?taskId=${taskId}`;
-              const linkName = `✅ AirOps Result: ${completedTask?.outputFormat || 'Task'} - ${result.status}`;
-              
-              await context.addLink({
-                url: linkUrl,
-                name: linkName,
-                description: `Task ${taskId} ${result.status}: ${result.data?.substring(0, 200)}...`
-              });
+            const saved = await saveTaskResultsToNetlify(context.conversation.id, updatedTasks);
+            if (saved) {
+              console.log(`✅ Task ${taskId} results saved to storage`);
             }
-          } catch (linkError) {
-            console.error('Error adding completion link:', linkError);
           }
           
-          // Stop polling this task
           setPollingTasks(prev => {
             const newSet = new Set(prev);
             newSet.delete(taskId);
@@ -426,31 +391,26 @@ function App() {
           });
           
           setStatus(`Task ${result.status}!`);
-          return true; // Task completed
+          return true;
         }
       }
     } catch (error) {
       console.error('Error checking task status:', error);
     }
-    return false; // Task still pending
+    return false;
   };
 
-  // Smart polling system
+  // Polling system
   useEffect(() => {
     if (pollingTasks.size > 0) {
       const checkAllTasks = async () => {
         const tasksToCheck = Array.from(pollingTasks);
-        console.log(`🔄 Checking ${tasksToCheck.length} tasks for updates...`);
-        
-        // Check all tasks concurrently
+        console.log(`🔄 Polling ${tasksToCheck.length} tasks...`);
         const promises = tasksToCheck.map(taskId => checkTaskStatus(taskId));
         await Promise.all(promises);
       };
       
-      // Initial check after 5 seconds
       const initialTimeout = setTimeout(checkAllTasks, 5000);
-      
-      // Then check every 15 seconds
       const interval = setInterval(checkAllTasks, 15000);
       
       return () => {
@@ -473,12 +433,10 @@ function App() {
     let combinedText = comment.trim();
     
     if (mode === 'task') {
-      // Output format is optional - only add if specified
       if (outputFormat.trim()) {
         combinedText += `\n\nOutput Format: ${outputFormat.trim()}`;
       }
       
-      // File attachment is optional - only add if uploaded
       if (uploadedFile) {
         combinedText += `\n\nReference File: ${uploadedFile.name} (${uploadedFile.type}, ${(uploadedFile.size / 1024).toFixed(1)}KB)`;
         combinedText += `\nFile Content Preview: ${uploadedFile.preview || 'Binary file - see attachment'}`;
@@ -488,17 +446,14 @@ function App() {
     return combinedText;
   };
 
-  // ✅ SINGLE NESTED PAYLOAD CREATOR - This creates ONE object with all data nested inside
   const createCompletePayload = async (combinedInstructions, taskId = null) => {
     const timestamp = new Date().toISOString();
     const callbackUrl = taskId ? `${window.location.origin}/.netlify/functions/task-completion-webhook` : null;
     
-    // Gather ALL conversation data
     let conversationData = {};
     let messagesData = [];
     
     if (context?.conversation) {
-      // Basic conversation info
       conversationData = {
         id: context.conversation.id,
         subject: context.conversation.subject || 'No Subject',
@@ -515,7 +470,6 @@ function App() {
         folder: context.conversation.folder
       };
       
-      // Load ALL messages with full context
       try {
         const messages = await context.listMessages();
         messagesData = messages.results.map(msg => ({
@@ -537,13 +491,11 @@ function App() {
           attachments: msg.attachments || [],
           metadata: msg.metadata || {}
         }));
-        
       } catch (err) {
         messagesData = [];
       }
     }
     
-    // Get current draft context (for composer)
     let draftData = null;
     if (context?.draft) {
       draftData = {
@@ -556,7 +508,6 @@ function App() {
       };
     }
     
-    // Get user/teammate info
     const teammateData = context?.teammate ? {
       id: context.teammate.id,
       name: context.teammate.name,
@@ -566,20 +517,14 @@ function App() {
       timezone: context.teammate.timezone
     } : null;
     
-    // ✅ CREATE SINGLE NESTED OBJECT - Everything is inside airops_request
-    const singleNestedPayload = {
+    return {
       airops_request: {
-        // Primary instruction combining everything
         combined_instructions: combinedInstructions,
-        
-        // SEPARATE output format specification
         output_format: {
           selected_format: selectedFormat,
           format_label: selectedFormat ? formatOptions.find(f => f.value === selectedFormat)?.label : null,
           raw_instructions: comment
         },
-        
-        // SEPARATE file attachment specification
         attachment: uploadedFile ? {
           name: uploadedFile.name,
           type: uploadedFile.type,
@@ -590,8 +535,6 @@ function App() {
           has_preview: !!uploadedFile.preview,
           is_text_file: uploadedFile.type?.startsWith('text/') || uploadedFile.name?.match(/\.(txt|csv|json|md)$/i)
         } : null,
-        
-        // Request metadata
         request_info: {
           mode: mode,
           timestamp: timestamp,
@@ -601,22 +544,11 @@ function App() {
           user_agent: navigator.userAgent,
           plugin_version: "1.0.0"
         },
-        
-        // User making the request
         requesting_user: teammateData,
-        
-        // Complete Front conversation context
         front_conversation: {
-          // Basic conversation details
           conversation: conversationData,
-          
-          // All messages in the conversation
           messages: messagesData,
-          
-          // Current draft (if in composer)
           current_draft: draftData,
-          
-          // Conversation stats
           stats: {
             total_messages: messagesData.length,
             inbound_messages: messagesData.filter(m => m.is_inbound).length,
@@ -626,15 +558,9 @@ function App() {
             participants_count: conversationData.participants?.length || 0,
             tags_count: conversationData.tags?.length || 0
           },
-          
-          // Most recent message for context
           latest_message: messagesData.length > 0 ? messagesData[0] : null,
-          
-          // Original message (last in chronological order)
           original_message: messagesData.length > 0 ? messagesData[messagesData.length - 1] : null
         },
-        
-        // Request history context
         request_history: {
           previous_requests: commentHistory.slice(0, 5).map(entry => ({
             text: entry.text,
@@ -657,8 +583,6 @@ function App() {
             user: task.user
           }))
         },
-        
-        // Additional context for AI processing
         ai_context_hints: {
           conversation_subject: conversationData.subject,
           is_reply_context: !!draftData,
@@ -673,14 +597,6 @@ function App() {
         }
       }
     };
-    
-    console.log('📦 SINGLE NESTED PAYLOAD CREATED:', {
-      total_size: JSON.stringify(singleNestedPayload).length,
-      top_level_keys: Object.keys(singleNestedPayload),
-      nested_keys: Object.keys(singleNestedPayload.airops_request)
-    });
-    
-    return singleNestedPayload;
   };
 
   const handleFileUpload = async (event) => {
@@ -706,16 +622,16 @@ function App() {
           const content = e.target.result;
           fileData.preview = content.substring(0, 500) + (content.length > 500 ? '...' : '');
           setUploadedFile(fileData);
-          setStatus('File uploaded successfully');
+          setStatus('File uploaded');
         };
         reader.readAsText(file);
       } else {
         setUploadedFile(fileData);
-        setStatus('File uploaded successfully');
+        setStatus('File uploaded');
       }
     } catch (error) {
       console.error('File upload error:', error);
-      setStatus('File upload failed');
+      setStatus('Upload failed');
     }
   };
 
@@ -727,24 +643,28 @@ function App() {
     setStatus('File removed');
   };
 
-  // Load history from Netlify Blobs storage
+  // ✅ FIXED: Load history properly
   const loadHistoryFromNetlify = async (conversationId) => {
+    console.log(`📚 Loading history for conversation: ${conversationId}`);
     try {
       const response = await fetch(`/.netlify/functions/get-conversation-history?conversationId=${conversationId}`);
       if (response.ok) {
         const { history } = await response.json();
+        console.log(`📚 Loaded ${history?.length || 0} history entries`);
         setCommentHistory(history || []);
       } else {
+        console.log('📚 No history found, starting fresh');
         setCommentHistory([]);
       }
     } catch (error) {
-      console.error('Error loading history from Netlify:', error);
+      console.error('❌ Error loading history:', error);
       setCommentHistory([]);
     }
   };
 
-  // Save history to Netlify Blobs storage
+  // ✅ FIXED: Save history properly
   const saveHistoryToNetlify = async (conversationId, entry) => {
+    console.log(`📚 Saving history entry for conversation: ${conversationId}`);
     try {
       const response = await fetch('/.netlify/functions/save-conversation-history', {
         method: 'POST',
@@ -753,40 +673,41 @@ function App() {
       });
       
       if (response.ok) {
-        setStatus('Request saved!');
+        console.log('✅ History entry saved successfully');
+        return true;
       } else {
-        console.error('Failed to save history to Netlify');
+        const errorText = await response.text();
+        console.error('❌ Failed to save history:', errorText);
+        return false;
       }
     } catch (error) {
-      console.error('Error saving to Netlify:', error);
+      console.error('❌ Error saving history:', error);
+      return false;
     }
   };
 
-  // ✅ FIXED: Load task results from Netlify Blobs storage (persistent) with debugging
+  // ✅ FIXED: Load task results properly
   const loadTaskResultsFromNetlify = async (conversationId) => {
-    console.log(`📋 Loading task results for conversation: ${conversationId}`);
+    console.log(`📋 Loading tasks for conversation: ${conversationId}`);
     try {
       const response = await fetch(`/.netlify/functions/get-conversation-tasks?conversationId=${conversationId}`);
-      console.log(`📋 Task results response status: ${response.status}`);
       
       if (response.ok) {
         const { tasks } = await response.json();
-        console.log(`📋 Loaded ${tasks.length} tasks from Netlify:`, tasks.map(t => ({ id: t.id, status: t.status })));
+        console.log(`📋 Loaded ${tasks?.length || 0} tasks`);
         setTaskResults(tasks || []);
         
-        // Check for any pending tasks to resume polling
-        const pendingTasks = tasks.filter(task => task.status === 'pending').map(task => task.id);
+        const pendingTasks = (tasks || []).filter(task => task.status === 'pending').map(task => task.id);
         if (pendingTasks.length > 0) {
           setPollingTasks(new Set(pendingTasks));
-          console.log('🔄 Resuming polling for pending tasks:', pendingTasks);
+          console.log(`🔄 Resuming polling for ${pendingTasks.length} pending tasks`);
         }
       } else {
-        const errorText = await response.text();
-        console.log(`📋 No existing tasks found or error: ${response.status} - ${errorText}`);
+        console.log('📋 No tasks found, starting fresh'); 
         setTaskResults([]);
       }
     } catch (error) {
-      console.error('❌ Error loading task results from Netlify:', error);
+      console.error('❌ Error loading tasks:', error);
       setTaskResults([]);
     }
   };
@@ -794,7 +715,7 @@ function App() {
   const insertIntoDraft = (content) => {
     if (context && context.draft && typeof context.insertTextIntoBody === 'function') {
       context.insertTextIntoBody(content);
-      setStatus('Inserted into draft!');
+      setStatus('Inserted!');
     } else if (context && typeof context.createDraft === 'function') {
       context.createDraft({
         content: {
@@ -805,22 +726,19 @@ function App() {
       setStatus('Draft created!');
     } else {
       navigator.clipboard.writeText(content).then(() => {
-        setStatus('Copied to clipboard!');
+        setStatus('Copied!');
       }).catch(() => {
         setStatus('Copy failed');
       });
     }
   };
 
-  // ✅ ENHANCED COPY TO CLIPBOARD FUNCTION
   const copyToClipboard = (content) => {
-    // Strip HTML tags and get clean text
     const cleanContent = content.replace(/<[^>]*>/g, '');
     
     navigator.clipboard.writeText(cleanContent).then(() => {
-      setStatus('Copied to clipboard!');
+      setStatus('Copied!');
     }).catch(() => {
-      // Fallback for older browsers
       try {
         const textArea = document.createElement('textarea');
         textArea.value = cleanContent;
@@ -828,16 +746,15 @@ function App() {
         textArea.select();
         document.execCommand('copy');
         document.body.removeChild(textArea);
-        setStatus('Copied to clipboard!');
+        setStatus('Copied!');
       } catch (err) {
         setStatus('Copy failed');
       }
     });
   };
 
-  // ✅ ENHANCED PROCESS REQUEST with proper task saving
+  // ✅ ENHANCED: Process request with proper task creation and storage
   const processRequest = async () => {
-    // Prevent multiple calls
     const now = Date.now();
     if (isProcessingRef.current || (now - lastCallTimeRef.current) < 1000) {
       return;
@@ -848,7 +765,6 @@ function App() {
       return;
     }
     
-    // Set processing flags
     isProcessingRef.current = true;
     lastCallTimeRef.current = now;
     setIsSending(true);
@@ -856,16 +772,13 @@ function App() {
     
     try {
       const taskId = mode === 'task' ? `task_${Date.now()}_${Math.random().toString(36).substr(2, 9)}` : null;
-      
       const combinedInstructions = createCombinedInstructions();
-      
-      // ✅ CREATE SINGLE NESTED PAYLOAD with ALL context
       const singleNestedPayload = await createCompletePayload(combinedInstructions, taskId);
       
-      // Save request to Netlify storage
       if (context?.conversation) {
         const conversationId = context.conversation.id;
         
+        // ✅ ENHANCED: Create and save history entry
         const newEntry = {
           text: comment,
           mode: mode,
@@ -877,13 +790,14 @@ function App() {
           user: context.teammate ? context.teammate.name : 'Unknown user'
         };
         
-        // Save to Netlify storage
-        await saveHistoryToNetlify(conversationId, newEntry);
-        
-        // Update local state
-        const updatedHistory = [newEntry, ...commentHistory];
-        setCommentHistory(updatedHistory);
+        const historySaved = await saveHistoryToNetlify(conversationId, newEntry);
+        if (historySaved) {
+          const updatedHistory = [newEntry, ...commentHistory];
+          setCommentHistory(updatedHistory);
+          console.log('✅ History updated locally');
+        }
 
+        // ✅ ENHANCED: Create and save task if in task mode  
         if (mode === 'task' && taskId) {
           const newTask = {
             id: taskId,
@@ -899,29 +813,38 @@ function App() {
           
           const updatedTasks = [newTask, ...taskResults];
           setTaskResults(updatedTasks);
+          console.log(`✅ Task ${taskId} created locally`);
           
-          // ✅ FIXED: Save task to both individual and conversation storage
+          // ✅ CRITICAL: Save to both individual storage and conversation storage immediately
           try {
-            await fetch('/.netlify/functions/store-task', {
+            // Save individual task
+            const individualResponse = await fetch('/.netlify/functions/store-task', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ taskId, task: newTask })
             });
             
-            // Also save to conversation tasks
-            await saveTaskResultsToNetlify(conversationId, updatedTasks);
+            if (individualResponse.ok) {
+              console.log(`✅ Task ${taskId} saved individually`);
+            }
+            
+            // Save to conversation tasks
+            const conversationSaved = await saveTaskResultsToNetlify(conversationId, updatedTasks);
+            if (conversationSaved) {
+              console.log(`✅ Task ${taskId} saved to conversation`);
+            }
           } catch (blobError) {
-            console.error('Error storing task in Netlify Blobs:', blobError);
+            console.error('❌ Error storing task:', blobError);
           }
           
           setPollingTasks(prev => new Set([...prev, taskId]));
+          console.log(`🔄 Started polling for task ${taskId}`);
         }
       }
       
       const webhookUrl = mode === 'email' ? EMAIL_WEBHOOK_URL : TASK_WEBHOOK_URL;
       
-      // ✅ SEND SINGLE NESTED PAYLOAD to webhook
-      console.log('🚀 SENDING SINGLE PAYLOAD TO:', webhookUrl);
+      console.log(`🚀 Sending ${mode} request to AirOps...`);
       const response = await fetch(webhookUrl, {
         method: 'POST',
         headers: {
@@ -937,15 +860,15 @@ function App() {
       }
       
       const responseData = await response.json();
-      console.log('✅ WEBHOOK RESPONSE:', responseData);
+      console.log('✅ AirOps response received:', responseData);
       
       if (mode === 'email') {
-        setStatus('Email sent successfully!');
+        setStatus('Email sent!');
       } else {
-        setStatus(`Task created successfully!`);
-        console.log(`✅ Task created: ${taskId}`);
+        setStatus('Task created!');
       }
       
+      // Clear form
       setComment('');
       setOutputFormat('');
       setSelectedFormat('');
@@ -955,7 +878,7 @@ function App() {
       }
       
     } catch (error) {
-      console.error('❌ WEBHOOK ERROR:', error);
+      console.error('❌ Request error:', error);
       setStatus('Error: ' + error.message);
     } finally {
       setIsSending(false);
@@ -975,17 +898,100 @@ function App() {
     }
   };
 
+  const viewTaskInNewWindow = (task) => {
+    const newWindow = window.open('', '_blank');
+    newWindow.document.write(`
+      <html>
+        <head>
+          <title>AirOps Task Result</title>
+          <style>
+            body { 
+              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
+              max-width: 800px; 
+              margin: 40px auto; 
+              padding: 20px; 
+              line-height: 1.6; 
+              color: #0f172a;
+            }
+            .header { 
+              border-bottom: 2px solid #e2e8f0; 
+              padding-bottom: 20px; 
+              margin-bottom: 30px; 
+            }
+            h1 { color: #0f172a; margin-bottom: 16px; }
+            .meta { 
+              background: #f8fafc; 
+              padding: 16px; 
+              border-radius: 8px; 
+              margin-bottom: 20px; 
+            }
+            .meta strong { color: #475569; }
+            .content { 
+              background: white; 
+              border: 1px solid #e2e8f0; 
+              padding: 24px; 
+              border-radius: 8px; 
+            }
+            h2, h3 { color: #0f172a; margin: 20px 0 12px 0; }
+            p { margin-bottom: 16px; }
+            ul, ol { margin-left: 20px; margin-bottom: 16px; }
+            li { margin-bottom: 4px; }
+            table { 
+              border-collapse: collapse; 
+              width: 100%; 
+              margin-bottom: 16px; 
+              border: 1px solid #e2e8f0;
+              border-radius: 8px;
+              overflow: hidden;
+            }
+            th, td { border-bottom: 1px solid #e2e8f0; padding: 12px; text-align: left; }
+            th { background-color: #f8fafc; font-weight: 600; }
+            code { 
+              background: #f1f5f9; 
+              padding: 2px 6px; 
+              border-radius: 4px; 
+              font-family: monospace; 
+            }
+            pre { 
+              background: #0f172a; 
+              color: #e2e8f0; 
+              padding: 16px; 
+              border-radius: 8px; 
+              overflow-x: auto; 
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1>AirOps Task Result</h1>
+          </div>
+          <div class="meta">
+            <p><strong>Format:</strong> ${task.outputFormat || 'General Task'}</p>
+            <p><strong>Created:</strong> ${formatDate(task.createdAt)}</p>
+            <p><strong>Status:</strong> ${task.status}</p>
+            <p><strong>User:</strong> ${task.user}</p>
+            ${task.fileName ? `<p><strong>File:</strong> ${task.fileName}</p>` : ''}
+          </div>
+          <div class="content">
+            ${task.result || '<p>No result available yet.</p>'}
+          </div>
+        </body>
+      </html>
+    `);
+    newWindow.document.close();
+  };
+
   if (!context) {
     return (
       <div style={{
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        height: '200px',
+        height: '150px',
         fontSize: theme.fontSize.base,
         color: theme.colors.tertiary
       }}>
-        Loading context...
+        Loading...
       </div>
     );
   }
@@ -1021,14 +1027,14 @@ function App() {
         boxShadow: theme.shadows.md,
         display: 'flex',
         flexDirection: 'column',
-        minWidth: '240px',
-        minHeight: '300px',
+        minWidth: '200px',
+        minHeight: '280px',
         maxWidth: '100%',
         maxHeight: '100%',
         transition: isResizing ? 'none' : 'width 0.2s ease, height 0.2s ease'
       }}
     >
-      {/* Compact Header */}
+      {/* Ultra-compact Header */}
       <div style={{
         display: 'flex',
         alignItems: 'center',
@@ -1040,9 +1046,9 @@ function App() {
           src={AIROPS_LOGO_URL} 
           alt="" 
           style={{ 
-            width: '14px', 
-            height: '14px', 
-            marginRight: theme.spacing.xs
+            width: '12px', 
+            height: '12px', 
+            marginRight: theme.spacing.sm
           }}
         />
         <span style={{
@@ -1050,19 +1056,17 @@ function App() {
           fontWeight: '600',
           color: theme.colors.primary
         }}>
-          Send to AirOps
+          {cardSize.width < 220 ? 'AirOps' : 'Send to AirOps'}
         </span>
       </div>
 
-      {/* Compact Mode Tabs */}
-      <div style={{ 
-        marginBottom: theme.spacing.sm 
-      }}>
+      {/* Ultra-compact Mode Tabs */}
+      <div style={{ marginBottom: theme.spacing.sm }}>
         <div style={{
           display: 'flex',
           background: theme.colors.background,
           borderRadius: theme.borderRadius.md,
-          padding: '2px',
+          padding: '1px',
           border: `1px solid ${theme.colors.border}`
         }}>
           <button
@@ -1085,7 +1089,7 @@ function App() {
             }}
           >
             <EmailIcon 
-              size={12} 
+              size={10} 
               color={mode === 'email' ? theme.colors.primary : theme.colors.secondary} 
               style={{ marginRight: theme.spacing.xs }} 
             />
@@ -1111,7 +1115,7 @@ function App() {
             }}
           >
             <TaskIcon 
-              size={12} 
+              size={10} 
               color={mode === 'task' ? theme.colors.primary : theme.colors.secondary} 
               style={{ marginRight: theme.spacing.xs }} 
             />
@@ -1120,14 +1124,14 @@ function App() {
         </div>
       </div>
       
-      {/* Compact Content Area */}
+      {/* Ultra-compact Content Area */}
       <div style={{
         flex: 1,
         overflowY: 'auto',
         paddingRight: '2px',
         marginBottom: theme.spacing.sm
       }}>
-        {/* Compact Instructions Input */}
+        {/* Ultra-compact Instructions Input */}
         <div ref={textareaContainerRef} style={{ position: 'relative', marginBottom: theme.spacing.sm }}>
           <label style={{
             display: 'block',
@@ -1162,7 +1166,7 @@ function App() {
             onBlur={(e) => e.target.style.borderColor = theme.colors.border}
           />
           
-          {/* Compact context hint */}
+          {/* Ultra-compact context hint */}
           <div style={{
             fontSize: theme.fontSize.xs,
             color: theme.colors.tertiary,
@@ -1170,8 +1174,8 @@ function App() {
             fontStyle: 'italic'
           }}>
             {mode === 'email' ? 
-              'AI will draft a response using conversation context' : 
-              'AI will create content based on your requirements'
+              'AI will draft using conversation context' : 
+              'AI will create based on your requirements'
             }
           </div>
           
@@ -1206,7 +1210,7 @@ function App() {
           </div>
         </div>
 
-        {/* Compact Task Mode Controls */}
+        {/* Ultra-compact Task Mode Controls */}
         {mode === 'task' && (
           <div style={{ marginBottom: theme.spacing.sm }}>
             <label style={{
@@ -1243,8 +1247,8 @@ function App() {
               ))}
             </select>
 
-            {/* Compact File Upload */}
-            <div style={{ marginTop: theme.spacing.md }}>
+            {/* Ultra-compact File Upload - Much smaller */}
+            <div style={{ marginTop: theme.spacing.sm }}>
               <input
                 ref={fileInputRef}
                 type="file"
@@ -1258,16 +1262,16 @@ function App() {
                   onClick={() => fileInputRef.current?.click()}
                   style={{ 
                     width: '100%',
-                    background: theme.colors.background,
+                    background: 'none',
                     border: `1px dashed ${theme.colors.border}`,
                     color: theme.colors.accent,
-                    fontSize: theme.fontSize.sm,
+                    fontSize: theme.fontSize.xs,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     cursor: 'pointer',
-                    padding: `${theme.spacing.md} ${theme.spacing.sm}`,
-                    borderRadius: theme.borderRadius.md,
+                    padding: `${theme.spacing.sm}`,
+                    borderRadius: theme.borderRadius.sm,
                     transition: 'all 0.2s ease'
                   }}
                   onMouseEnter={(e) => {
@@ -1275,55 +1279,38 @@ function App() {
                     e.target.style.borderColor = theme.colors.accent;
                   }}
                   onMouseLeave={(e) => {
-                    e.target.style.backgroundColor = theme.colors.background;
+                    e.target.style.backgroundColor = 'transparent';
                     e.target.style.borderColor = theme.colors.border;
                   }}
                 >
-                  <UploadIcon size={12} color={theme.colors.accent} style={{ marginRight: theme.spacing.xs }} />
-                  <div>
-                    <div>Upload file (optional)</div>
-                    <div style={{ 
-                      fontSize: theme.fontSize.xs, 
-                      color: theme.colors.tertiary, 
-                      marginTop: '1px' 
-                    }}>
-                      Max 2MB
-                    </div>
-                  </div>
+                  <UploadIcon size={10} color={theme.colors.accent} style={{ marginRight: theme.spacing.xs }} />
+                  Upload file (optional)
                 </button>
               ) : (
                 <div style={{
                   background: theme.colors.background,
                   border: `1px solid ${theme.colors.border}`,
-                  borderRadius: theme.borderRadius.md,
-                  padding: theme.spacing.md,
+                  borderRadius: theme.borderRadius.sm,
+                  padding: theme.spacing.sm,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between'
                 }}>
                   <div style={{ 
-                    fontSize: theme.fontSize.sm, 
+                    fontSize: theme.fontSize.xs, 
                     color: theme.colors.primary,
                     display: 'flex',
                     alignItems: 'center',
                     flex: 1,
                     minWidth: 0
                   }}>
-                    <AttachmentIcon size={12} color={theme.colors.secondary} style={{ marginRight: theme.spacing.xs, flexShrink: 0 }} />
-                    <div style={{ minWidth: 0 }}>
-                      <div style={{ 
-                        whiteSpace: 'nowrap',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis'
-                      }}>
-                        {uploadedFile.name}
-                      </div>
-                      <div style={{ 
-                        fontSize: theme.fontSize.xs,
-                        color: theme.colors.tertiary
-                      }}>
-                        {(uploadedFile.size / 1024).toFixed(1)}KB
-                      </div>
+                    <AttachmentIcon size={8} color={theme.colors.secondary} style={{ marginRight: theme.spacing.xs, flexShrink: 0 }} />
+                    <div style={{ 
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis'
+                    }}>
+                      {uploadedFile.name} ({(uploadedFile.size / 1024).toFixed(0)}KB)
                     </div>
                   </div>
                   <button
@@ -1338,14 +1325,14 @@ function App() {
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      marginLeft: theme.spacing.sm,
+                      marginLeft: theme.spacing.xs,
                       flexShrink: 0
                     }}
-                    onMouseEnter={(e) => e.target.style.color = theme.colors.error}
+                    onMouseEnter={(e) => e.target.style.color = theme.colors.secondary}
                     onMouseLeave={(e) => e.target.style.color = theme.colors.tertiary}
                     title="Remove file"
                   >
-                    <TrashIcon style={{ width: '12px', height: '12px' }} />
+                    <Icon name="Close" size={8} />
                   </button>
                 </div>
               )}
@@ -1353,40 +1340,7 @@ function App() {
           </div>
         )}
 
-          {/* Temporary Debug Panel - Remove when stable */}
-          {taskResults.length === 0 && context?.conversation?.id && (
-            <div style={{ 
-              padding: theme.spacing.xs, 
-              background: '#f0f9ff', 
-              border: '1px solid #0ea5e9',
-              borderRadius: theme.borderRadius.sm,
-              marginBottom: theme.spacing.sm
-            }}>
-              <div style={{ fontSize: theme.fontSize.xs, color: '#0369a1', marginBottom: theme.spacing.xs }}>
-                💡 No tasks found. Conv: {context.conversation.id.substring(0, 8)}...
-              </div>
-              <button
-                onClick={() => {
-                  console.log('🔄 Manual refresh triggered');
-                  loadTaskResultsFromNetlify(context.conversation.id);
-                  loadHistoryFromNetlify(context.conversation.id);
-                }}
-                style={{
-                  padding: `${theme.spacing.xs} ${theme.spacing.sm}`,
-                  fontSize: theme.fontSize.xs,
-                  background: '#0ea5e9',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: theme.borderRadius.sm,
-                  cursor: 'pointer'
-                }}
-              >
-                🔄 Refresh
-              </button>
-            </div>
-          )}
-
-          {/* Results using Accordion */}
+        {/* ✅ IMPROVED: Results using Accordion with better UI and icons */}
         {(taskResults.length > 0 || commentHistory.length > 0) && (
           <Accordion expandMode="multi">
             {taskResults.length > 0 && (
@@ -1394,7 +1348,9 @@ function App() {
                 id="tasks"
                 title={
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-                    <span>Tasks ({taskResults.length})</span>
+                    <span style={{ fontSize: theme.fontSize.sm, fontWeight: '600', color: theme.colors.primary }}>
+                      Results ({taskResults.length})
+                    </span>
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
@@ -1403,25 +1359,25 @@ function App() {
                       style={{
                         background: 'none',
                         border: 'none',
-                        color: theme.colors.error,
-                        fontSize: theme.fontSize.xs,
                         cursor: 'pointer',
-                        padding: '2px 4px',
+                        padding: theme.spacing.xs,
                         borderRadius: theme.borderRadius.sm,
+                        color: theme.colors.tertiary,
                         display: 'flex',
                         alignItems: 'center',
-                        gap: '2px'
+                        justifyContent: 'center'
                       }}
-                      title="Clear all tasks"
+                      onMouseEnter={(e) => e.target.style.color = theme.colors.secondary}
+                      onMouseLeave={(e) => e.target.style.color = theme.colors.tertiary}
+                      title="Delete all tasks"
                     >
-                      <SafeTrashIcon size={10} />
-                      Clear All
+                      <Icon name="TrashFilled" size={10} />
                     </button>
                   </div>
                 }
               >
                 <div>
-                  {taskResults.slice(0, 3).map((task) => (
+                  {taskResults.slice(0, 5).map((task) => (
                     <div
                       key={task.id}
                       style={{
@@ -1433,7 +1389,7 @@ function App() {
                         fontSize: theme.fontSize.xs
                       }}
                     >
-                      {/* Compact Task Header with Delete Button */}
+                      {/* Task Header */}
                       <div style={{ 
                         display: 'flex', 
                         alignItems: 'center', 
@@ -1443,8 +1399,8 @@ function App() {
                         <div style={{ display: 'flex', alignItems: 'center', flex: 1 }}>
                           {task.status === 'pending' ? (
                             <div style={{ 
-                              width: '12px', 
-                              height: '12px', 
+                              width: '10px', 
+                              height: '10px', 
                               marginRight: theme.spacing.xs,
                               border: `2px solid ${theme.colors.accent}`,
                               borderTop: '2px solid transparent',
@@ -1452,9 +1408,9 @@ function App() {
                               animation: 'spin 1s linear infinite'
                             }} />
                           ) : task.status === 'completed' ? (
-                            <CheckmarkIcon size={12} color={theme.colors.success} style={{ marginRight: theme.spacing.xs }} />
+                            <CheckmarkIcon size={10} color={theme.colors.success} style={{ marginRight: theme.spacing.xs }} />
                           ) : (
-                            <WarningIcon size={12} color={theme.colors.error} style={{ marginRight: theme.spacing.xs }} />
+                            <WarningIcon size={10} color={theme.colors.warning} style={{ marginRight: theme.spacing.xs }} />
                           )}
                           
                           <div style={{ flex: 1 }}>
@@ -1469,7 +1425,7 @@ function App() {
                               }
                               {task.hasFile && (
                                 <AttachmentIcon 
-                                  size={10} 
+                                  size={8} 
                                   color={theme.colors.tertiary} 
                                   style={{ marginLeft: theme.spacing.xs }} 
                                 />
@@ -1485,42 +1441,64 @@ function App() {
                           </div>
                         </div>
                         
-                        {/* Delete Task Button */}
-                        <button
-                          onClick={() => deleteTask(task.id)}
-                          style={{
-                            background: 'none',
-                            border: 'none',
-                            color: theme.colors.tertiary,
-                            cursor: 'pointer',
-                            padding: theme.spacing.xs,
-                            borderRadius: theme.borderRadius.sm,
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            marginLeft: theme.spacing.xs
-                          }}
-                          onMouseEnter={(e) => e.target.style.color = theme.colors.error}
-                          onMouseLeave={(e) => e.target.style.color = theme.colors.tertiary}
-                          title="Delete this task"
-                        >
-                          <SafeTrashIcon size={10} />
-                        </button>
+                        {/* Action buttons */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: theme.spacing.xs }}>
+                          {task.result && (
+                            <button
+                              onClick={() => viewTaskInNewWindow(task)}
+                              style={{
+                                background: 'none',
+                                border: 'none',
+                                cursor: 'pointer',
+                                padding: theme.spacing.xs,
+                                borderRadius: theme.borderRadius.sm,
+                                color: theme.colors.tertiary,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center'
+                              }}
+                              onMouseEnter={(e) => e.target.style.color = theme.colors.info}
+                              onMouseLeave={(e) => e.target.style.color = theme.colors.tertiary}
+                              title="View task result"
+                            >
+                              <Icon name="ExternalLink" size={10} />
+                            </button>
+                          )}
+                          <button
+                            onClick={() => deleteTask(task.id)}
+                            style={{
+                              background: 'none',
+                              border: 'none',
+                              cursor: 'pointer',
+                              padding: theme.spacing.xs,
+                              borderRadius: theme.borderRadius.sm,
+                              color: theme.colors.tertiary,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center'
+                            }}
+                            onMouseEnter={(e) => e.target.style.color = theme.colors.secondary}
+                            onMouseLeave={(e) => e.target.style.color = theme.colors.tertiary}
+                            title="Delete this task"
+                          >
+                            <Icon name="Trash" size={10} />
+                          </button>
+                        </div>
                       </div>
 
-                      {/* Compact Task Status */}
+                      {/* Task Status */}
                       <div style={{
                         padding: `${theme.spacing.xs} ${theme.spacing.sm}`,
                         background: task.status === 'completed' ? 
                           `${theme.colors.success}15` : 
                           task.status === 'failed' ? 
-                          `${theme.colors.error}15` : 
+                          `${theme.colors.warning}15` : 
                           `${theme.colors.accent}15`,
                         border: `1px solid ${
                           task.status === 'completed' ? 
                           theme.colors.success : 
                           task.status === 'failed' ? 
-                          theme.colors.error : 
+                          theme.colors.warning : 
                           theme.colors.accent
                         }`,
                         borderRadius: theme.borderRadius.sm,
@@ -1528,7 +1506,7 @@ function App() {
                         color: task.status === 'completed' ? 
                           theme.colors.success : 
                           task.status === 'failed' ? 
-                          theme.colors.error : 
+                          theme.colors.warning : 
                           theme.colors.accent,
                         marginBottom: task.result ? theme.spacing.xs : '0',
                         fontWeight: '500'
@@ -1538,7 +1516,7 @@ function App() {
                         {task.status === 'failed' && 'Failed'}
                       </div>
 
-                      {/* Compact Task Result Content */}
+                      {/* Task Result Content */}
                       {task.result && (
                         <div>
                           <div style={{
@@ -1547,7 +1525,7 @@ function App() {
                             borderRadius: theme.borderRadius.md,
                             padding: theme.spacing.sm,
                             marginBottom: theme.spacing.xs,
-                            maxHeight: '120px',
+                            maxHeight: '100px',
                             overflowY: 'auto',
                             fontSize: theme.fontSize.xs,
                             lineHeight: '1.4'
@@ -1589,7 +1567,7 @@ function App() {
                                 e.target.style.backgroundColor = theme.colors.background;
                               }}
                             >
-                              <CopyIcon size={8} color={theme.colors.secondary} style={{ marginRight: '2px' }} />
+                              <Icon name="Copy" size={8} style={{ marginRight: '2px' }} />
                               Copy
                             </button>
                             <button
@@ -1619,68 +1597,6 @@ function App() {
                               <InsertIcon size={8} color={theme.colors.secondary} style={{ marginRight: '2px' }} />
                               Insert
                             </button>
-                            <button
-                              onClick={() => {
-                                // Show full result in a modal or expanded view
-                                const newWindow = window.open('', '_blank');
-                                newWindow.document.write(`
-                                  <html>
-                                    <head>
-                                      <title>AirOps Task Result</title>
-                                      <style>
-                                        body { 
-                                          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
-                                          max-width: 800px; 
-                                          margin: 40px auto; 
-                                          padding: 20px; 
-                                          line-height: 1.6; 
-                                          color: #0f172a;
-                                        }
-                                        h1, h2, h3 { color: #0f172a; margin-bottom: 16px; }
-                                        p { margin-bottom: 16px; }
-                                        ul, ol { margin-left: 20px; margin-bottom: 16px; }
-                                        li { margin-bottom: 4px; }
-                                        table { border-collapse: collapse; width: 100%; margin-bottom: 16px; }
-                                        th, td { border: 1px solid #e2e8f0; padding: 8px 12px; text-align: left; }
-                                        th { background-color: #f8fafc; font-weight: 600; }
-                                      </style>
-                                    </head>
-                                    <body>
-                                      <h1>AirOps Task Result</h1>
-                                      <p><strong>Format:</strong> ${task.outputFormat || 'General Task'}</p>
-                                      <p><strong>Created:</strong> ${formatDate(task.createdAt)}</p>
-                                      <hr style="margin: 20px 0; border: none; border-top: 1px solid #e2e8f0;">
-                                      ${task.result}
-                                    </body>
-                                  </html>
-                                `);
-                                newWindow.document.close();
-                              }}
-                              style={{
-                                padding: `${theme.spacing.xs} ${theme.spacing.sm}`,
-                                fontSize: theme.fontSize.xs,
-                                minHeight: 'auto',
-                                display: 'flex',
-                                alignItems: 'center',
-                                background: theme.colors.background,
-                                border: `1px solid ${theme.colors.border}`,
-                                borderRadius: theme.borderRadius.sm,
-                                cursor: 'pointer',
-                                color: theme.colors.secondary,
-                                transition: 'all 0.2s ease'
-                              }}
-                              onMouseEnter={(e) => {
-                                e.target.style.borderColor = theme.colors.borderHover;
-                                e.target.style.backgroundColor = theme.colors.surface;
-                              }}
-                              onMouseLeave={(e) => {
-                                e.target.style.borderColor = theme.colors.border;
-                                e.target.style.backgroundColor = theme.colors.background;
-                              }}
-                            >
-                              <ViewIcon size={8} color={theme.colors.secondary} style={{ marginRight: '2px' }} />
-                              View
-                            </button>
                           </div>
                         </div>
                       )}
@@ -1695,7 +1611,9 @@ function App() {
                 id="history"
                 title={
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-                    <span>Plugin History ({commentHistory.length})</span>
+                    <span style={{ fontSize: theme.fontSize.sm, fontWeight: '600', color: theme.colors.primary }}>
+                      History ({commentHistory.length})
+                    </span>
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
@@ -1704,24 +1622,25 @@ function App() {
                       style={{
                         background: 'none',
                         border: 'none',
-                        color: theme.colors.error,
-                        fontSize: theme.fontSize.xs,
                         cursor: 'pointer',
-                        padding: '2px 4px',
+                        padding: theme.spacing.xs,
                         borderRadius: theme.borderRadius.sm,
+                        color: theme.colors.tertiary,
                         display: 'flex',
                         alignItems: 'center',
-                        gap: '2px'
+                        justifyContent: 'center'
                       }}
-                      title="Clear all history"
+                      onMouseEnter={(e) => e.target.style.color = theme.colors.secondary}
+                      onMouseLeave={(e) => e.target.style.color = theme.colors.tertiary}
+                      title="Delete all history"
                     >
-                      🗑️ Clear All
+                      <Icon name="TrashFilled" size={10} />
                     </button>
                   </div>
                 }
               >
-                <div style={{ maxHeight: '100px', overflowY: 'auto' }}>
-                  {commentHistory.slice(0, 3).map((entry, index) => (
+                <div style={{ maxHeight: '80px', overflowY: 'auto' }}>
+                  {commentHistory.slice(0, 5).map((entry, index) => (
                     <div key={index} style={{
                       padding: theme.spacing.xs,
                       background: theme.colors.background,
@@ -1736,20 +1655,23 @@ function App() {
                         fontSize: theme.fontSize.xs,
                         fontWeight: '500',
                         display: 'flex',
-                        alignItems: 'center'
+                        alignItems: 'center',
+                        justifyContent: 'space-between'
                       }}>
-                        <span>{formatDate(entry.timestamp)} • </span>
-                        <span style={{ margin: '0 2px', display: 'flex', alignItems: 'center' }}>
-                          {entry.mode === 'email' ? (
-                            <EmailIcon size={10} color={theme.colors.tertiary} />
-                          ) : (
-                            <TaskIcon size={10} color={theme.colors.tertiary} />
+                        <div style={{ display: 'flex', alignItems: 'center' }}>
+                          <span>{formatDate(entry.timestamp)} • </span>
+                          <span style={{ margin: '0 2px', display: 'flex', alignItems: 'center' }}>
+                            {entry.mode === 'email' ? (
+                              <EmailIcon size={8} color={theme.colors.tertiary} />
+                            ) : (
+                              <TaskIcon size={8} color={theme.colors.tertiary} />
+                            )}
+                          </span>
+                          <span>• {entry.user}</span>
+                          {entry.hasFile && (
+                            <AttachmentIcon size={8} color={theme.colors.tertiary} style={{ marginLeft: '2px' }} />
                           )}
-                        </span>
-                        <span>• {entry.user}</span>
-                        {entry.hasFile && (
-                          <AttachmentIcon size={10} color={theme.colors.tertiary} style={{ marginLeft: '2px' }} />
-                        )}
+                        </div>
                       </div>
                       <div style={{ 
                         color: theme.colors.secondary, 
@@ -1780,7 +1702,7 @@ function App() {
         )}
       </div>
 
-      {/* Compact Bottom Section */}
+      {/* Ultra-compact Bottom Section */}
       <div style={{
         borderTop: `1px solid ${theme.colors.border}`,
         paddingTop: theme.spacing.sm
@@ -1827,23 +1749,15 @@ function App() {
             border: `1px solid ${theme.colors.border}`,
             borderRadius: theme.borderRadius.md,
             fontSize: theme.fontSize.xs,
-            color: status.includes('Error') || status.includes('failed') ? 
-              theme.colors.error : theme.colors.secondary,
+            color: theme.colors.secondary,
             textAlign: 'center',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center'
           }}>
-            {(status.includes('Error') || status.includes('failed')) && (
-              <WarningIcon 
-                size={12} 
-                color={theme.colors.error} 
-                style={{ marginRight: theme.spacing.xs }} 
-              />
-            )}
-            {(status.includes('success') || status.includes('completed') || status.includes('saved')) && (
+            {(status.includes('success') || status.includes('completed') || status.includes('saved') || status.includes('created')) && (
               <SuccessIcon 
-                size={12} 
+                size={10} 
                 color={theme.colors.success} 
                 style={{ marginRight: theme.spacing.xs }} 
               />
@@ -1853,7 +1767,7 @@ function App() {
         )}
       </div>
 
-      {/* Compact resize handle */}
+      {/* Ultra-compact resize handle */}
       <div
         onMouseDown={handleCardResizeStart}
         className="card-resize-handle"
@@ -1861,8 +1775,8 @@ function App() {
           position: 'absolute',
           bottom: '0px',
           right: '0px',
-          width: '16px',
-          height: '16px',
+          width: '14px',
+          height: '14px',
           cursor: 'nw-resize',
           background: `linear-gradient(-45deg, transparent 30%, ${theme.colors.tertiary} 30%, ${theme.colors.tertiary} 35%, transparent 35%, transparent 65%, ${theme.colors.tertiary} 65%, ${theme.colors.tertiary} 70%, transparent 70%)`,
           backgroundSize: '4px 4px',

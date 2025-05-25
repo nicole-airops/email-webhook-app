@@ -36,11 +36,17 @@ export default async (request, context) => {
   }
 
   try {
+    console.log(`📋 Checking status for task: ${taskId}`);
+    
     const store = getStore('tasks');
     const taskData = await store.get(taskId);
     
     if (!taskData) {
-      return new Response(JSON.stringify({ error: 'Task not found' }), {
+      console.log(`❌ Task not found: ${taskId}`);
+      return new Response(JSON.stringify({ 
+        error: 'Task not found',
+        taskId: taskId 
+      }), {
         status: 404,
         headers: {
           'Access-Control-Allow-Origin': '*',
@@ -50,23 +56,42 @@ export default async (request, context) => {
     }
 
     const task = JSON.parse(taskData);
+    const status = task.status || 'pending';
     
-    console.log(`📋 Task status check for ${taskId}: ${task.status || 'pending'}`);
+    console.log(`📋 Task ${taskId} status: ${status}`);
     
-    return new Response(JSON.stringify({
-      status: task.status || 'pending',
+    // Return comprehensive task status
+    const response = {
+      taskId: taskId,
+      status: status,
       data: task.result || null,
-      completedAt: task.completedAt || null
-    }), {
+      completedAt: task.completedAt || null,
+      createdAt: task.createdAt || null,
+      error: task.error || null,
+      // Additional metadata that might be useful
+      metadata: {
+        user: task.user || null,
+        outputFormat: task.outputFormat || null,
+        hasFile: task.hasFile || false,
+        fileName: task.fileName || null
+      }
+    };
+    
+    return new Response(JSON.stringify(response), {
       status: 200,
       headers: {
         'Content-Type': 'application/json',
         'Access-Control-Allow-Origin': '*'
       }
     });
+    
   } catch (error) {
-    console.error('Error fetching task status:', error);
-    return new Response(JSON.stringify({ error: 'Internal server error' }), {
+    console.error(`❌ Error fetching task status for ${taskId}:`, error);
+    return new Response(JSON.stringify({ 
+      error: 'Internal server error',
+      taskId: taskId,
+      details: error.message 
+    }), {
       status: 500,
       headers: {
         'Access-Control-Allow-Origin': '*',

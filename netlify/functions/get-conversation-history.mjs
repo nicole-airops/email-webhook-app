@@ -41,6 +41,8 @@ export default async (request, context) => {
     
     const history = historyData ? JSON.parse(historyData) : [];
     
+    console.log(`📚 Loading history for ${conversationId}: ${history.length} entries`);
+    
     return new Response(JSON.stringify({ history }), {
       status: 200,
       headers: {
