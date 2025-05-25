@@ -37,7 +37,7 @@ export default async (request, context) => {
 
     const store = getStore('conversation-history');
     
-    // Handle clearing all history
+    // ✅ FIXED: Handle clearing all history (multiple ways)
     if (clearAll || (history && Array.isArray(history) && history.length === 0)) {
       console.log(`🗑️ Clearing all history for conversation ${conversationId}`);
       await store.set(conversationId, JSON.stringify([]));
@@ -55,14 +55,25 @@ export default async (request, context) => {
       });
     }
     
-    // Handle setting complete history array (for clearing or bulk updates)
+    // ✅ ENHANCED: Handle setting complete history array (for clearing or bulk updates)
     if (history && Array.isArray(history)) {
       console.log(`📚 Setting complete history for conversation ${conversationId}: ${history.length} entries`);
-      await store.set(conversationId, JSON.stringify(history.slice(0, 50))); // Limit to 50 entries
+      
+      // If it's an empty array, we're clearing
+      if (history.length === 0) {
+        await store.set(conversationId, JSON.stringify([]));
+        console.log(`✅ History cleared for conversation ${conversationId}`);
+      } else {
+        // Otherwise, save the provided history (limit to 50 entries)
+        const limitedHistory = history.slice(0, 50);
+        await store.set(conversationId, JSON.stringify(limitedHistory));
+        console.log(`✅ History updated for conversation ${conversationId}: ${limitedHistory.length} entries`);
+      }
       
       return new Response(JSON.stringify({ 
         success: true, 
-        count: history.length 
+        count: history.length,
+        message: history.length === 0 ? 'History cleared' : 'History updated'
       }), {
         status: 200,
         headers: {
@@ -114,7 +125,10 @@ export default async (request, context) => {
     
   } catch (error) {
     console.error('Error processing conversation history:', error);
-    return new Response(JSON.stringify({ error: 'Internal server error' }), {
+    return new Response(JSON.stringify({ 
+      error: 'Internal server error',
+      details: error.message 
+    }), {
       status: 500,
       headers: {
         'Access-Control-Allow-Origin': '*',

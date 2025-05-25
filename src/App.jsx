@@ -117,9 +117,9 @@ function App() {
         const containerWidth = rect.width;
         const containerHeight = rect.height;
         
-        // Compact constraints - 0.5" thinner but allow expansion
-        const newWidth = Math.max(200, Math.min(400, containerWidth - 10));
-        const newHeight = Math.max(280, Math.min(600, containerHeight - 10));
+        // Even more compact constraints - 0.5" thinner than original 280px
+        const newWidth = Math.max(200, Math.min(260, containerWidth - 10));
+        const newHeight = Math.max(280, Math.min(480, containerHeight - 10));
         
         setContainerSize({ width: containerWidth, height: containerHeight });
         setCardSize({ width: newWidth, height: newHeight });
@@ -165,8 +165,8 @@ function App() {
         const parentRect = parent.getBoundingClientRect();
         const cardRect = cardRef.current.getBoundingClientRect();
         
-        const newWidth = Math.max(200, Math.min(450, e.clientX - cardRect.left));
-        const newHeight = Math.max(280, Math.min(650, e.clientY - cardRect.top));
+        const newWidth = Math.max(200, Math.min(300, e.clientX - cardRect.left));
+        const newHeight = Math.max(280, Math.min(520, e.clientY - cardRect.top));
         
         setCardSize({ width: newWidth, height: newHeight });
       }
@@ -358,7 +358,7 @@ function App() {
     }
   };
 
-  // ✅ ENHANCED: Check task status and save results with history refresh
+  // ✅ FIXED: Check task status and save results
   const checkTaskStatus = async (taskId) => {
     try {
       const response = await fetch(`/.netlify/functions/task-status?taskId=${taskId}`);
@@ -381,8 +381,6 @@ function App() {
             const saved = await saveTaskResultsToNetlify(context.conversation.id, updatedTasks);
             if (saved) {
               console.log(`✅ Task ${taskId} results saved to storage`);
-              // ✅ NEW: Refresh history to show task completions
-              await loadHistoryFromNetlify(context.conversation.id);
             }
           }
           
@@ -448,15 +446,9 @@ function App() {
     return combinedText;
   };
 
-  // ✅ ENHANCED: Payload creation with conversation metadata for callbacks
   const createCompletePayload = async (combinedInstructions, taskId = null) => {
     const timestamp = new Date().toISOString();
-    const conversationId = context?.conversation?.id;
-    
-    // ✅ ENHANCED: Include conversation ID in callback URL and metadata
-    const callbackUrl = taskId ? 
-      `${window.location.origin}/.netlify/functions/task-completion-webhook?conversationId=${conversationId}&taskId=${taskId}` : 
-      null;
+    const callbackUrl = taskId ? `${window.location.origin}/.netlify/functions/task-completion-webhook` : null;
     
     let conversationData = {};
     let messagesData = [];
@@ -540,8 +532,10 @@ function App() {
           size_formatted: `${(uploadedFile.size / 1024).toFixed(1)}KB`,
           last_modified: uploadedFile.lastModified ? new Date(uploadedFile.lastModified).toISOString() : null,
           content_preview: uploadedFile.preview || null,
+          full_content: uploadedFile.fullContent || null, // Include full content for AI processing
           has_preview: !!uploadedFile.preview,
-          is_text_file: uploadedFile.type?.startsWith('text/') || uploadedFile.name?.match(/\.(txt|csv|json|md)$/i)
+          has_full_content: !!uploadedFile.fullContent,
+          is_text_file: uploadedFile.type?.startsWith('text/') || uploadedFile.name?.match(/\.(txt|csv|json|md|xml|log|js|jsx|ts|tsx|py|html|css)$/i)
         } : null,
         request_info: {
           mode: mode,
@@ -549,8 +543,6 @@ function App() {
           plugin_context: context?.type,
           task_id: taskId,
           callback_url: callbackUrl,
-          // ✅ CRITICAL: Explicit conversation ID for webhook
-          conversation_id: conversationId,
           user_agent: navigator.userAgent,
           plugin_version: "1.0.0"
         },
@@ -604,14 +596,6 @@ function App() {
             Math.round((new Date() - new Date(conversationData.created_at)) / (1000 * 60 * 60)) : null,
           latest_message_age_hours: messagesData.length > 0 && messagesData[0].created_at ?
             Math.round((new Date() - new Date(messagesData[0].created_at)) / (1000 * 60 * 60)) : null
-        },
-        // ✅ ENHANCED: Add callback metadata to ensure AirOps can route responses properly
-        callback_metadata: {
-          conversation_id: conversationId,
-          task_id: taskId,
-          plugin_version: "1.0.0",
-          webhook_url: callbackUrl,
-          created_at: timestamp
         }
       }
     };
@@ -634,11 +618,14 @@ function App() {
         lastModified: file.lastModified
       };
 
-      if (file.type.startsWith('text/') || file.name.endsWith('.json') || file.name.endsWith('.csv')) {
+      if (file.type.startsWith('text/') || 
+          file.name.match(/\.(txt|csv|json|md|xml|log|js|jsx|ts|tsx|py|html|css)$/i)) {
         const reader = new FileReader();
         reader.onload = (e) => {
           const content = e.target.result;
-          fileData.preview = content.substring(0, 500) + (content.length > 500 ? '...' : '');
+          // Include more content for better context (up to 5000 characters instead of 500)
+          fileData.preview = content.substring(0, 5000) + (content.length > 5000 ? '...\n\n[File truncated - full content available to AI]' : '');
+          fileData.fullContent = content; // Store full content for AI processing
           setUploadedFile(fileData);
           setStatus('File uploaded');
         };
@@ -731,80 +718,71 @@ function App() {
   };
 
   const insertIntoDraft = (content) => {
+    // Clean HTML content same way as copy function
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = content;
+    
+    // Replace HTML elements with text equivalents to preserve some formatting
+    tempDiv.querySelectorAll('br').forEach(br => br.replaceWith('\n'));
+    tempDiv.querySelectorAll('p').forEach(p => p.replaceWith(p.textContent + '\n\n'));
+    tempDiv.querySelectorAll('h1, h2, h3, h4, h5, h6').forEach(h => h.replaceWith(h.textContent + '\n\n'));
+    tempDiv.querySelectorAll('li').forEach(li => li.replaceWith('• ' + li.textContent + '\n'));
+    tempDiv.querySelectorAll('ul, ol').forEach(list => list.replaceWith(list.textContent + '\n'));
+    tempDiv.querySelectorAll('table').forEach(table => {
+      let tableText = '';
+      table.querySelectorAll('tr').forEach(row => {
+        const cells = Array.from(row.querySelectorAll('td, th')).map(cell => cell.textContent.trim());
+        tableText += cells.join(' | ') + '\n';
+      });
+      table.replaceWith(tableText + '\n');
+    });
+    
+    const cleanContent = tempDiv.textContent || tempDiv.innerText || content.replace(/<[^>]*>/g, '');
+    
     if (context && context.draft && typeof context.insertTextIntoBody === 'function') {
-      context.insertTextIntoBody(content);
+      context.insertTextIntoBody(cleanContent);
       setStatus('Inserted!');
     } else if (context && typeof context.createDraft === 'function') {
       context.createDraft({
         content: {
-          body: content,
+          body: cleanContent,
           type: 'text'
         }
       });
       setStatus('Draft created!');
     } else {
-      navigator.clipboard.writeText(content).then(() => {
-        setStatus('Copied!');
-      }).catch(() => {
-        setStatus('Copy failed');
-      });
+      copyToClipboard(content); // Fallback to copy
     }
   };
 
-  // ✅ ENHANCED: Convert HTML to formatted text while preserving structure
-  const htmlToFormattedText = (html) => {
-    if (!html) return '';
-    
-    // Create a temporary div to parse HTML
-    const tempDiv = document.createElement('div');
-    tempDiv.innerHTML = html;
-    
-    // Convert common HTML elements to formatted text
-    let text = html
-      // Convert headers to text with line breaks
-      .replace(/<h[1-6][^>]*>(.*?)<\/h[1-6]>/gi, '\n$1\n')
-      // Convert paragraphs to text with line breaks
-      .replace(/<p[^>]*>(.*?)<\/p>/gi, '$1\n\n')
-      // Convert line breaks
-      .replace(/<br\s*\/?>/gi, '\n')
-      // Convert list items to bulleted text
-      .replace(/<li[^>]*>(.*?)<\/li>/gi, '• $1\n')
-      // Convert unordered lists
-      .replace(/<ul[^>]*>/gi, '\n').replace(/<\/ul>/gi, '\n')
-      // Convert ordered lists  
-      .replace(/<ol[^>]*>/gi, '\n').replace(/<\/ol>/gi, '\n')
-      // Convert bold/strong
-      .replace(/<(b|strong)[^>]*>(.*?)<\/(b|strong)>/gi, '**$2**')
-      // Convert italic/em
-      .replace(/<(i|em)[^>]*>(.*?)<\/(i|em)>/gi, '*$2*')
-      // Convert tables to basic text format
-      .replace(/<table[^>]*>/gi, '\n')
-      .replace(/<\/table>/gi, '\n')
-      .replace(/<tr[^>]*>/gi, '')
-      .replace(/<\/tr>/gi, '\n')
-      .replace(/<th[^>]*>(.*?)<\/th>/gi, '$1\t')
-      .replace(/<td[^>]*>(.*?)<\/td>/gi, '$1\t')
-      // Remove remaining HTML tags
-      .replace(/<[^>]*>/g, '')
-      // Clean up multiple line breaks
-      .replace(/\n\s*\n\s*\n/g, '\n\n')
-      .replace(/^\s+|\s+$/g, '')
-      // Clean up extra spaces and tabs
-      .replace(/\t+/g, '\t')
-      .replace(/[ ]+/g, ' ');
-      
-    return text;
-  };
-
   const copyToClipboard = (content) => {
-    const formattedText = htmlToFormattedText(content);
+    // Create a temporary div to properly convert HTML to text while preserving some formatting
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = content;
     
-    navigator.clipboard.writeText(formattedText).then(() => {
+    // Replace HTML elements with text equivalents to preserve some formatting
+    tempDiv.querySelectorAll('br').forEach(br => br.replaceWith('\n'));
+    tempDiv.querySelectorAll('p').forEach(p => p.replaceWith(p.textContent + '\n\n'));
+    tempDiv.querySelectorAll('h1, h2, h3, h4, h5, h6').forEach(h => h.replaceWith(h.textContent + '\n\n'));
+    tempDiv.querySelectorAll('li').forEach(li => li.replaceWith('• ' + li.textContent + '\n'));
+    tempDiv.querySelectorAll('ul, ol').forEach(list => list.replaceWith(list.textContent + '\n'));
+    tempDiv.querySelectorAll('table').forEach(table => {
+      let tableText = '';
+      table.querySelectorAll('tr').forEach(row => {
+        const cells = Array.from(row.querySelectorAll('td, th')).map(cell => cell.textContent.trim());
+        tableText += cells.join(' | ') + '\n';
+      });
+      table.replaceWith(tableText + '\n');
+    });
+    
+    const cleanContent = tempDiv.textContent || tempDiv.innerText || content.replace(/<[^>]*>/g, '');
+    
+    navigator.clipboard.writeText(cleanContent).then(() => {
       setStatus('Copied!');
     }).catch(() => {
       try {
         const textArea = document.createElement('textarea');
-        textArea.value = formattedText;
+        textArea.value = cleanContent;
         document.body.appendChild(textArea);
         textArea.select();
         document.execCommand('copy');
@@ -816,7 +794,7 @@ function App() {
     });
   };
 
-  // ✅ ENHANCED: Process request with proper task creation and conversation ID
+  // ✅ ENHANCED: Process request with proper task creation and storage
   const processRequest = async () => {
     const now = Date.now();
     if (isProcessingRef.current || (now - lastCallTimeRef.current) < 1000) {
@@ -860,7 +838,7 @@ function App() {
           console.log('✅ History updated locally');
         }
 
-        // ✅ ENHANCED: Create and save task if in task mode with CONVERSATION ID
+        // ✅ ENHANCED: Create and save task if in task mode  
         if (mode === 'task' && taskId) {
           const newTask = {
             id: taskId,
@@ -871,14 +849,12 @@ function App() {
             fileName: uploadedFile?.name,
             status: 'pending',
             createdAt: new Date().toISOString(),
-            user: context.teammate ? context.teammate.name : 'Unknown user',
-            // ✅ CRITICAL: Include conversation ID for webhook callbacks
-            conversationId: conversationId
+            user: context.teammate ? context.teammate.name : 'Unknown user'
           };
           
           const updatedTasks = [newTask, ...taskResults];
           setTaskResults(updatedTasks);
-          console.log(`✅ Task ${taskId} created locally with conversationId: ${conversationId}`);
+          console.log(`✅ Task ${taskId} created locally`);
           
           // ✅ CRITICAL: Save to both individual storage and conversation storage immediately
           try {
@@ -1198,20 +1174,11 @@ function App() {
       }}>
         {/* Ultra-compact Instructions Input */}
         <div ref={textareaContainerRef} style={{ position: 'relative', marginBottom: theme.spacing.sm }}>
-          <label style={{
-            display: 'block',
-            marginBottom: theme.spacing.xs,
-            fontSize: theme.fontSize.sm,
-            fontWeight: '600',
-            color: theme.colors.primary
-          }}>
-            Instructions <span style={{ color: theme.colors.error }}>*</span>
-          </label>
           <textarea
             value={comment}
             onChange={(e) => setComment(e.target.value)}
             placeholder={
-              mode === 'email' ? "How should we respond?" : "What do you need created?"
+              mode === 'email' ? "Instructions: How should we respond?" : "Instructions: What do you need created?"
             }
             style={{
               width: '100%',
@@ -1230,19 +1197,6 @@ function App() {
             onFocus={(e) => e.target.style.borderColor = theme.colors.accent}
             onBlur={(e) => e.target.style.borderColor = theme.colors.border}
           />
-          
-          {/* Ultra-compact context hint */}
-          <div style={{
-            fontSize: theme.fontSize.xs,
-            color: theme.colors.tertiary,
-            marginTop: '2px',
-            fontStyle: 'italic'
-          }}>
-            {mode === 'email' ? 
-              'AI will draft using conversation context' : 
-              'AI will create based on your requirements'
-            }
-          </div>
           
           {/* Textarea resize handle */}
           <div
@@ -1405,7 +1359,7 @@ function App() {
           </div>
         )}
 
-        {/* ✅ ENHANCED: Results and History with Task Completion Integration */}
+        {/* ✅ FIXED: Results and History sections with proper alignment */}
         {(taskResults.length > 0 || commentHistory.length > 0) && (
           <Accordion expandMode="multi">
             {taskResults.length > 0 && (
@@ -1441,7 +1395,7 @@ function App() {
                   </div>
                 }
               >
-                <div>
+                <div style={{ marginLeft: '-2px', marginRight: '-2px' }}>
                   {taskResults.slice(0, 5).map((task) => (
                     <div
                       key={task.id}
@@ -1581,7 +1535,7 @@ function App() {
                         {task.status === 'failed' && 'Failed'}
                       </div>
 
-                      {/* Task Result Content */}
+                      {/* ✅ FIXED: Task Result Content with better alignment */}
                       {task.result && (
                         <div>
                           <div style={{
@@ -1636,7 +1590,7 @@ function App() {
                               Copy
                             </button>
                             <button
-                              onClick={() => insertIntoDraft(task.result.replace(/<[^>]*>/g, ''))}
+                              onClick={() => insertIntoDraft(task.result)}
                               style={{
                                 padding: `${theme.spacing.xs} ${theme.spacing.sm}`,
                                 fontSize: theme.fontSize.xs,
@@ -1671,7 +1625,6 @@ function App() {
               </AccordionSection>
             )}
 
-            {/* ✅ ENHANCED: History section that shows both regular history and task completions */}
             {commentHistory.length > 0 && (
               <AccordionSection
                 id="history"
@@ -1705,7 +1658,7 @@ function App() {
                   </div>
                 }
               >
-                <div style={{ maxHeight: '120px', overflowY: 'auto' }}>
+                <div style={{ maxHeight: '120px', overflowY: 'auto', marginLeft: '-2px', marginRight: '-2px' }}>
                   {commentHistory.slice(0, 8).map((entry, index) => (
                     <div key={index} style={{
                       padding: theme.spacing.xs,
@@ -1787,7 +1740,7 @@ function App() {
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
-                                insertIntoDraft(entry.result.replace(/<[^>]*>/g, ''));
+                                insertIntoDraft(entry.result);
                               }}
                               style={{
                                 background: 'none',
