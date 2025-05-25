@@ -998,114 +998,213 @@ function App() {
     }
   };
 
-  // ✅ ENHANCED: Draft insertion with multiple strategies
-  const insertIntoDraft = async (content) => {
-    console.log('🔍 AIROPS INSERT: Starting draft insertion process');
-    console.log('🔍 AIROPS INSERT: Content length:', content.length);
-    
-    if (!context) {
-      console.log('❌ AIROPS INSERT: No context available');
-      copyToClipboard(content);
-      setStatus('Copied to clipboard (no context)');
-      return;
-    }
-
-    // ✅ STRATEGY 1: Use Front context methods if available
-    if (typeof context.createDraft === 'function') {
-      console.log('🎯 AIROPS INSERT: Trying Front createDraft method');
-      try {
-        await context.createDraft({
-          body: content,
-          // Add other required fields based on context
-          ...(context.conversation?.id && { conversationId: context.conversation.id })
-        });
-        setStatus('Draft created via Front API!');
-        return;
-      } catch (error) {
-        console.error('❌ AIROPS INSERT: createDraft failed:', error);
-      }
-    }
-
-    if (typeof context.updateDraft === 'function' && context.draft?.id) {
-      console.log('🎯 AIROPS INSERT: Trying Front updateDraft method');
-      try {
-        const existingBody = context.draft.body || '';
-        const newBody = existingBody + (existingBody ? '\n\n' : '') + content;
-        
-        await context.updateDraft(context.draft.id, {
-          updateMode: 'replace', // or 'insert' depending on what's supported
-          body: newBody
-        });
-        setStatus('Draft updated via Front API!');
-        return;
-      } catch (error) {
-        console.error('❌ AIROPS INSERT: updateDraft failed:', error);
-      }
-    }
-
-    // ✅ STRATEGY 2: Front REST API
-    if (context?.conversation?.id && context?.teammate) {
-      console.log('🎯 AIROPS INSERT: Trying Front REST API');
-      
-      try {
-        const conversationId = context.conversation.id;
-        const teammateId = context.teammate.id;
-        const teammateEmail = context.teammate.email;
-        
-        // ✅ Try multiple channel ID formats
-        const channelFormats = [
-          `alt:address:${teammateEmail}`,
-          teammateEmail,
-          context.conversation.channel?.id
-        ].filter(Boolean);
-        
-        for (const channelId of channelFormats) {
-          const url = `https://api2.frontapp.com/conversations/${conversationId}/drafts`;
-          
-          const headers = {
-            "accept": "application/json",
-            "content-type": "application/json",
-            "authorization": "Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzY29wZXMiOlsicHJvdmlzaW9uaW5nIiwicHJpdmF0ZToqIiwic2hhcmVkOioiLCJrYiJdLCJpYXQiOjE3MjkyNTY3MzYsImlzcyI6ImZyb250Iiwic3ViIjoiYzRhYzc3Y2NjN2M5NWNiNzExNzYiLCJqdGkiOiIyNWRlOWQwMzA2ZTI0NGExIn0.KocFXR3MLCqqUU80e3BRZiLo7Zz5wtbee7kxo5V0Xw4"
-          };
-          
-          const payload = {
-            author_id: teammateId,
-            body: content,
-            channel_id: channelId,
-            should_add_default_signature: true
-          };
-          
-          console.log(`🎯 AIROPS INSERT: Trying API with channel: ${channelId}`);
-          
-          const response = await fetch(url, {
-            method: 'POST',
-            headers: headers,
-            body: JSON.stringify(payload)
-          });
-          
-          console.log(`🎯 AIROPS INSERT: API response status: ${response.status}`);
-          
-          if (response.ok) {
-            const result = await response.json();
-            console.log('✅ AIROPS INSERT: Draft created successfully via API:', result);
-            setStatus('Draft created via REST API!');
-            return;
-          } else {
-            const errorText = await response.text();
-            console.error(`❌ AIROPS INSERT: API failed for ${channelId}:`, response.status, errorText);
-          }
-        }
-        
-      } catch (error) {
-        console.error('❌ AIROPS INSERT: REST API error:', error);
-      }
-    }
-    
-    // ✅ FALLBACK: Copy to clipboard
-    console.log('📋 AIROPS INSERT: All methods failed, copying to clipboard');
+// ✅ FIXED: Enhanced draft insertion with correct payload structures
+const insertIntoDraft = async (content) => {
+  console.log('🔍 AIROPS INSERT: Starting draft insertion process');
+  console.log('🔍 AIROPS INSERT: Content length:', content.length);
+  console.log('🔍 AIROPS INSERT: Content preview:', content.substring(0, 200) + '...');
+  
+  if (!context) {
+    console.log('❌ AIROPS INSERT: No context available');
     copyToClipboard(content);
-    setStatus('Copied - Front API unavailable');
-  };
+    setStatus('Copied to clipboard (no context)');
+    return;
+  }
+
+  // ✅ STRATEGY 1: Use Front context createDraft with CORRECT structure
+  if (typeof context.createDraft === 'function') {
+    console.log('🎯 AIROPS INSERT: Trying Front createDraft method');
+    try {
+      const draftTemplate = {
+        content: {
+          body: content,
+          type: 'html' // or 'text' if content is plain text
+        }
+      };
+      
+      console.log('🎯 AIROPS INSERT: Draft template:', draftTemplate);
+      
+      const result = await context.createDraft(draftTemplate);
+      console.log('✅ AIROPS INSERT: Draft created successfully:', result);
+      setStatus('Draft created via Front API!');
+      return;
+    } catch (error) {
+      console.error('❌ AIROPS INSERT: createDraft failed:', error);
+      console.error('❌ AIROPS INSERT: Error details:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      });
+    }
+  }
+
+  // ✅ STRATEGY 2: Use Front context updateDraft with CORRECT structure
+  if (typeof context.updateDraft === 'function' && context.draft?.id) {
+    console.log('🎯 AIROPS INSERT: Trying Front updateDraft method');
+    console.log('🎯 AIROPS INSERT: Current draft ID:', context.draft.id);
+    console.log('🎯 AIROPS INSERT: Current draft body length:', context.draft.content?.body?.length || 0);
+    
+    try {
+      const existingBody = context.draft.content?.body || '';
+      const newBody = existingBody + (existingBody ? '\n\n' : '') + content;
+      
+      const updatePayload = {
+        updateMode: 'replace', // or 'insert' depending on behavior you want
+        content: {
+          body: newBody,
+          type: 'html' // or 'text' if content is plain text  
+        }
+      };
+      
+      console.log('🎯 AIROPS INSERT: Update payload:', {
+        updateMode: updatePayload.updateMode,
+        contentType: updatePayload.content.type,
+        bodyLength: updatePayload.content.body.length
+      });
+      
+      await context.updateDraft(context.draft.id, updatePayload);
+      console.log('✅ AIROPS INSERT: Draft updated successfully');
+      setStatus('Draft updated via Front API!');
+      return;
+    } catch (error) {
+      console.error('❌ AIROPS INSERT: updateDraft failed:', error);
+      console.error('❌ AIROPS INSERT: Error details:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      });
+    }
+  }
+
+  // ✅ STRATEGY 3: Front REST API with CORRECT payload
+  if (context?.conversation?.id && context?.teammate) {
+    console.log('🎯 AIROPS INSERT: Trying Front REST API');
+    
+    try {
+      const conversationId = context.conversation.id;
+      const teammateId = context.teammate.id;
+      const teammateEmail = context.teammate.email;
+      
+      // ✅ Better channel ID detection
+      const channelFormats = [
+        context.conversation.channel?.id, // Try conversation's channel first
+        `alt:address:${teammateEmail}`,
+        teammateEmail
+      ].filter(Boolean);
+      
+      for (const channelId of channelFormats) {
+        const url = `https://api2.frontapp.com/conversations/${conversationId}/drafts`;
+        
+        const headers = {
+          "accept": "application/json",
+          "content-type": "application/json",
+          "authorization": "Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzY29wZXMiOlsicHJvdmlzaW9uaW5nIiwicHJpdmF0ZToqIiwic2hhcmVkOioiLCJrYiJdLCJpYXQiOjE3MjkyNTY3MzYsImlzcyI6ImZyb250Iiwic3ViIjoiYzRhYzc3Y2NjN2M5NWNiNzExNzYiLCJqdGkiOiIyNWRlOWQwMzA2ZTI0NGExIn0.KocFXR3MLCqqUU80e3BRZiLo7Zz5wtbee7kxo5V0Xw4"
+        };
+        
+        // ✅ FIXED: Correct REST API payload structure
+        const payload = {
+          author_id: teammateId,
+          body: content,
+          channel_id: channelId,
+          should_add_default_signature: false // Try without signature first
+        };
+        
+        console.log(`🎯 AIROPS INSERT: Trying API with channel: ${channelId}`);
+        console.log(`🎯 AIROPS INSERT: Payload:`, {
+          author_id: teammateId,
+          channel_id: channelId,
+          bodyLength: content.length,
+          should_add_default_signature: payload.should_add_default_signature
+        });
+        
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: headers,
+          body: JSON.stringify(payload)
+        });
+        
+        console.log(`🎯 AIROPS INSERT: API response status: ${response.status}`);
+        
+        if (response.ok) {
+          const result = await response.json();
+          console.log('✅ AIROPS INSERT: Draft created successfully via API:', result);
+          setStatus('Draft created via REST API!');
+          return;
+        } else {
+          const errorText = await response.text();
+          console.error(`❌ AIROPS INSERT: API failed for ${channelId}:`, {
+            status: response.status,
+            statusText: response.statusText,
+            error: errorText
+          });
+        }
+      }
+      
+    } catch (error) {
+      console.error('❌ AIROPS INSERT: REST API error:', error);
+    }
+  }
+  
+  // ✅ FALLBACK: Copy to clipboard with better feedback
+  console.log('📋 AIROPS INSERT: All methods failed, copying to clipboard');
+  copyToClipboard(content);
+  setStatus('Copied - Front API unavailable');
+};
+
+// ✅ ALSO: Add this debug function to test draft operations
+const debugDraftAPI = async () => {
+  console.log('🧪 DRAFT DEBUG: Testing draft operations');
+  
+  if (!context) {
+    console.log('❌ DRAFT DEBUG: No context');
+    return;
+  }
+  
+  console.log('🧪 DRAFT DEBUG: Context info:', {
+    type: context.type,
+    conversationId: context.conversation?.id,
+    draftId: context.draft?.id,
+    hasCreateDraft: typeof context.createDraft === 'function',
+    hasUpdateDraft: typeof context.updateDraft === 'function',
+    channelId: context.conversation?.channel?.id,
+    teammateId: context.teammate?.id,
+    teammateEmail: context.teammate?.email
+  });
+  
+  // Test with simple content
+  const testContent = "<p>Test draft content from AirOps plugin</p>";
+  
+  if (typeof context.createDraft === 'function') {
+    try {
+      console.log('🧪 DRAFT DEBUG: Testing createDraft...');
+      const result = await context.createDraft({
+        content: {
+          body: testContent,
+          type: 'html'
+        }
+      });
+      console.log('✅ DRAFT DEBUG: createDraft successful:', result);
+    } catch (error) {
+      console.error('❌ DRAFT DEBUG: createDraft failed:', error);
+    }
+  }
+  
+  if (typeof context.updateDraft === 'function' && context.draft?.id) {
+    try {
+      console.log('🧪 DRAFT DEBUG: Testing updateDraft...');
+      const result = await context.updateDraft(context.draft.id, {
+        updateMode: 'insert',
+        content: {
+          body: testContent,
+          type: 'html'
+        }
+      });
+      console.log('✅ DRAFT DEBUG: updateDraft successful:', result);
+    } catch (error) {
+      console.error('❌ DRAFT DEBUG: updateDraft failed:', error);
+    }
+  }
+};
 
   const copyToClipboard = (content) => {
     // Convert HTML to clean text
@@ -2527,5 +2626,194 @@ function App() {
     </div>
   );
 }
+// ✅ Add this function to your App component (before the return statement)
+
+const debugFrontContextDetailed = () => {
+  console.log('🔍 DETAILED FRONT CONTEXT DEBUG FROM REACT');
+  console.log('============================================');
+  
+  // 1. Basic context info
+  console.log('1. CONTEXT OVERVIEW:');
+  console.log('- Context exists:', !!context);
+  console.log('- Context type:', context?.type);
+  console.log('- Context constructor:', context?.constructor?.name);
+  console.log('- Is Proxy:', context?.constructor?.name === 'Object' ? 'Possibly' : 'No');
+  
+  if (!context) {
+    console.log('❌ No context available for detailed debugging');
+    return;
+  }
+  
+  // 2. Context properties
+  console.log('\n2. CONTEXT PROPERTIES:');
+  console.log('- Enumerable keys:', Object.keys(context));
+  console.log('- Own properties:', Object.getOwnPropertyNames(context));
+  console.log('- Prototype properties:', Object.getOwnPropertyNames(Object.getPrototypeOf(context)));
+  
+  // 3. Context data
+  console.log('\n3. CONTEXT DATA:');
+  console.log('- Type:', context.type);
+  console.log('- ID:', context.id);
+  console.log('- Conversation:', context.conversation ? {
+    id: context.conversation.id,
+    type: context.conversation.type,
+    subject: context.conversation.subject,
+    channel: context.conversation.channel
+  } : 'None');
+  console.log('- Draft:', context.draft ? {
+    id: context.draft.id,
+    isEditable: context.draft.isEditable,
+    bodyLength: context.draft.content?.body?.length || 0,
+    channel: context.draft.channel
+  } : 'None');
+  console.log('- Teammate:', context.teammate ? {
+    id: context.teammate.id,
+    name: context.teammate.name,
+    email: context.teammate.email
+  } : 'None');
+  
+  // 4. Method detection
+  console.log('\n4. METHOD DETECTION:');
+  const methodsToCheck = [
+    'createDraft', 'updateDraft', 'fetchDraft',
+    'listMessages', 'listComments', 'listTeammates',
+    'addLink', 'assign', 'move', 'setStatus', 'tag', 'untag',
+    'sendHttp', 'relayHttp', 'authenticate', 'openUrl'
+  ];
+  
+  methodsToCheck.forEach(methodName => {
+    const exists = typeof context[methodName] === 'function';
+    console.log(`   ${exists ? '✅' : '❌'} ${methodName}: ${exists ? 'Available' : 'Missing'}`);
+    
+    // If method exists, try to get its signature
+    if (exists) {
+      try {
+        console.log(`      └── ${methodName} signature:`, context[methodName].toString().split('{')[0]);
+      } catch (e) {
+        console.log(`      └── ${methodName} signature: Unable to inspect`);
+      }
+    }
+  });
+  
+  // 5. Test draft operations safely
+  console.log('\n5. TESTING DRAFT OPERATIONS:');
+  
+  if (typeof context.createDraft === 'function') {
+    console.log('🧪 Testing createDraft...');
+    
+    const testPayloads = [
+      // Test 1: Basic HTML content
+      {
+        name: 'HTML content',
+        payload: {
+          content: {
+            body: '<p>Test draft from AirOps debug</p>',
+            type: 'html'
+          }
+        }
+      },
+      // Test 2: Plain text content  
+      {
+        name: 'Plain text content',
+        payload: {
+          content: {
+            body: 'Test draft from AirOps debug (plain text)',
+            type: 'text'
+          }
+        }
+      },
+      // Test 3: Just body (your original approach)
+      {
+        name: 'Direct body',
+        payload: {
+          body: 'Test draft direct body'
+        }
+      }
+    ];
+    
+    testPayloads.forEach(async (test, index) => {
+      try {
+        console.log(`   🧪 Test ${index + 1} (${test.name}):`, test.payload);
+        const result = await context.createDraft(test.payload);
+        console.log(`   ✅ Test ${index + 1} SUCCESS:`, result);
+      } catch (error) {
+        console.error(`   ❌ Test ${index + 1} FAILED:`, error);
+        console.error(`   ❌ Error details:`, {
+          message: error.message,
+          name: error.name,
+          stack: error.stack?.split('\n')[0]
+        });
+      }
+    });
+  }
+  
+  if (typeof context.updateDraft === 'function' && context.draft?.id) {
+    console.log('🧪 Testing updateDraft...');
+    
+    const updateTests = [
+      {
+        name: 'Replace with HTML',
+        payload: {
+          updateMode: 'replace',
+          content: {
+            body: '<p>Updated via debug test (HTML)</p>',
+            type: 'html'
+          }
+        }
+      },
+      {
+        name: 'Insert with HTML',
+        payload: {
+          updateMode: 'insert', 
+          content: {
+            body: '<p>Inserted via debug test (HTML)</p>',
+            type: 'html'
+          }
+        }
+      }
+    ];
+    
+    updateTests.forEach(async (test, index) => {
+      try {
+        console.log(`   🧪 Update test ${index + 1} (${test.name}):`, test.payload);
+        const result = await context.updateDraft(context.draft.id, test.payload);
+        console.log(`   ✅ Update test ${index + 1} SUCCESS:`, result);
+      } catch (error) {
+        console.error(`   ❌ Update test ${index + 1} FAILED:`, error);
+      }
+    });
+  }
+  
+  // 6. Context function arities (if available)
+  if (context.functionArities) {
+    console.log('\n6. FUNCTION ARITIES:', context.functionArities);
+  }
+  
+  console.log('\n✅ Detailed debug complete!');
+  setStatus('Debug complete - check console');
+};
+
+// ✅ Add this button to your debug section (next to the existing 🧪 button):
+
+<button
+  onClick={debugFrontContextDetailed}
+  style={{
+    background: 'none',
+    border: 'none',
+    cursor: 'pointer',
+    padding: theme.spacing.xs,
+    borderRadius: theme.borderRadius.sm,
+    color: theme.colors.tertiary,
+    fontSize: theme.fontSize.lg,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center'
+  }}
+  onMouseEnter={(e) => e.target.style.color = theme.colors.info}
+  onMouseLeave={(e) => e.target.style.color = theme.colors.tertiary}
+  title="Detailed Front debug (check console)"
+>
+  🔬
+</button>
 
 export default App;
