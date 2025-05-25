@@ -5,7 +5,7 @@ import {
   AccordionSection,
   Button,
   ButtonGroup,
-  TrashIcon
+  Icon
 } from '@frontapp/ui-kit';
 import {
   SuccessIcon,
@@ -60,6 +60,22 @@ function App() {
     { value: 'text', label: 'Text' },
     { value: 'table', label: 'Table' }
   ];
+
+  // Safe Front Trash Icon - tries Front's Icon component first, falls back to simple text
+  const SafeTrashIcon = ({ size = 12 }) => {
+    try {
+      return (
+        <Icon 
+          name="Trash" 
+          size={size} 
+          shouldDisableColor={true}
+        />
+      );
+    } catch (e) {
+      // Fallback to simple text if Icon component fails
+      return <span style={{ fontSize: `${size}px` }}>🗑️</span>;
+    }
+  };
 
   // Compact, consistent styling configuration
   const theme = {
@@ -1398,7 +1414,7 @@ function App() {
                       }}
                       title="Clear all tasks"
                     >
-                      <TrashIcon style={{ width: '10px', height: '10px' }} />
+                      <SafeTrashIcon size={10} />
                       Clear All
                     </button>
                   </div>
@@ -1488,7 +1504,7 @@ function App() {
                           onMouseLeave={(e) => e.target.style.color = theme.colors.tertiary}
                           title="Delete this task"
                         >
-                          <TrashIcon style={{ width: '10px', height: '10px' }} />
+                          <SafeTrashIcon size={10} />
                         </button>
                       </div>
 
@@ -1699,8 +1715,7 @@ function App() {
                       }}
                       title="Clear all history"
                     >
-                      <TrashIcon style={{ width: '10px', height: '10px' }} />
-                      Clear All
+                      🗑️ Clear All
                     </button>
                   </div>
                 }
