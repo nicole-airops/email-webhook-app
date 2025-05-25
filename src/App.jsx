@@ -35,11 +35,12 @@ function App() {
   const [commentHistory, setCommentHistory] = useState([]);
   const [taskResults, setTaskResults] = useState([]);
   const [pollingTasks, setPollingTasks] = useState(new Set());
+  const [expandedTasks, setExpandedTasks] = useState(new Set()); // Track expanded tasks
   
   // Compact auto-resize state - 0.5" thinner (≈36px) from original 280px = 244px
   const [cardSize, setCardSize] = useState({ width: 244, height: 360 });
   const [isResizing, setIsResizing] = useState(false);
-  const [textareaHeight, setTextareaHeight] = useState(55);
+  const [textareaHeight, setTextareaHeight] = useState(65); // Increased from 55
   const [isTextareaResizing, setIsTextareaResizing] = useState(false);
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
   
@@ -62,7 +63,7 @@ function App() {
     { value: 'table', label: 'Table' }
   ];
 
-  // Ultra-compact theme
+  // Ultra-compact theme - MADE BIGGER
   const theme = {
     colors: {
       primary: '#0f172a',
@@ -79,23 +80,23 @@ function App() {
       accent: '#6366f1'
     },
     spacing: {
-      xs: '2px',
-      sm: '4px',
-      md: '6px',
-      lg: '8px',
-      xl: '12px'
+      xs: '3px',    // was 2px
+      sm: '6px',    // was 4px  
+      md: '8px',    // was 6px
+      lg: '12px',   // was 8px
+      xl: '16px'    // was 12px
     },
     borderRadius: {
-      sm: '3px',
-      md: '4px',
-      lg: '5px'
+      sm: '4px',    // was 3px
+      md: '6px',    // was 4px
+      lg: '8px'     // was 5px
     },
     fontSize: {
-      xs: '9px',
-      sm: '10px',
-      base: '11px',
-      lg: '12px',
-      xl: '13px'
+      xs: '10px',   // was 9px
+      sm: '11px',   // was 10px
+      base: '12px', // was 11px
+      lg: '14px',   // was 12px
+      xl: '16px'    // was 13px
     },
     shadows: {
       sm: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
@@ -702,6 +703,10 @@ function App() {
         console.log(`📋 Loaded ${tasks?.length || 0} tasks`);
         setTaskResults(tasks || []);
         
+        // Auto-expand completed tasks
+        const completedTaskIds = (tasks || []).filter(task => task.status === 'completed').map(task => task.id);
+        setExpandedTasks(new Set(completedTaskIds));
+        
         const pendingTasks = (tasks || []).filter(task => task.status === 'pending').map(task => task.id);
         if (pendingTasks.length > 0) {
           setPollingTasks(new Set(pendingTasks));
@@ -717,7 +722,7 @@ function App() {
     }
   };
 
-  const insertIntoDraft = (content) => {
+  const insertIntoDraft = async (content) => {
     // Clean HTML content same way as copy function
     const tempDiv = document.createElement('div');
     tempDiv.innerHTML = content;
@@ -739,20 +744,128 @@ function App() {
     
     const cleanContent = tempDiv.textContent || tempDiv.innerText || content.replace(/<[^>]*>/g, '');
     
-    if (context && context.draft && typeof context.insertTextIntoBody === 'function') {
-      context.insertTextIntoBody(cleanContent);
-      setStatus('Inserted!');
-    } else if (context && typeof context.createDraft === 'function') {
-      context.createDraft({
-        content: {
+    // 🔍 DEBUG: Log context details (look for these in console!)
+    console.log('🔍 AIROPS DEBUG - Context Type:', context?.type);
+    console.log('🔍 AIROPS DEBUG - Has Draft:', !!context?.draft);
+    console.log('🔍 AIROPS DEBUG - Draft Body:', context?.draft?.body);
+    console.log('🔍 AIROPS DEBUG - Available Methods:', context ? Object.keys(context).filter(key => typeof context[key] === 'function') : []);
+    
+    if (!context) {
+      console.log('❌ AIROPS: No context available');
+      copyToClipboard(content);
+      return;
+    }
+    
+    try {
+      // 🎯 STRATEGY 1: Message Composer Context (most common)
+      if (context.type === 'messageComposer') {
+        console.log('🎯 AIROPS: Trying messageComposer insertion');
+        
+        // Try multiple messageComposer methods
+        if (typeof context.insertTextIntoBody === 'function') {
+          console.log('✅ AIROPS: Using insertTextIntoBody');
+          await context.insertTextIntoBody(cleanContent);
+          setStatus('Inserted into draft!');
+          return;
+        }
+        
+        if (typeof context.insertText === 'function') {
+          console.log('✅ AIROPS: Using insertText');
+          await context.insertText(cleanContent);
+          setStatus('Inserted into draft!');
+          return;
+        }
+        
+        if (context.draft && typeof context.draft.insertText === 'function') {
+          console.log('✅ AIROPS: Using draft.insertText');
+          await context.draft.insertText(cleanContent);
+          setStatus('Inserted into draft!');
+          return;
+        }
+      }
+      
+      // 🎯 STRATEGY 2: Conversation Context with Draft
+      if (context.type === 'conversation' && context.draft) {
+        console.log('🎯 AIROPS: Trying conversation context with draft');
+        
+        if (typeof context.insertTextIntoBody === 'function') {
+          console.log('✅ AIROPS: Using conversation insertTextIntoBody');
+          await context.insertTextIntoBody(cleanContent);
+          setStatus('Inserted into draft!');
+          return;
+        }
+        
+        // Try updating draft body directly
+        if (typeof context.updateDraft === 'function') {
+          console.log('✅ AIROPS: Using updateDraft');
+          const existingBody = context.draft.body || '';
+          const newBody = existingBody + (existingBody ? '\n\n' : '') + cleanContent;
+          await context.updateDraft({ body: newBody });
+          setStatus('Added to draft!');
+          return;
+        }
+        
+        // Try draft.update method
+        if (context.draft && typeof context.draft.update === 'function') {
+          console.log('✅ AIROPS: Using draft.update');
+          const existingBody = context.draft.body || '';
+          const newBody = existingBody + (existingBody ? '\n\n' : '') + cleanContent;
+          await context.draft.update({ body: newBody });
+          setStatus('Added to draft!');
+          return;
+        }
+      }
+      
+      // 🎯 STRATEGY 3: Generic Context Methods
+      console.log('🎯 AIROPS: Trying generic context methods');
+      
+      if (typeof context.insertTextIntoBody === 'function') {
+        console.log('✅ AIROPS: Using generic insertTextIntoBody');
+        await context.insertTextIntoBody(cleanContent);
+        setStatus('Inserted into draft!');
+        return;
+      }
+      
+      if (typeof context.insertText === 'function') {
+        console.log('✅ AIROPS: Using generic insertText');
+        await context.insertText(cleanContent);
+        setStatus('Inserted into draft!');
+        return;
+      }
+      
+      // 🎯 STRATEGY 4: Create New Draft (last resort)
+      if (typeof context.createDraft === 'function') {
+        console.log('⚠️ AIROPS: Creating new draft (no existing draft found)');
+        await context.createDraft({
           body: cleanContent,
           type: 'text'
-        }
-      });
-      setStatus('Draft created!');
-    } else {
-      copyToClipboard(content); // Fallback to copy
+        });
+        setStatus('New draft created!');
+        return;
+      }
+      
+      // 🎯 STRATEGY 5: Alternative createDraft format
+      if (typeof context.createDraft === 'function') {
+        console.log('⚠️ AIROPS: Trying alternative createDraft format');
+        await context.createDraft({
+          content: {
+            body: cleanContent,
+            type: 'text'
+          }
+        });
+        setStatus('New draft created!');
+        return;
+      }
+      
+    } catch (error) {
+      console.error('❌ AIROPS: Insert error:', error);
+      setStatus('Insert failed: ' + error.message);
     }
+    
+    // 📋 FALLBACK: Copy to clipboard
+    console.log('📋 AIROPS: Falling back to clipboard');
+    copyToClipboard(content);
+    setStatus('Copied to clipboard (insert failed)');
   };
 
   const copyToClipboard = (content) => {
@@ -939,6 +1052,19 @@ function App() {
     }
   };
 
+  // Toggle individual task expansion
+  const toggleTaskExpansion = (taskId) => {
+    setExpandedTasks(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(taskId)) {
+        newSet.delete(taskId);
+      } else {
+        newSet.add(taskId);
+      }
+      return newSet;
+    });
+  };
+
   const viewTaskInNewWindow = (task) => {
     const newWindow = window.open('', '_blank');
     newWindow.document.write(`
@@ -1075,6 +1201,17 @@ function App() {
         transition: isResizing ? 'none' : 'width 0.2s ease, height 0.2s ease'
       }}
     >
+      {/* Add CSS animations */}
+      <style jsx>{`
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translateY(-4px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
       {/* Ultra-compact Header */}
       <div style={{
         display: 'flex',
@@ -1408,28 +1545,50 @@ function App() {
                         fontSize: theme.fontSize.xs
                       }}
                     >
-                      {/* Task Header */}
-                      <div style={{ 
-                        display: 'flex', 
-                        alignItems: 'center', 
-                        justifyContent: 'space-between',
-                        marginBottom: theme.spacing.xs 
-                      }}>
+                      {/* Task Header - CLICKABLE */}
+                      <div 
+                        onClick={() => toggleTaskExpansion(task.id)}
+                        style={{ 
+                          display: 'flex', 
+                          alignItems: 'center', 
+                          justifyContent: 'space-between',
+                          marginBottom: theme.spacing.xs,
+                          cursor: 'pointer',
+                          padding: theme.spacing.xs,
+                          borderRadius: theme.borderRadius.sm,
+                          transition: 'background-color 0.2s ease'
+                        }}
+                        onMouseEnter={(e) => e.target.style.backgroundColor = theme.colors.background}
+                        onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
+                        title="Click to expand/collapse"
+                      >
                         <div style={{ display: 'flex', alignItems: 'center', flex: 1 }}>
+                          {/* Expand/Collapse Icon */}
+                          <div style={{ 
+                            marginRight: theme.spacing.sm,
+                            transform: expandedTasks.has(task.id) ? 'rotate(90deg)' : 'rotate(0deg)',
+                            transition: 'transform 0.2s ease',
+                            fontSize: theme.fontSize.xs,
+                            color: theme.colors.tertiary
+                          }}>
+                            ▶
+                          </div>
+                          
+                          {/* Status Icon */}
                           {task.status === 'pending' ? (
                             <div style={{ 
-                              width: '10px', 
-                              height: '10px', 
-                              marginRight: theme.spacing.xs,
+                              width: '12px', 
+                              height: '12px', 
+                              marginRight: theme.spacing.sm,
                               border: `2px solid ${theme.colors.accent}`,
                               borderTop: '2px solid transparent',
                               borderRadius: '50%',
                               animation: 'spin 1s linear infinite'
                             }} />
                           ) : task.status === 'completed' ? (
-                            <CheckmarkIcon size={10} color={theme.colors.success} style={{ marginRight: theme.spacing.xs }} />
+                            <CheckmarkIcon size={12} color={theme.colors.success} style={{ marginRight: theme.spacing.sm }} />
                           ) : (
-                            <WarningIcon size={10} color={theme.colors.warning} style={{ marginRight: theme.spacing.xs }} />
+                            <WarningIcon size={12} color={theme.colors.warning} style={{ marginRight: theme.spacing.sm }} />
                           )}
                           
                           <div style={{ flex: 1 }}>
@@ -1444,24 +1603,27 @@ function App() {
                               }
                               {task.hasFile && (
                                 <AttachmentIcon 
-                                  size={8} 
+                                  size={10} 
                                   color={theme.colors.tertiary} 
-                                  style={{ marginLeft: theme.spacing.xs }} 
+                                  style={{ marginLeft: theme.spacing.sm }} 
                                 />
                               )}
                             </div>
                             <div style={{ 
                               color: theme.colors.tertiary, 
                               fontSize: theme.fontSize.xs,
-                              marginTop: '1px'
+                              marginTop: '2px'
                             }}>
                               {formatDate(task.createdAt)} • {task.user}
                             </div>
                           </div>
                         </div>
                         
-                        {/* Action buttons */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: theme.spacing.xs }}>
+                        {/* Action buttons - Don't trigger expand/collapse */}
+                        <div 
+                          style={{ display: 'flex', alignItems: 'center', gap: theme.spacing.xs }}
+                          onClick={(e) => e.stopPropagation()} // Prevent expand/collapse
+                        >
                           {task.result && (
                             <button
                               onClick={() => viewTaskInNewWindow(task)}
@@ -1480,7 +1642,7 @@ function App() {
                               onMouseLeave={(e) => e.target.style.color = theme.colors.tertiary}
                               title="View task result"
                             >
-                              <Icon name="ExternalLink" size={10} />
+                              <Icon name="ExternalLink" size={12} />
                             </button>
                           )}
                           <button
@@ -1500,123 +1662,131 @@ function App() {
                             onMouseLeave={(e) => e.target.style.color = theme.colors.tertiary}
                             title="Delete this task"
                           >
-                            <Icon name="Trash" size={10} />
+                            <Icon name="Trash" size={12} />
                           </button>
                         </div>
                       </div>
 
-                      {/* Task Status */}
-                      <div style={{
-                        padding: `${theme.spacing.xs} ${theme.spacing.sm}`,
-                        background: task.status === 'completed' ? 
-                          `${theme.colors.success}15` : 
-                          task.status === 'failed' ? 
-                          `${theme.colors.warning}15` : 
-                          `${theme.colors.accent}15`,
-                        border: `1px solid ${
-                          task.status === 'completed' ? 
-                          theme.colors.success : 
-                          task.status === 'failed' ? 
-                          theme.colors.warning : 
-                          theme.colors.accent
-                        }`,
-                        borderRadius: theme.borderRadius.sm,
-                        fontSize: theme.fontSize.xs,
-                        color: task.status === 'completed' ? 
-                          theme.colors.success : 
-                          task.status === 'failed' ? 
-                          theme.colors.warning : 
-                          theme.colors.accent,
-                        marginBottom: task.result ? theme.spacing.xs : '0',
-                        fontWeight: '500'
-                      }}>
-                        {task.status === 'pending' && 'Processing...'}
-                        {task.status === 'completed' && 'Completed'}
-                        {task.status === 'failed' && 'Failed'}
-                      </div>
-
-                      {/* ✅ FIXED: Task Result Content with better alignment */}
-                      {task.result && (
-                        <div>
+                      {/* Expandable Content */}
+                      {expandedTasks.has(task.id) && (
+                        <div style={{ 
+                          paddingLeft: theme.spacing.lg,
+                          animation: 'fadeIn 0.2s ease-out'
+                        }}>
+                          {/* Task Status */}
                           <div style={{
-                            background: theme.colors.surface,
-                            border: `1px solid ${theme.colors.border}`,
-                            borderRadius: theme.borderRadius.md,
-                            padding: theme.spacing.sm,
-                            marginBottom: theme.spacing.xs,
-                            maxHeight: '100px',
-                            overflowY: 'auto',
-                            fontSize: theme.fontSize.xs,
-                            lineHeight: '1.4'
+                            padding: `${theme.spacing.sm} ${theme.spacing.lg}`,
+                            background: task.status === 'completed' ? 
+                              `${theme.colors.success}15` : 
+                              task.status === 'failed' ? 
+                              `${theme.colors.warning}15` : 
+                              `${theme.colors.accent}15`,
+                            border: `1px solid ${
+                              task.status === 'completed' ? 
+                              theme.colors.success : 
+                              task.status === 'failed' ? 
+                              theme.colors.warning : 
+                              theme.colors.accent
+                            }`,
+                            borderRadius: theme.borderRadius.sm,
+                            fontSize: theme.fontSize.sm,
+                            color: task.status === 'completed' ? 
+                              theme.colors.success : 
+                              task.status === 'failed' ? 
+                              theme.colors.warning : 
+                              theme.colors.accent,
+                            marginBottom: task.result ? theme.spacing.sm : '0',
+                            fontWeight: '500'
                           }}>
-                            <div 
-                              dangerouslySetInnerHTML={{ __html: task.result }}
-                              style={{ 
-                                color: theme.colors.primary
-                              }}
-                            />
+                            {task.status === 'pending' && 'Processing...'}
+                            {task.status === 'completed' && 'Completed'}
+                            {task.status === 'failed' && 'Failed'}
                           </div>
-                          
-                          <div style={{ 
-                            display: 'flex', 
-                            gap: theme.spacing.xs,
-                            flexWrap: 'wrap'
-                          }}>
-                            <button
-                              onClick={() => copyToClipboard(task.result)}
-                              style={{
-                                padding: `${theme.spacing.xs} ${theme.spacing.sm}`,
-                                fontSize: theme.fontSize.xs,
-                                minHeight: 'auto',
-                                display: 'flex',
-                                alignItems: 'center',
-                                background: theme.colors.background,
+
+                          {/* Task Result Content */}
+                          {task.result && (
+                            <div>
+                              <div style={{
+                                background: theme.colors.surface,
                                 border: `1px solid ${theme.colors.border}`,
-                                borderRadius: theme.borderRadius.sm,
-                                cursor: 'pointer',
-                                color: theme.colors.secondary,
-                                transition: 'all 0.2s ease'
-                              }}
-                              onMouseEnter={(e) => {
-                                e.target.style.borderColor = theme.colors.borderHover;
-                                e.target.style.backgroundColor = theme.colors.surface;
-                              }}
-                              onMouseLeave={(e) => {
-                                e.target.style.borderColor = theme.colors.border;
-                                e.target.style.backgroundColor = theme.colors.background;
-                              }}
-                            >
-                              <Icon name="Copy" size={8} style={{ marginRight: '2px' }} />
-                              Copy
-                            </button>
-                            <button
-                              onClick={() => insertIntoDraft(task.result)}
-                              style={{
-                                padding: `${theme.spacing.xs} ${theme.spacing.sm}`,
-                                fontSize: theme.fontSize.xs,
-                                minHeight: 'auto',
-                                display: 'flex',
-                                alignItems: 'center',
-                                background: theme.colors.background,
-                                border: `1px solid ${theme.colors.border}`,
-                                borderRadius: theme.borderRadius.sm,
-                                cursor: 'pointer',
-                                color: theme.colors.secondary,
-                                transition: 'all 0.2s ease'
-                              }}
-                              onMouseEnter={(e) => {
-                                e.target.style.borderColor = theme.colors.borderHover;
-                                e.target.style.backgroundColor = theme.colors.surface;
-                              }}
-                              onMouseLeave={(e) => {
-                                e.target.style.borderColor = theme.colors.border;
-                                e.target.style.backgroundColor = theme.colors.background;
-                              }}
-                            >
-                              <InsertIcon size={8} color={theme.colors.secondary} style={{ marginRight: '2px' }} />
-                              Insert
-                            </button>
-                          </div>
+                                borderRadius: theme.borderRadius.md,
+                                padding: theme.spacing.lg,
+                                marginBottom: theme.spacing.sm,
+                                maxHeight: '200px',
+                                overflowY: 'auto',
+                                fontSize: theme.fontSize.sm,
+                                lineHeight: '1.5'
+                              }}>
+                                <div 
+                                  dangerouslySetInnerHTML={{ __html: task.result }}
+                                  style={{ 
+                                    color: theme.colors.primary
+                                  }}
+                                />
+                              </div>
+                              
+                              <div style={{ 
+                                display: 'flex', 
+                                gap: theme.spacing.sm,
+                                flexWrap: 'wrap'
+                              }}>
+                                <button
+                                  onClick={() => copyToClipboard(task.result)}
+                                  style={{
+                                    padding: `${theme.spacing.sm} ${theme.spacing.lg}`,
+                                    fontSize: theme.fontSize.sm,
+                                    minHeight: 'auto',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    background: theme.colors.background,
+                                    border: `1px solid ${theme.colors.border}`,
+                                    borderRadius: theme.borderRadius.sm,
+                                    cursor: 'pointer',
+                                    color: theme.colors.secondary,
+                                    transition: 'all 0.2s ease'
+                                  }}
+                                  onMouseEnter={(e) => {
+                                    e.target.style.borderColor = theme.colors.borderHover;
+                                    e.target.style.backgroundColor = theme.colors.surface;
+                                  }}
+                                  onMouseLeave={(e) => {
+                                    e.target.style.borderColor = theme.colors.border;
+                                    e.target.style.backgroundColor = theme.colors.background;
+                                  }}
+                                >
+                                  <Icon name="Copy" size={10} style={{ marginRight: theme.spacing.xs }} />
+                                  Copy
+                                </button>
+                                <button
+                                  onClick={() => insertIntoDraft(task.result)}
+                                  style={{
+                                    padding: `${theme.spacing.sm} ${theme.spacing.lg}`,
+                                    fontSize: theme.fontSize.sm,
+                                    minHeight: 'auto',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    background: theme.colors.background,
+                                    border: `1px solid ${theme.colors.border}`,
+                                    borderRadius: theme.borderRadius.sm,
+                                    cursor: 'pointer',
+                                    color: theme.colors.secondary,
+                                    transition: 'all 0.2s ease'
+                                  }}
+                                  onMouseEnter={(e) => {
+                                    e.target.style.borderColor = theme.colors.borderHover;
+                                    e.target.style.backgroundColor = theme.colors.surface;
+                                  }}
+                                  onMouseLeave={(e) => {
+                                    e.target.style.borderColor = theme.colors.border;
+                                    e.target.style.backgroundColor = theme.colors.background;
+                                  }}
+                                >
+                                  <InsertIcon size={10} color={theme.colors.secondary} style={{ marginRight: theme.spacing.xs }} />
+                                  Insert
+                                </button>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
