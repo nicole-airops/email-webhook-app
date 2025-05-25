@@ -24,21 +24,56 @@ export default async (request, context) => {
 
   try {
     const payload = await request.json();
-    console.log('🔔 AirOps task completion webhook received:', JSON.stringify(payload, null, 2));
+    console.log('🔔 AIROPS WEBHOOK: Full payload received:', JSON.stringify(payload, null, 2));
     
-    // Handle different payload structures from AirOps
-    const taskId = payload.taskId || payload.task_id || payload.request_info?.task_id;
-    const status = payload.status || 'completed';
-    const result = payload.result || payload.output || payload.data;
-    const error = payload.error;
+    // ✅ ENHANCED: Multiple strategies to extract task ID
+    const taskId = payload.taskId || 
+                   payload.task_id || 
+                   payload.request_info?.task_id ||
+                   payload.metadata?.task_id;
+    
+    console.log('🔍 AIROPS WEBHOOK: Task ID extraction attempts:');
+    console.log('- payload.taskId:', payload.taskId);
+    console.log('- payload.task_id:', payload.task_id);
+    console.log('- payload.request_info?.task_id:', payload.request_info?.task_id);
+    console.log('- payload.metadata?.task_id:', payload.metadata?.task_id);
+    console.log('- Final taskId:', taskId);
+    
+    // ✅ ENHANCED: Multiple strategies to extract conversation ID
     const conversationId = payload.conversationId || 
                           payload.conversation_id ||
                           payload.metadata?.conversation_id ||
+                          payload.request_info?.conversation_id ||
                           payload.airops_request?.front_conversation?.conversation?.id;
     
+    console.log('🔍 AIROPS WEBHOOK: Conversation ID extraction attempts:');
+    console.log('- payload.conversationId:', payload.conversationId);
+    console.log('- payload.conversation_id:', payload.conversation_id);
+    console.log('- payload.metadata?.conversation_id:', payload.metadata?.conversation_id);
+    console.log('- payload.request_info?.conversation_id:', payload.request_info?.conversation_id);
+    console.log('- Final conversationId:', conversationId);
+    
+    // Extract other data
+    const status = payload.status || 'completed';
+    const result = payload.result || payload.output || payload.data;
+    const error = payload.error;
+    
+    console.log('🔍 AIROPS WEBHOOK: Extracted data:');
+    console.log('- taskId:', taskId);
+    console.log('- conversationId:', conversationId);
+    console.log('- status:', status);
+    console.log('- result length:', result ? result.length : 0);
+    console.log('- error:', error);
+    
     if (!taskId) {
-      console.error('❌ Missing taskId in webhook payload');
-      return new Response(JSON.stringify({ error: 'taskId is required' }), {
+      console.error('❌ AIROPS WEBHOOK: Missing taskId in webhook payload');
+      return new Response(JSON.stringify({ 
+        error: 'taskId is required',
+        debug: {
+          availableFields: Object.keys(payload),
+          payload: payload
+        }
+      }), {
         status: 400,
         headers: { 
           'Access-Control-Allow-Origin': '*',
@@ -47,21 +82,23 @@ export default async (request, context) => {
       });
     }
 
-    console.log(`📋 Processing completion for task: ${taskId}, status: ${status}, conversation: ${conversationId}`);
+    console.log(`📋 AIROPS WEBHOOK: Processing completion for task: ${taskId}, status: ${status}, conversation: ${conversationId}`);
 
     const tasksStore = getStore('tasks');
     const conversationTasksStore = getStore('conversation-tasks');
     const historyStore = getStore('conversation-history');
     
-    // 1. Update individual task storage (for status checks)
+    // 1. ✅ ENHANCED: Update individual task storage with better logging
+    console.log(`📋 AIROPS WEBHOOK: Looking for individual task: ${taskId}`);
     const existingTaskData = await tasksStore.get(taskId);
     let individualTask = {};
     
     if (existingTaskData) {
       individualTask = JSON.parse(existingTaskData);
-      console.log(`📋 Found existing individual task: ${taskId}`);
+      console.log(`📋 AIROPS WEBHOOK: Found existing individual task:`, individualTask);
     } else {
-      console.log(`⚠️ No existing individual task found for: ${taskId}`);
+      console.log(`⚠️ AIROPS WEBHOOK: No existing individual task found for: ${taskId}`);
+      console.log(`⚠️ AIROPS WEBHOOK: This might be normal if the task was created recently`);
     }
 
     // Update individual task with completion data
@@ -71,34 +108,41 @@ export default async (request, context) => {
     
     if (result) {
       individualTask.result = result;
+      console.log(`📋 AIROPS WEBHOOK: Added result of length ${result.length} to task ${taskId}`);
     }
     
     if (error) {
       individualTask.error = error;
       individualTask.status = 'failed';
+      console.log(`❌ AIROPS WEBHOOK: Task ${taskId} failed with error:`, error);
     }
 
     // Save updated individual task
     await tasksStore.set(taskId, JSON.stringify(individualTask));
-    console.log(`✅ Updated individual task storage for: ${taskId}`);
+    console.log(`✅ AIROPS WEBHOOK: Updated individual task storage for: ${taskId}`);
 
-    // 2. Update conversation-level task storage
+    // 2. ✅ ENHANCED: Update conversation-level task storage with better logging
     const finalConversationId = conversationId || individualTask.conversationId;
     
     if (finalConversationId) {
-      console.log(`📋 Updating conversation tasks and history for: ${finalConversationId}`);
+      console.log(`📋 AIROPS WEBHOOK: Updating conversation tasks for: ${finalConversationId}`);
       
       try {
-        // Update conversation tasks
+        // Load conversation tasks
         const conversationTasksData = await conversationTasksStore.get(finalConversationId);
         let conversationTasks = conversationTasksData ? JSON.parse(conversationTasksData) : [];
         
-        console.log(`📋 Found ${conversationTasks.length} tasks in conversation storage`);
+        console.log(`📋 AIROPS WEBHOOK: Found ${conversationTasks.length} tasks in conversation storage`);
+        console.log(`📋 AIROPS WEBHOOK: Task IDs in conversation:`, conversationTasks.map(t => t.id));
         
         // Find and update the specific task in the conversation
         const taskIndex = conversationTasks.findIndex(task => task.id === taskId);
+        console.log(`📋 AIROPS WEBHOOK: Task index in conversation: ${taskIndex}`);
         
         if (taskIndex !== -1) {
+          const oldTask = conversationTasks[taskIndex];
+          console.log(`📋 AIROPS WEBHOOK: Updating task at index ${taskIndex}:`, oldTask);
+          
           conversationTasks[taskIndex] = {
             ...conversationTasks[taskIndex],
             status: individualTask.status,
@@ -107,19 +151,23 @@ export default async (request, context) => {
             error: error || null
           };
           
+          console.log(`📋 AIROPS WEBHOOK: Updated task:`, conversationTasks[taskIndex]);
+          
           // Save updated conversation tasks
           await conversationTasksStore.set(finalConversationId, JSON.stringify(conversationTasks));
-          console.log(`✅ Updated conversation task storage for: ${finalConversationId}, task: ${taskId}`);
+          console.log(`✅ AIROPS WEBHOOK: Updated conversation task storage for: ${finalConversationId}, task: ${taskId}`);
           
-          // 3. ✅ NEW: Save completed task result to conversation history
+          // 3. ✅ ENHANCED: Save completed task result to conversation history
           if (result && status === 'completed') {
             try {
+              console.log(`📚 AIROPS WEBHOOK: Adding task completion to history for conversation: ${finalConversationId}`);
+              
               const historyData = await historyStore.get(finalConversationId);
               const currentHistory = historyData ? JSON.parse(historyData) : [];
               
               // Create history entry for completed task
               const historyEntry = {
-                text: `Task completed: ${individualTask.comment || 'Task'}`,
+                text: `${individualTask.comment || 'Task'}`,
                 result: result,
                 mode: 'task_completion',
                 taskId: taskId,
@@ -142,32 +190,48 @@ export default async (request, context) => {
               // Save updated history
               await historyStore.set(finalConversationId, JSON.stringify(limitedHistory));
               
-              console.log(`✅ Added task completion to history for conversation: ${finalConversationId}`);
+              console.log(`✅ AIROPS WEBHOOK: Added task completion to history for conversation: ${finalConversationId}`);
             } catch (historyError) {
-              console.error(`❌ Error saving task completion to history:`, historyError);
+              console.error(`❌ AIROPS WEBHOOK: Error saving task completion to history:`, historyError);
             }
           }
           
         } else {
-          console.log(`⚠️ Task ${taskId} not found in conversation ${finalConversationId} storage`);
+          console.log(`⚠️ AIROPS WEBHOOK: Task ${taskId} not found in conversation ${finalConversationId} storage`);
+          console.log(`⚠️ AIROPS WEBHOOK: Available task IDs:`, conversationTasks.map(t => t.id));
+          console.log(`⚠️ AIROPS WEBHOOK: This might indicate the task was created but not properly saved to conversation storage`);
         }
       } catch (convError) {
-        console.error(`❌ Error updating conversation tasks for ${finalConversationId}:`, convError);
+        console.error(`❌ AIROPS WEBHOOK: Error updating conversation tasks for ${finalConversationId}:`, convError);
       }
     } else {
-      console.log(`⚠️ No conversation ID found for task ${taskId}, cannot update conversation storage or history`);
+      console.log(`⚠️ AIROPS WEBHOOK: No conversation ID found for task ${taskId}, cannot update conversation storage or history`);
     }
 
-    console.log(`✅ Task completion webhook processed successfully for: ${taskId}`);
+    console.log(`✅ AIROPS WEBHOOK: Task completion webhook processed successfully for: ${taskId}`);
     
-    return new Response(JSON.stringify({ 
+    const response = {
       success: true,
       message: `Task ${taskId} marked as ${individualTask.status}`,
       taskId: taskId,
       status: individualTask.status,
+      conversationId: finalConversationId,
       conversationUpdated: !!finalConversationId,
-      historySaved: !!(finalConversationId && result && status === 'completed')
-    }), {
+      historySaved: !!(finalConversationId && result && status === 'completed'),
+      debug: {
+        originalPayload: payload,
+        extractedData: {
+          taskId,
+          conversationId,
+          status,
+          resultLength: result ? result.length : 0
+        }
+      }
+    };
+    
+    console.log(`✅ AIROPS WEBHOOK: Sending response:`, response);
+    
+    return new Response(JSON.stringify(response), {
       status: 200,
       headers: {
         'Content-Type': 'application/json',
@@ -176,7 +240,7 @@ export default async (request, context) => {
     });
     
   } catch (error) {
-    console.error('❌ Error processing task completion webhook:', error);
+    console.error('❌ AIROPS WEBHOOK: Error processing task completion webhook:', error);
     return new Response(JSON.stringify({ 
       error: 'Internal server error',
       details: error.message,

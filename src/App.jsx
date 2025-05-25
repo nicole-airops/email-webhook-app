@@ -35,12 +35,12 @@ function App() {
   const [commentHistory, setCommentHistory] = useState([]);
   const [taskResults, setTaskResults] = useState([]);
   const [pollingTasks, setPollingTasks] = useState(new Set());
-  const [expandedTasks, setExpandedTasks] = useState(new Set()); // Track expanded tasks
+  const [expandedTasks, setExpandedTasks] = useState(new Set()); 
   
   // Compact auto-resize state - 0.5" thinner (≈36px) from original 280px = 244px
   const [cardSize, setCardSize] = useState({ width: 244, height: 360 });
   const [isResizing, setIsResizing] = useState(false);
-  const [textareaHeight, setTextareaHeight] = useState(65); // Increased from 55
+  const [textareaHeight, setTextareaHeight] = useState(65);
   const [isTextareaResizing, setIsTextareaResizing] = useState(false);
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
   
@@ -63,7 +63,7 @@ function App() {
     { value: 'table', label: 'Table' }
   ];
 
-  // Adaptive theme based on card size
+  // ✅ RESTORED: Enhanced adaptive theme based on card size
   const theme = {
     colors: {
       primary: '#0f172a',
@@ -80,29 +80,29 @@ function App() {
       accent: '#6366f1'
     },
     spacing: {
-      xs: '3px',
-      sm: '6px',
-      md: '8px',
-      lg: '12px',
-      xl: '16px'
-    },
-    borderRadius: {
+      xs: '2px',
       sm: '4px',
       md: '6px',
-      lg: '8px'
+      lg: '8px',
+      xl: '12px'
+    },
+    borderRadius: {
+      sm: '3px',
+      md: '4px',
+      lg: '6px'
     },
     fontSize: {
-      xs: `${Math.max(10, Math.min(12, cardSize.width / 30))}px`,    // Adaptive 10-12px
-      sm: `${Math.max(11, Math.min(13, cardSize.width / 25))}px`,    // Adaptive 11-13px  
-      base: `${Math.max(12, Math.min(14, cardSize.width / 22))}px`,  // Adaptive 12-14px
-      lg: `${Math.max(14, Math.min(16, cardSize.width / 20))}px`,    // Adaptive 14-16px
-      xl: `${Math.max(16, Math.min(18, cardSize.width / 18))}px`,    // Adaptive 16-18px
-      result: `${Math.max(13, Math.min(15, cardSize.width / 20))}px` // Bigger for results
+      xs: `${Math.max(9, Math.min(11, cardSize.width / 32))}px`,    // Adaptive 9-11px
+      sm: `${Math.max(10, Math.min(12, cardSize.width / 28))}px`,   // Adaptive 10-12px  
+      base: `${Math.max(11, Math.min(13, cardSize.width / 25))}px`, // Adaptive 11-13px
+      lg: `${Math.max(12, Math.min(14, cardSize.width / 22))}px`,   // Adaptive 12-14px
+      xl: `${Math.max(13, Math.min(15, cardSize.width / 20))}px`,   // Adaptive 13-15px
+      result: `${Math.max(12, Math.min(14, cardSize.width / 22))}px` // Bigger for results
     },
     iconSize: {
-      sm: Math.max(10, Math.min(14, cardSize.width / 25)),          // Adaptive icon sizes
-      md: Math.max(12, Math.min(16, cardSize.width / 22)),
-      lg: Math.max(14, Math.min(18, cardSize.width / 20))
+      sm: Math.max(8, Math.min(12, cardSize.width / 28)),          // Adaptive icon sizes
+      md: Math.max(10, Math.min(14, cardSize.width / 25)),
+      lg: Math.max(12, Math.min(16, cardSize.width / 22))
     },
     shadows: {
       sm: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
@@ -111,7 +111,34 @@ function App() {
     }
   };
 
-  // Container size detection
+  // ✅ RESTORED: Toggle task expansion
+  const toggleTaskExpansion = (taskId) => {
+    setExpandedTasks(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(taskId)) {
+        newSet.delete(taskId);
+      } else {
+        newSet.add(taskId);
+      }
+      return newSet;
+    });
+  };
+
+  // ✅ RESTORED: Enhanced Front context logging
+  useEffect(() => {
+    console.log('🔍 AIROPS DEBUG: Front context update:', {
+      type: context?.type,
+      hasConversation: !!context?.conversation,
+      conversationId: context?.conversation?.id,
+      hasDraft: !!context?.draft,
+      draftId: context?.draft?.id,
+      hasTeammate: !!context?.teammate,
+      teammateId: context?.teammate?.id,
+      availableMethods: context ? Object.keys(context).filter(key => typeof context[key] === 'function') : []
+    });
+  }, [context]);
+
+  // ✅ RESTORED: Enhanced container size detection with better responsiveness
   useEffect(() => {
     const observeContainerSize = () => {
       if (!cardRef.current) return;
@@ -124,12 +151,20 @@ function App() {
         const containerWidth = rect.width;
         const containerHeight = rect.height;
         
-        // Even more compact constraints - MADE WIDER AGAIN
-        const newWidth = Math.max(200, Math.min(400, containerWidth - 10)); // Was 260, now 400
-        const newHeight = Math.max(280, Math.min(600, containerHeight - 10)); // Was 480, now 600
+        // Enhanced adaptive constraints based on container
+        const minWidth = Math.max(200, Math.min(240, containerWidth * 0.6));
+        const maxWidth = Math.min(400, containerWidth - 12);
+        const minHeight = Math.max(280, Math.min(320, containerHeight * 0.5));
+        const maxHeight = Math.min(600, containerHeight - 12);
         
-        setContainerSize({ width: containerWidth, height: containerHeight });
-        setCardSize({ width: newWidth, height: newHeight });
+        const newWidth = Math.max(minWidth, Math.min(maxWidth, cardSize.width));
+        const newHeight = Math.max(minHeight, Math.min(maxHeight, cardSize.height));
+        
+        // Only update if there's a meaningful change
+        if (Math.abs(newWidth - cardSize.width) > 2 || Math.abs(newHeight - cardSize.height) > 2) {
+          setContainerSize({ width: containerWidth, height: containerHeight });
+          setCardSize({ width: newWidth, height: newHeight });
+        }
       };
       
       updateSize();
@@ -141,14 +176,21 @@ function App() {
         resizeObserver.observe(parent);
         window.addEventListener('resize', updateSize);
         
+        // Also observe the parent's parent for nested resize scenarios
+        const grandParent = parent.parentElement;
+        if (grandParent) {
+          resizeObserver.observe(grandParent);
+        }
+        
         return () => {
           resizeObserver.disconnect();
           window.removeEventListener('resize', updateSize);
         };
       } else {
+        // Enhanced fallback for older browsers
         const handleResize = () => requestAnimationFrame(updateSize);
         window.addEventListener('resize', handleResize);
-        const interval = setInterval(updateSize, 100);
+        const interval = setInterval(updateSize, 200); // Less frequent but still responsive
         
         return () => {
           window.removeEventListener('resize', handleResize);
@@ -159,9 +201,9 @@ function App() {
     
     const cleanup = observeContainerSize();
     return cleanup;
-  }, []);
+  }, [cardSize.width, cardSize.height]);
 
-  // Resize handling
+  // ✅ RESTORED: Enhanced resize handling with better constraints
   useEffect(() => {
     const handleMouseMove = (e) => {
       e.preventDefault();
@@ -172,8 +214,14 @@ function App() {
         const parentRect = parent.getBoundingClientRect();
         const cardRect = cardRef.current.getBoundingClientRect();
         
-        const newWidth = Math.max(200, Math.min(450, e.clientX - cardRect.left)); // Was 300, now 450
-        const newHeight = Math.max(280, Math.min(650, e.clientY - cardRect.top)); // Was 520, now 650
+        // Enhanced constraints based on container
+        const minWidth = Math.max(200, containerSize.width * 0.3);
+        const maxWidth = Math.min(450, containerSize.width - 12);
+        const minHeight = Math.max(280, containerSize.height * 0.4);
+        const maxHeight = Math.min(650, containerSize.height - 12);
+        
+        const newWidth = Math.max(minWidth, Math.min(maxWidth, e.clientX - cardRect.left));
+        const newHeight = Math.max(minHeight, Math.min(maxHeight, e.clientY - cardRect.top));
         
         setCardSize({ width: newWidth, height: newHeight });
       }
@@ -181,7 +229,7 @@ function App() {
       if (isTextareaResizing) {
         const rect = textareaContainerRef.current?.getBoundingClientRect();
         if (rect) {
-          const newHeight = Math.max(35, Math.min(200, e.clientY - rect.top));
+          const newHeight = Math.max(35, Math.min(Math.min(200, cardSize.height * 0.4), e.clientY - rect.top));
           setTextareaHeight(newHeight);
         }
       }
@@ -210,7 +258,7 @@ function App() {
       document.body.style.cursor = '';
       document.body.style.userSelect = '';
     };
-  }, [isResizing, isTextareaResizing]);
+  }, [isResizing, isTextareaResizing, containerSize, cardSize.height]);
 
   const handleCardResizeStart = (e) => {
     e.preventDefault();
@@ -224,27 +272,143 @@ function App() {
     setIsTextareaResizing(true);
   };
 
+  // ✅ ENHANCED: Better logging for context loading
   useEffect(() => {
     const conversationId = context?.conversation?.id;
     
     if (conversationId) {
-      console.log('📋 Loading data for conversation:', conversationId);
+      console.log('🔄 AIROPS: Loading data for conversation:', conversationId);
+      console.log('🔄 AIROPS: Context type:', context.type);
+      console.log('🔄 AIROPS: Available context methods:', Object.keys(context).filter(key => typeof context[key] === 'function'));
       loadHistoryFromNetlify(conversationId);
       loadTaskResultsFromNetlify(conversationId);
     } else {
-      console.log('❌ No conversation ID available');
+      console.log('❌ AIROPS: No conversation ID available, context type:', context?.type);
       setTaskResults([]);
       setCommentHistory([]);
     }
   }, [context]);
 
-  // ✅ FIXED: Clear all tasks properly
+  // ✅ RESTORED: Enhanced manual refresh function for debugging
+  const manualRefresh = async () => {
+    if (!context?.conversation?.id) {
+      console.log('❌ AIROPS REFRESH: No conversation ID');
+      console.log('❌ AIROPS REFRESH: Context:', context);
+      setStatus('No conversation context');
+      return;
+    }
+
+    console.log('🔄 AIROPS REFRESH: Manual refresh triggered for conversation:', context.conversation.id);
+    console.log('🔄 AIROPS REFRESH: Current state - History:', commentHistory.length, 'Tasks:', taskResults.length);
+    setStatus('Refreshing...');
+    
+    try {
+      await Promise.all([
+        loadHistoryFromNetlify(context.conversation.id),
+        loadTaskResultsFromNetlify(context.conversation.id)
+      ]);
+      setStatus('Refreshed!');
+      console.log('✅ AIROPS REFRESH: Manual refresh completed');
+    } catch (error) {
+      console.error('❌ AIROPS REFRESH: Failed:', error);
+      setStatus('Refresh failed');
+    }
+  };
+
+  // ✅ RESTORED: Complete debug function for testing history API
+  const debugHistoryAPI = async () => {
+    if (!context?.conversation?.id) {
+      console.error('❌ DEBUG: No conversation ID');
+      setStatus('No conversation context');
+      return;
+    }
+    
+    console.log('🧪 DEBUG: Testing history API...');
+    console.log('🧪 DEBUG: Conversation ID:', context.conversation.id);
+    console.log('🧪 DEBUG: Current history length:', commentHistory.length);
+    setStatus('Running debug...');
+    
+    try {
+      // Test 1: Load current history
+      console.log('🧪 DEBUG: Test 1 - Loading current history');
+      const loadResponse = await fetch(`/.netlify/functions/get-conversation-history?conversationId=${context.conversation.id}`);
+      console.log('🧪 DEBUG: Load response status:', loadResponse.status);
+      
+      if (loadResponse.ok) {
+        const loadData = await loadResponse.json();
+        console.log('🧪 DEBUG: Loaded history:', loadData);
+      } else {
+        const loadError = await loadResponse.text();
+        console.log('🧪 DEBUG: Load error:', loadError);
+      }
+      
+      // Test 2: Save current history back (should be no-op)
+      console.log('🧪 DEBUG: Test 2 - Saving current history back');
+      const saveResponse = await fetch('/.netlify/functions/save-conversation-history', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          conversationId: context.conversation.id, 
+          history: commentHistory 
+        })
+      });
+      
+      console.log('🧪 DEBUG: Save response status:', saveResponse.status);
+      
+      if (saveResponse.ok) {
+        const saveData = await saveResponse.json();
+        console.log('🧪 DEBUG: Save response data:', saveData);
+      } else {
+        const saveError = await saveResponse.text();
+        console.log('🧪 DEBUG: Save error:', saveError);
+      }
+      
+      // Test 3: Test task loading
+      console.log('🧪 DEBUG: Test 3 - Loading tasks');
+      const tasksResponse = await fetch(`/.netlify/functions/get-conversation-tasks?conversationId=${context.conversation.id}`);
+      console.log('🧪 DEBUG: Tasks response status:', tasksResponse.status);
+      
+      if (tasksResponse.ok) {
+        const tasksData = await tasksResponse.json();
+        console.log('🧪 DEBUG: Tasks data:', tasksData);
+      } else {
+        const tasksError = await tasksResponse.text();
+        console.log('🧪 DEBUG: Tasks error:', tasksError);
+      }
+      
+      // Test 4: Test Front context
+      console.log('🧪 DEBUG: Test 4 - Front context analysis');
+      console.log('🧪 DEBUG: Context type:', context.type);
+      console.log('🧪 DEBUG: Conversation:', {
+        id: context.conversation?.id,
+        subject: context.conversation?.subject,
+        participants: context.conversation?.participants?.length
+      });
+      console.log('🧪 DEBUG: Draft:', {
+        id: context.draft?.id,
+        hasBody: !!context.draft?.body,
+        bodyLength: context.draft?.body?.length
+      });
+      console.log('🧪 DEBUG: Teammate:', {
+        id: context.teammate?.id,
+        name: context.teammate?.name,
+        email: context.teammate?.email
+      });
+      
+      setStatus('Debug complete - check console');
+      
+    } catch (error) {
+      console.error('🧪 DEBUG: API test failed:', error);
+      setStatus('Debug failed - check console');
+    }
+  };
+
   const clearAllTasks = async () => {
     if (!context?.conversation?.id) return;
     
     if (!confirm('Delete all tasks? This cannot be undone.')) return;
     
-    console.log('🗑️ Clearing all tasks');
+    console.log('🗑️ AIROPS: Clearing all tasks');
     try {
       const response = await fetch('/.netlify/functions/save-conversation-tasks', {
         method: 'POST',
@@ -258,15 +422,16 @@ function App() {
       if (response.ok) {
         setTaskResults([]);
         setPollingTasks(new Set());
+        setExpandedTasks(new Set());
         setStatus('Tasks cleared');
-        console.log('✅ All tasks cleared successfully');
+        console.log('✅ AIROPS: All tasks cleared successfully');
       } else {
         const errorText = await response.text();
-        console.error('❌ Failed to clear tasks:', errorText);
+        console.error('❌ AIROPS: Failed to clear tasks:', errorText);
         setStatus('Failed to clear');
       }
     } catch (error) {
-      console.error('❌ Error clearing tasks:', error);
+      console.error('❌ AIROPS: Error clearing tasks:', error);
       setStatus('Clear failed');
     }
   };
@@ -387,11 +552,10 @@ function App() {
     }
   };
 
-  // ✅ FIXED: Delete individual task
   const deleteTask = async (taskId) => {
     if (!context?.conversation?.id) return;
     
-    console.log(`🗑️ Deleting task: ${taskId}`);
+    console.log(`🗑️ AIROPS: Deleting task: ${taskId}`);
     try {
       const updatedTasks = taskResults.filter(task => task.id !== taskId);
       
@@ -411,22 +575,26 @@ function App() {
           newSet.delete(taskId);
           return newSet;
         });
+        setExpandedTasks(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(taskId);
+          return newSet;
+        });
         setStatus('Task deleted');
-        console.log(`✅ Task ${taskId} deleted successfully`);
+        console.log(`✅ AIROPS: Task ${taskId} deleted successfully`);
       } else {
         const errorText = await response.text();
-        console.error('❌ Failed to delete task:', errorText);
+        console.error('❌ AIROPS: Failed to delete task:', errorText);
         setStatus('Delete failed');
       }
     } catch (error) {
-      console.error('❌ Error deleting task:', error);
+      console.error('❌ AIROPS: Error deleting task:', error);
       setStatus('Delete failed');
     }
   };
 
-  // ✅ FIXED: Save task results properly
   const saveTaskResultsToNetlify = async (conversationId, tasks) => {
-    console.log(`💾 Saving ${tasks.length} tasks for conversation ${conversationId}`);
+    console.log(`💾 AIROPS: Saving ${tasks.length} tasks for conversation ${conversationId}`);
     try {
       const response = await fetch('/.netlify/functions/save-conversation-tasks', {
         method: 'POST',
@@ -436,80 +604,121 @@ function App() {
       
       if (response.ok) {
         const result = await response.json();
-        console.log('✅ Tasks saved successfully:', result);
+        console.log('✅ AIROPS: Tasks saved successfully:', result);
         return true;
       } else {
         const errorText = await response.text();
-        console.error('❌ Failed to save tasks:', errorText);
+        console.error('❌ AIROPS: Failed to save tasks:', errorText);
         return false;
       }
     } catch (error) {
-      console.error('❌ Error saving tasks:', error);
+      console.error('❌ AIROPS: Error saving tasks:', error);
       return false;
     }
   };
 
-  // ✅ FIXED: Check task status and save results
+  // ✅ ENHANCED: Better task status checking with comprehensive debug logs
   const checkTaskStatus = async (taskId) => {
+    console.log(`🔄 AIROPS POLLING: Checking status for task: ${taskId}`);
     try {
       const response = await fetch(`/.netlify/functions/task-status?taskId=${taskId}`);
+      console.log(`🔄 AIROPS POLLING: Task status API response: ${response.status}`);
+      
       if (response.ok) {
         const result = await response.json();
-        console.log(`📋 Task ${taskId} status:`, result.status);
+        console.log(`📋 AIROPS POLLING: Task ${taskId} status: ${result.status}`, result);
         
         if (result.status === 'completed' || result.status === 'failed') {
+          console.log(`✅ AIROPS POLLING: Task ${taskId} finished with status ${result.status}, updating UI`);
+          
           const updatedTasks = taskResults.map(task => 
             task.id === taskId 
-              ? { ...task, status: result.status, result: result.data, completedAt: result.completedAt }
+              ? { 
+                  ...task, 
+                  status: result.status, 
+                  result: result.data, 
+                  completedAt: result.completedAt,
+                  error: result.error 
+                }
               : task
           );
           
           setTaskResults(updatedTasks);
-          console.log(`✅ Updated task ${taskId} locally`);
+          console.log(`📋 AIROPS POLLING: Updated local task state for ${taskId}`);
           
-          // ✅ CRITICAL: Save updated tasks immediately
+          // Auto-expand completed tasks
+          if (result.status === 'completed') {
+            setExpandedTasks(prev => new Set([...prev, taskId]));
+            console.log(`📋 AIROPS POLLING: Auto-expanded completed task ${taskId}`);
+          }
+          
+          // Save updated tasks to storage
           if (context?.conversation?.id) {
             const saved = await saveTaskResultsToNetlify(context.conversation.id, updatedTasks);
             if (saved) {
-              console.log(`✅ Task ${taskId} results saved to storage`);
+              console.log(`✅ AIROPS POLLING: Task ${taskId} results saved to storage`);
             }
           }
           
+          // Stop polling this task
           setPollingTasks(prev => {
             const newSet = new Set(prev);
             newSet.delete(taskId);
+            console.log(`🔄 AIROPS POLLING: Stopped polling for ${taskId}, remaining: ${newSet.size}`);
             return newSet;
           });
           
           setStatus(`Task ${result.status}!`);
           return true;
+        } else {
+          console.log(`📋 AIROPS POLLING: Task ${taskId} still ${result.status}, continuing to poll`);
         }
+      } else {
+        const errorText = await response.text();
+        console.log(`❌ AIROPS POLLING: Task ${taskId} status check failed: ${response.status} - ${errorText}`);
       }
     } catch (error) {
-      console.error('Error checking task status:', error);
+      console.error(`❌ AIROPS POLLING: Error checking task ${taskId}:`, error);
     }
     return false;
   };
 
-  // Polling system
+  // ✅ ENHANCED: Comprehensive polling system with better logging and error handling
   useEffect(() => {
     if (pollingTasks.size > 0) {
+      console.log(`🔄 AIROPS POLLING: Starting polling for ${pollingTasks.size} tasks:`, Array.from(pollingTasks));
+      
       const checkAllTasks = async () => {
         const tasksToCheck = Array.from(pollingTasks);
-        console.log(`🔄 Polling ${tasksToCheck.length} tasks...`);
-        const promises = tasksToCheck.map(taskId => checkTaskStatus(taskId));
-        await Promise.all(promises);
+        console.log(`🔄 AIROPS POLLING: Checking ${tasksToCheck.length} pending tasks`);
+        
+        // Check tasks sequentially to avoid overwhelming the API
+        for (const taskId of tasksToCheck) {
+          try {
+            await checkTaskStatus(taskId);
+            // Small delay between checks to be nice to the API
+            await new Promise(resolve => setTimeout(resolve, 200));
+          } catch (error) {
+            console.error(`❌ AIROPS POLLING: Error checking task ${taskId}:`, error);
+          }
+        }
+        
+        console.log(`✅ AIROPS POLLING: Completed polling cycle`);
       };
       
-      const initialTimeout = setTimeout(checkAllTasks, 5000);
-      const interval = setInterval(checkAllTasks, 15000);
+      // Check immediately after 3 seconds, then every 8 seconds for faster updates
+      const initialTimeout = setTimeout(checkAllTasks, 3000);
+      const interval = setInterval(checkAllTasks, 8000);
       
       return () => {
+        console.log(`🔄 AIROPS POLLING: Stopping polling for ${pollingTasks.size} tasks`);
         clearTimeout(initialTimeout);
         clearInterval(interval);
       };
+    } else {
+      console.log(`🔄 AIROPS POLLING: No tasks to poll`);
     }
-  }, [pollingTasks, taskResults]);
+  }, [pollingTasks, taskResults, context]);
 
   useEffect(() => {
     if (selectedFormat) {
@@ -530,13 +739,22 @@ function App() {
       
       if (uploadedFile) {
         combinedText += `\n\nReference File: ${uploadedFile.name} (${uploadedFile.type}, ${(uploadedFile.size / 1024).toFixed(1)}KB)`;
-        combinedText += `\nFile Content Preview: ${uploadedFile.preview || 'Binary file - see attachment'}`;
+        
+        // Enhanced file content inclusion
+        if (uploadedFile.fullContent) {
+          combinedText += `\n\nFull File Content:\n${uploadedFile.fullContent}`;
+        } else if (uploadedFile.preview) {
+          combinedText += `\n\nFile Content Preview:\n${uploadedFile.preview}`;
+        } else {
+          combinedText += `\n\nNote: Binary file attachment - content not shown in preview`;
+        }
       }
     }
     
     return combinedText;
   };
 
+  // ✅ ENHANCED: More comprehensive payload creation with better metadata
   const createCompletePayload = async (combinedInstructions, taskId = null) => {
     const timestamp = new Date().toISOString();
     const callbackUrl = taskId ? `${window.location.origin}/.netlify/functions/task-completion-webhook` : null;
@@ -582,7 +800,9 @@ function App() {
           attachments: msg.attachments || [],
           metadata: msg.metadata || {}
         }));
+        console.log(`📨 AIROPS: Loaded ${messagesData.length} messages for context`);
       } catch (err) {
+        console.error('❌ AIROPS: Error loading messages:', err);
         messagesData = [];
       }
     }
@@ -590,6 +810,7 @@ function App() {
     let draftData = null;
     if (context?.draft) {
       draftData = {
+        id: context.draft.id,
         body: context.draft.body,
         subject: context.draft.subject,
         to: context.draft.to,
@@ -597,6 +818,7 @@ function App() {
         bcc: context.draft.bcc,
         reply_options: context.draft.reply_options
       };
+      console.log(`📝 AIROPS: Including draft context:`, { id: draftData.id, hasBody: !!draftData.body });
     }
     
     const teammateData = context?.teammate ? {
@@ -608,6 +830,7 @@ function App() {
       timezone: context.teammate.timezone
     } : null;
     
+    // Enhanced payload with better organization
     return {
       airops_request: {
         combined_instructions: combinedInstructions,
@@ -623,10 +846,10 @@ function App() {
           size_formatted: `${(uploadedFile.size / 1024).toFixed(1)}KB`,
           last_modified: uploadedFile.lastModified ? new Date(uploadedFile.lastModified).toISOString() : null,
           content_preview: uploadedFile.preview || null,
-          full_content: uploadedFile.fullContent || null, // Include full content for AI processing
+          full_content: uploadedFile.fullContent || null,
           has_preview: !!uploadedFile.preview,
           has_full_content: !!uploadedFile.fullContent,
-          is_text_file: uploadedFile.type?.startsWith('text/') || uploadedFile.name?.match(/\.(txt|csv|json|md|xml|log|js|jsx|ts|tsx|py|html|css)$/i)
+          is_text_file: uploadedFile.type?.startsWith('text/') || uploadedFile.name?.match(/\.(txt|csv|json|md|xml|log|js|jsx|ts|tsx|py|html|css|yaml|yml)$/i)
         } : null,
         request_info: {
           mode: mode,
@@ -635,7 +858,10 @@ function App() {
           task_id: taskId,
           callback_url: callbackUrl,
           user_agent: navigator.userAgent,
-          plugin_version: "1.0.0"
+          plugin_version: "1.1.0",
+          // Enhanced metadata for webhook processing
+          conversation_id: context?.conversation?.id, // Added for easier extraction
+          requesting_user_id: context?.teammate?.id
         },
         requesting_user: teammateData,
         front_conversation: {
@@ -692,6 +918,7 @@ function App() {
     };
   };
 
+  // ✅ RESTORED: Enhanced file upload handling with better file type detection
   const handleFileUpload = async (event) => {
     const file = event.target.files[0];
     if (!file) return;
@@ -701,6 +928,13 @@ function App() {
       return;
     }
 
+    console.log(`📎 AIROPS: Processing file upload:`, {
+      name: file.name,
+      type: file.type,
+      size: file.size,
+      lastModified: file.lastModified
+    });
+
     try {
       const fileData = {
         name: file.name,
@@ -709,29 +943,54 @@ function App() {
         lastModified: file.lastModified
       };
 
-      if (file.type.startsWith('text/') || 
-          file.name.match(/\.(txt|csv|json|md|xml|log|js|jsx|ts|tsx|py|html|css)$/i)) {
+      // Enhanced file type detection and processing
+      const isTextFile = file.type.startsWith('text/') || 
+                        file.name.match(/\.(txt|csv|json|md|xml|log|js|jsx|ts|tsx|py|html|css|yaml|yml|sql|sh|bat|dockerfile|gitignore|env)$/i);
+      
+      if (isTextFile) {
+        console.log(`📎 AIROPS: Reading text file: ${file.name}`);
         const reader = new FileReader();
         reader.onload = (e) => {
           const content = e.target.result;
-          // Include more content for better context (up to 5000 characters instead of 500)
-          fileData.preview = content.substring(0, 5000) + (content.length > 5000 ? '...\n\n[File truncated - full content available to AI]' : '');
-          fileData.fullContent = content; // Store full content for AI processing
+          console.log(`📎 AIROPS: File content length: ${content.length} characters`);
+          
+          // Enhanced preview with more context (up to 8000 characters for preview)
+          const previewLength = Math.min(8000, content.length);
+          fileData.preview = content.substring(0, previewLength) + 
+                           (content.length > previewLength ? 
+                             '\n\n[File preview truncated - full content available to AI]' : '');
+          
+          // Store full content for AI processing (respects 2MB file size limit)
+          fileData.fullContent = content;
+          fileData.isProcessed = true;
+          
           setUploadedFile(fileData);
-          setStatus('File uploaded');
+          setStatus('File uploaded and processed');
+          console.log(`✅ AIROPS: Text file processed successfully`);
+        };
+        reader.onerror = (error) => {
+          console.error('❌ AIROPS: Error reading file:', error);
+          setStatus('Error reading file');
         };
         reader.readAsText(file);
       } else {
+        // Handle non-text files (images, PDFs, etc.)
+        console.log(`📎 AIROPS: Processing binary file: ${file.name}`);
+        fileData.preview = `[Binary file: ${file.name}]\nType: ${file.type}\nSize: ${(file.size / 1024).toFixed(1)}KB\n\nThis file has been uploaded and will be available to the AI for processing.`;
+        fileData.isProcessed = true;
         setUploadedFile(fileData);
         setStatus('File uploaded');
+        console.log(`✅ AIROPS: Binary file processed successfully`);
       }
+      
     } catch (error) {
-      console.error('File upload error:', error);
+      console.error('❌ AIROPS: File upload error:', error);
       setStatus('Upload failed');
     }
   };
 
   const removeFile = () => {
+    console.log(`📎 AIROPS: Removing uploaded file: ${uploadedFile?.name}`);
     setUploadedFile(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
@@ -739,32 +998,44 @@ function App() {
     setStatus('File removed');
   };
 
-  // ✅ FIXED: Load history properly with better debugging
+  // ✅ ENHANCED: Load history with better error handling and logging
   const loadHistoryFromNetlify = async (conversationId) => {
-    console.log(`📚 Loading history for conversation: ${conversationId}`);
+    console.log(`📚 AIROPS: Loading history for conversation: ${conversationId}`);
     try {
       const response = await fetch(`/.netlify/functions/get-conversation-history?conversationId=${conversationId}`);
-      
-      console.log(`📚 History API response status: ${response.status}`);
+      console.log(`📚 AIROPS: History API response status: ${response.status}`);
       
       if (response.ok) {
         const { history } = await response.json();
-        console.log(`📚 Loaded ${history?.length || 0} history entries:`, history);
-        setCommentHistory(history || []);
+        console.log(`📚 AIROPS: Loaded ${history?.length || 0} history entries`);
+        
+        if (history && Array.isArray(history)) {
+          setCommentHistory(history);
+          console.log(`📚 AIROPS: History types:`, history.map(h => h.mode || 'unknown').join(', '));
+        } else {
+          console.log(`📚 AIROPS: Invalid history data:`, history);
+          setCommentHistory([]);
+        }
       } else {
         const errorText = await response.text();
-        console.log(`📚 No history found (${response.status}): ${errorText}`);
+        console.log(`📚 AIROPS: No history found (${response.status}): ${errorText}`);
         setCommentHistory([]);
       }
     } catch (error) {
-      console.error('❌ Error loading history:', error);
+      console.error('❌ AIROPS: Error loading history:', error);
       setCommentHistory([]);
     }
   };
 
-  // ✅ FIXED: Save history properly with better debugging
+  // ✅ ENHANCED: Save history with better error handling and logging
   const saveHistoryToNetlify = async (conversationId, entry) => {
-    console.log(`📚 Saving history entry for conversation: ${conversationId}`, entry);
+    console.log(`📚 AIROPS: Saving history entry for conversation: ${conversationId}`, {
+      text: entry.text.substring(0, 100) + '...',
+      mode: entry.mode,
+      user: entry.user,
+      timestamp: entry.timestamp
+    });
+    
     try {
       const response = await fetch('/.netlify/functions/save-conversation-history', {
         method: 'POST',
@@ -774,50 +1045,70 @@ function App() {
       
       if (response.ok) {
         const result = await response.json();
-        console.log('✅ History entry saved successfully:', result);
+        console.log('✅ AIROPS: History entry saved successfully:', {
+          success: result.success,
+          count: result.count
+        });
         return true;
       } else {
         const errorText = await response.text();
-        console.error('❌ Failed to save history - Status:', response.status, 'Error:', errorText);
+        console.error('❌ AIROPS: Failed to save history - Status:', response.status, 'Error:', errorText);
         return false;
       }
     } catch (error) {
-      console.error('❌ Network error saving history:', error);
+      console.error('❌ AIROPS: Network error saving history:', error);
       return false;
     }
   };
 
-  // ✅ FIXED: Load task results properly
+  // ✅ ENHANCED: Load task results with better error handling and state management
   const loadTaskResultsFromNetlify = async (conversationId) => {
-    console.log(`📋 Loading tasks for conversation: ${conversationId}`);
+    console.log(`📋 AIROPS: Loading tasks for conversation: ${conversationId}`);
     try {
       const response = await fetch(`/.netlify/functions/get-conversation-tasks?conversationId=${conversationId}`);
+      console.log(`📋 AIROPS: Tasks API response status: ${response.status}`);
       
       if (response.ok) {
         const { tasks } = await response.json();
-        console.log(`📋 Loaded ${tasks?.length || 0} tasks`);
-        setTaskResults(tasks || []);
+        console.log(`📋 AIROPS: Loaded ${tasks?.length || 0} tasks`);
         
-        // Auto-expand completed tasks
-        const completedTaskIds = (tasks || []).filter(task => task.status === 'completed').map(task => task.id);
-        setExpandedTasks(new Set(completedTaskIds));
-        
-        const pendingTasks = (tasks || []).filter(task => task.status === 'pending').map(task => task.id);
-        if (pendingTasks.length > 0) {
-          setPollingTasks(new Set(pendingTasks));
-          console.log(`🔄 Resuming polling for ${pendingTasks.length} pending tasks`);
+        if (tasks && Array.isArray(tasks)) {
+          setTaskResults(tasks);
+          console.log(`📋 AIROPS: Task statuses:`, tasks.map(t => `${t.id}: ${t.status}`).join(', '));
+          
+          // Auto-expand completed tasks
+          const completedTaskIds = tasks.filter(task => task.status === 'completed').map(task => task.id);
+          if (completedTaskIds.length > 0) {
+            setExpandedTasks(new Set(completedTaskIds));
+            console.log(`📋 AIROPS: Auto-expanded ${completedTaskIds.length} completed tasks`);
+          }
+          
+          // Resume polling for pending tasks
+          const pendingTasks = tasks.filter(task => task.status === 'pending').map(task => task.id);
+          if (pendingTasks.length > 0) {
+            setPollingTasks(new Set(pendingTasks));
+            console.log(`🔄 AIROPS: Resuming polling for ${pendingTasks.length} pending tasks:`, pendingTasks);
+          }
+        } else {
+          console.log(`📋 AIROPS: Invalid tasks data:`, tasks);
+          setTaskResults([]);
         }
       } else {
-        console.log('📋 No tasks found, starting fresh'); 
+        const errorText = await response.text();
+        console.log(`📋 AIROPS: No tasks found (${response.status}): ${errorText}`); 
         setTaskResults([]);
       }
     } catch (error) {
-      console.error('❌ Error loading tasks:', error);
+      console.error('❌ AIROPS: Error loading tasks:', error);
       setTaskResults([]);
     }
   };
 
+  // ✅ RESTORED: Enhanced Front API integration with multiple fallback strategies
   const insertIntoDraft = async (content) => {
+    console.log('🔍 AIROPS INSERT: Starting draft insertion process');
+    console.log('🔍 AIROPS INSERT: Content length:', content.length);
+    
     // Clean HTML content same way as copy function
     const tempDiv = document.createElement('div');
     tempDiv.innerHTML = content;
@@ -838,24 +1129,35 @@ function App() {
     });
     
     const cleanContent = tempDiv.textContent || tempDiv.innerText || content.replace(/<[^>]*>/g, '');
+    console.log('🔍 AIROPS INSERT: Cleaned content length:', cleanContent.length);
     
-    // 🔍 DEBUG: Log context details (look for these in console!)
-    console.log('🔍 AIROPS DEBUG - Context Type:', context?.type);
-    console.log('🔍 AIROPS DEBUG - Has Draft:', !!context?.draft);
-    console.log('🔍 AIROPS DEBUG - Draft Body:', context?.draft?.body);
-    console.log('🔍 AIROPS DEBUG - Draft ID:', context?.draft?.id);
-    console.log('🔍 AIROPS DEBUG - Available Methods:', context ? Object.keys(context).filter(key => typeof context[key] === 'function') : []);
+    // 🔍 DEBUG: Log context details
+    console.log('🔍 AIROPS INSERT: Context analysis:', {
+      type: context?.type,
+      hasContext: !!context,
+      hasDraft: !!context?.draft,
+      draftId: context?.draft?.id,
+      hasConversation: !!context?.conversation,
+      conversationId: context?.conversation?.id,
+      availableMethods: context ? Object.keys(context).filter(key => typeof context[key] === 'function') : []
+    });
     
     if (!context) {
-      console.log('❌ AIROPS: No context available');
+      console.log('❌ AIROPS INSERT: No context available');
       copyToClipboard(content);
+      setStatus('Copied to clipboard (no context)');
       return;
     }
     
     try {
-      // 🎯 STRATEGY 1: MessageComposer Context (CORRECT API USAGE)
+      // 🎯 STRATEGY 1: MessageComposer Context (PRIMARY)
       if (context.type === 'messageComposer' && context.draft) {
-        console.log('🎯 AIROPS: Using MessageComposer updateDraft API');
+        console.log('🎯 AIROPS INSERT: Using MessageComposer updateDraft API');
+        console.log('🎯 AIROPS INSERT: Draft info:', {
+          id: context.draft.id,
+          hasBody: !!context.draft.body,
+          bodyLength: context.draft.body?.length || 0
+        });
         
         const existingBody = context.draft.body || '';
         const newBody = existingBody + (existingBody ? '\n\n' : '') + cleanContent;
@@ -866,16 +1168,17 @@ function App() {
         });
         
         setStatus('Added to draft!');
-        console.log('✅ AIROPS: Successfully updated draft using updateDraft API');
+        console.log('✅ AIROPS INSERT: Successfully updated draft using updateDraft API');
         return;
       }
       
-      // 🎯 STRATEGY 2: Single Conversation Context  
+      // 🎯 STRATEGY 2: Single Conversation Context with updateDraft
       if (context.type === 'singleConversation' && typeof context.updateDraft === 'function') {
-        console.log('🎯 AIROPS: Trying singleConversation updateDraft');
+        console.log('🎯 AIROPS INSERT: Trying singleConversation updateDraft');
         
         // Find existing draft or create new one
         if (context.conversation?.draft) {
+          console.log('🎯 AIROPS INSERT: Found conversation draft:', context.conversation.draft.id);
           const existingBody = context.conversation.draft.body || '';
           const newBody = existingBody + (existingBody ? '\n\n' : '') + cleanContent;
           
@@ -884,14 +1187,23 @@ function App() {
           });
           
           setStatus('Added to draft!');
-          console.log('✅ AIROPS: Successfully updated conversation draft');
+          console.log('✅ AIROPS INSERT: Successfully updated conversation draft');
           return;
         }
       }
       
-      // 🎯 STRATEGY 3: Create New Draft (using correct API)
+      // 🎯 STRATEGY 3: Direct insertTextIntoBody method (if available)
+      if (typeof context.insertTextIntoBody === 'function') {
+        console.log('🎯 AIROPS INSERT: Using insertTextIntoBody method');
+        await context.insertTextIntoBody(cleanContent);
+        setStatus('Inserted into body!');
+        console.log('✅ AIROPS INSERT: Successfully used insertTextIntoBody');
+        return;
+      }
+      
+      // 🎯 STRATEGY 4: Create New Draft (universal fallback)
       if (typeof context.createDraft === 'function') {
-        console.log('🎯 AIROPS: Creating new draft using createDraft API');
+        console.log('🎯 AIROPS INSERT: Creating new draft using createDraft API');
         
         const draftTemplate = {
           body: cleanContent
@@ -900,70 +1212,135 @@ function App() {
         // Add conversation context if available
         if (context.conversation) {
           draftTemplate.conversationId = context.conversation.id;
+          console.log('🎯 AIROPS INSERT: Adding conversation context:', context.conversation.id);
         }
         
         await context.createDraft(draftTemplate);
         setStatus('New draft created!');
-        console.log('✅ AIROPS: Successfully created new draft');
+        console.log('✅ AIROPS INSERT: Successfully created new draft');
         return;
       }
       
-      console.log('❌ AIROPS: No suitable draft API found');
+      // 🎯 STRATEGY 5: Generic insert method exploration
+      const insertMethods = Object.keys(context).filter(key => 
+        typeof context[key] === 'function' && 
+        (key.includes('insert') || key.includes('draft') || key.includes('text'))
+      );
+      
+      if (insertMethods.length > 0) {
+        console.log('🎯 AIROPS INSERT: Found potential insert methods:', insertMethods);
+        
+        // Try the most promising methods
+        for (const method of insertMethods) {
+          try {
+            console.log(`🎯 AIROPS INSERT: Trying method: ${method}`);
+            await context[method](cleanContent);
+            setStatus('Inserted using ' + method);
+            console.log(`✅ AIROPS INSERT: Successfully used ${method}`);
+            return;
+          } catch (methodError) {
+            console.log(`❌ AIROPS INSERT: Method ${method} failed:`, methodError.message);
+          }
+        }
+      }
+      
+      console.log('❌ AIROPS INSERT: No suitable draft API found, available methods:', Object.keys(context).filter(key => typeof context[key] === 'function'));
       
     } catch (error) {
-      console.error('❌ AIROPS: Insert error:', error);
+      console.error('❌ AIROPS INSERT: All insert strategies failed:', error);
       setStatus('Insert failed: ' + error.message);
     }
     
-    // 📋 FALLBACK: Copy to clipboard
-    console.log('📋 AIROPS: Falling back to clipboard');
+    // 📋 FALLBACK: Copy to clipboard with detailed status
+    console.log('📋 AIROPS INSERT: Falling back to clipboard copy');
     copyToClipboard(content);
-    setStatus('Copied to clipboard (insert failed)');
+    setStatus('Copied to clipboard (insert unavailable)');
   };
 
+  // ✅ RESTORED: Enhanced copy function with better formatting preservation
   const copyToClipboard = (content) => {
+    console.log('📋 AIROPS COPY: Starting copy process, content length:', content.length);
+    
     // Create a temporary div to properly convert HTML to text while preserving some formatting
     const tempDiv = document.createElement('div');
     tempDiv.innerHTML = content;
     
-    // Replace HTML elements with text equivalents to preserve some formatting
+    // Enhanced HTML to text conversion with better formatting preservation
     tempDiv.querySelectorAll('br').forEach(br => br.replaceWith('\n'));
     tempDiv.querySelectorAll('p').forEach(p => p.replaceWith(p.textContent + '\n\n'));
-    tempDiv.querySelectorAll('h1, h2, h3, h4, h5, h6').forEach(h => h.replaceWith(h.textContent + '\n\n'));
+    tempDiv.querySelectorAll('h1, h2, h3, h4, h5, h6').forEach(h => h.replaceWith('# ' + h.textContent + '\n\n'));
     tempDiv.querySelectorAll('li').forEach(li => li.replaceWith('• ' + li.textContent + '\n'));
-    tempDiv.querySelectorAll('ul, ol').forEach(list => list.replaceWith(list.textContent + '\n'));
+    tempDiv.querySelectorAll('ul, ol').forEach(list => list.replaceWith(list.textContent + '\n\n'));
+    tempDiv.querySelectorAll('blockquote').forEach(quote => quote.replaceWith('> ' + quote.textContent + '\n\n'));
+    tempDiv.querySelectorAll('code').forEach(code => code.replaceWith('`' + code.textContent + '`'));
+    tempDiv.querySelectorAll('pre').forEach(pre => pre.replaceWith('```\n' + pre.textContent + '\n```\n'));
+    
+    // Enhanced table handling
     tempDiv.querySelectorAll('table').forEach(table => {
       let tableText = '';
-      table.querySelectorAll('tr').forEach(row => {
+      const rows = table.querySelectorAll('tr');
+      rows.forEach((row, index) => {
         const cells = Array.from(row.querySelectorAll('td, th')).map(cell => cell.textContent.trim());
         tableText += cells.join(' | ') + '\n';
+        
+        // Add header separator for first row if it contains th elements
+        if (index === 0 && row.querySelector('th')) {
+          tableText += cells.map(() => '---').join(' | ') + '\n';
+        }
       });
       table.replaceWith(tableText + '\n');
     });
     
     const cleanContent = tempDiv.textContent || tempDiv.innerText || content.replace(/<[^>]*>/g, '');
+    console.log('📋 AIROPS COPY: Cleaned content length:', cleanContent.length);
     
-    navigator.clipboard.writeText(cleanContent).then(() => {
-      setStatus('Copied!');
-    }).catch(() => {
+    // Modern clipboard API with fallback
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(cleanContent).then(() => {
+        setStatus('Copied!');
+        console.log('✅ AIROPS COPY: Successfully copied using modern API');
+      }).catch((error) => {
+        console.log('❌ AIROPS COPY: Modern API failed, trying fallback:', error);
+        fallbackCopy(cleanContent);
+      });
+    } else {
+      console.log('📋 AIROPS COPY: Using fallback copy method');
+      fallbackCopy(cleanContent);
+    }
+    
+    function fallbackCopy(text) {
       try {
         const textArea = document.createElement('textarea');
-        textArea.value = cleanContent;
+        textArea.value = text;
+        textArea.style.position = 'fixed';
+        textArea.style.left = '-999999px';
+        textArea.style.top = '-999999px';
         document.body.appendChild(textArea);
+        textArea.focus();
         textArea.select();
-        document.execCommand('copy');
+        
+        const result = document.execCommand('copy');
         document.body.removeChild(textArea);
-        setStatus('Copied!');
+        
+        if (result) {
+          setStatus('Copied!');
+          console.log('✅ AIROPS COPY: Successfully copied using fallback');
+        } else {
+          setStatus('Copy failed');
+          console.log('❌ AIROPS COPY: Fallback copy failed');
+        }
       } catch (err) {
         setStatus('Copy failed');
+        console.error('❌ AIROPS COPY: All copy methods failed:', err);
       }
-    });
+    }
   };
 
-  // ✅ ENHANCED: Process request with proper task creation and storage
+  // ✅ ENHANCED: Process request with comprehensive error handling and logging
   const processRequest = async () => {
     const now = Date.now();
     if (isProcessingRef.current || (now - lastCallTimeRef.current) < 1000) {
+      console.log('🚫 AIROPS: Request blocked - too frequent or already processing');
       return;
     }
 
@@ -979,13 +1356,28 @@ function App() {
     
     try {
       const taskId = mode === 'task' ? `task_${Date.now()}_${Math.random().toString(36).substr(2, 9)}` : null;
+      console.log(`🚀 AIROPS: Creating ${mode} request${taskId ? ` with ID: ${taskId}` : ''}`);
+      console.log(`🚀 AIROPS: Request details:`, {
+        mode,
+        taskId,
+        hasFile: !!uploadedFile,
+        fileName: uploadedFile?.name,
+        outputFormat,
+        selectedFormat,
+        conversationId: context?.conversation?.id,
+        userId: context?.teammate?.id
+      });
+      
       const combinedInstructions = createCombinedInstructions();
-      const singleNestedPayload = await createCompletePayload(combinedInstructions, taskId);
+      console.log(`🚀 AIROPS: Combined instructions length: ${combinedInstructions.length} characters`);
+      
+      const payload = await createCompletePayload(combinedInstructions, taskId);
+      console.log(`🚀 AIROPS: Payload created, size: ${JSON.stringify(payload).length} characters`);
       
       if (context?.conversation) {
         const conversationId = context.conversation.id;
         
-        // ✅ ENHANCED: Create and save history entry
+        // Save history entry
         const newEntry = {
           text: comment,
           mode: mode,
@@ -997,14 +1389,20 @@ function App() {
           user: context.teammate ? context.teammate.name : 'Unknown user'
         };
         
+        console.log(`📚 AIROPS: Saving history entry:`, {
+          mode: newEntry.mode,
+          user: newEntry.user,
+          hasFile: newEntry.hasFile,
+          textLength: newEntry.text.length
+        });
+        
         const historySaved = await saveHistoryToNetlify(conversationId, newEntry);
         if (historySaved) {
-          const updatedHistory = [newEntry, ...commentHistory];
-          setCommentHistory(updatedHistory);
-          console.log('✅ History updated locally');
+          setCommentHistory([newEntry, ...commentHistory]);
+          console.log('✅ AIROPS: History updated locally');
         }
 
-        // ✅ ENHANCED: Create and save task if in task mode  
+        // Create and save task if in task mode
         if (mode === 'task' && taskId) {
           const newTask = {
             id: taskId,
@@ -1018,13 +1416,20 @@ function App() {
             user: context.teammate ? context.teammate.name : 'Unknown user'
           };
           
+          console.log(`📋 AIROPS: Creating task:`, {
+            id: newTask.id,
+            user: newTask.user,
+            outputFormat: newTask.outputFormat,
+            hasFile: newTask.hasFile
+          });
+          
           const updatedTasks = [newTask, ...taskResults];
           setTaskResults(updatedTasks);
-          console.log(`✅ Task ${taskId} created locally`);
+          console.log(`✅ AIROPS: Task ${taskId} created locally`);
           
-          // ✅ CRITICAL: Save to both individual storage and conversation storage immediately
+          // Save to storage with comprehensive error handling
           try {
-            // Save individual task
+            // Save individual task for status checking
             const individualResponse = await fetch('/.netlify/functions/store-task', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -1032,48 +1437,54 @@ function App() {
             });
             
             if (individualResponse.ok) {
-              console.log(`✅ Task ${taskId} saved individually`);
+              console.log(`✅ AIROPS: Task ${taskId} saved individually`);
+            } else {
+              const errorText = await individualResponse.text();
+              console.error(`❌ AIROPS: Failed to save individual task: ${errorText}`);
             }
             
-            // Save to conversation tasks
+            // Save to conversation tasks for UI persistence
             const conversationSaved = await saveTaskResultsToNetlify(conversationId, updatedTasks);
             if (conversationSaved) {
-              console.log(`✅ Task ${taskId} saved to conversation`);
+              console.log(`✅ AIROPS: Task ${taskId} saved to conversation`);
             }
-          } catch (blobError) {
-            console.error('❌ Error storing task:', blobError);
+            
+          } catch (storageError) {
+            console.error('❌ AIROPS: Storage error:', storageError);
+            setStatus('Task created but storage failed');
           }
           
+          // Start polling for this task
           setPollingTasks(prev => new Set([...prev, taskId]));
-          console.log(`🔄 Started polling for task ${taskId}`);
+          console.log(`🔄 AIROPS: Started polling for task ${taskId}`);
         }
       }
       
       const webhookUrl = mode === 'email' ? EMAIL_WEBHOOK_URL : TASK_WEBHOOK_URL;
+      console.log(`🚀 AIROPS: Sending request to webhook: ${webhookUrl.substring(0, 50)}...`);
       
-      console.log(`🚀 Sending ${mode} request to AirOps...`);
       const response = await fetch(webhookUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json'
         },
-        body: JSON.stringify(singleNestedPayload)
+        body: JSON.stringify(payload)
       });
+      
+      console.log(`🚀 AIROPS: Webhook response status: ${response.status}`);
       
       if (!response.ok) {
         const errorText = await response.text();
+        console.error(`❌ AIROPS: Webhook error: ${response.status} - ${errorText}`);
         throw new Error(`HTTP ${response.status}: ${errorText}`);
       }
       
       const responseData = await response.json();
-      console.log('✅ AirOps response received:', responseData);
+      console.log('✅ AIROPS: Webhook response received:', responseData);
       
-      if (mode === 'email') {
-        setStatus('Email sent!');
-      } else {
-        setStatus('Task created!');
-      }
+      setStatus(mode === 'email' ? 'Email sent!' : 'Task created!');
+      console.log(`✅ AIROPS: ${mode} request completed successfully`);
       
       // Clear form
       setComment('');
@@ -1085,8 +1496,8 @@ function App() {
       }
       
     } catch (error) {
-      console.error('❌ Request error:', error);
-      setStatus('Error: ' + error.message);
+      console.error('❌ AIROPS: Request processing failed:', error);
+      setStatus('Error: ' + (error.message || 'Unknown error'));
     } finally {
       setIsSending(false);
       isProcessingRef.current = false;
@@ -1098,62 +1509,12 @@ function App() {
       const date = new Date(isoString);
       return date.toLocaleDateString(undefined, { 
         month: 'short', 
-        day: 'numeric'
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
       });
     } catch (e) {
       return isoString;
-    }
-  };
-
-  // 🧪 TEMPORARY: Debug function to test history API directly
-  const debugHistoryAPI = async () => {
-    if (!context?.conversation?.id) {
-      console.error('❌ DEBUG: No conversation ID');
-      return;
-    }
-    
-    console.log('🧪 DEBUG: Testing history API...');
-    console.log('🧪 DEBUG: Conversation ID:', context.conversation.id);
-    console.log('🧪 DEBUG: Current history length:', commentHistory.length);
-    
-    try {
-      // Test 1: Try to load current history
-      const loadResponse = await fetch(`/.netlify/functions/get-conversation-history?conversationId=${context.conversation.id}`);
-      console.log('🧪 DEBUG: Load response status:', loadResponse.status);
-      
-      if (loadResponse.ok) {
-        const loadData = await loadResponse.json();
-        console.log('🧪 DEBUG: Loaded history:', loadData);
-      } else {
-        const loadError = await loadResponse.text();
-        console.log('🧪 DEBUG: Load error:', loadError);
-      }
-      
-      // Test 2: Try to save current history back (should be no-op)
-      const saveResponse = await fetch('/.netlify/functions/save-conversation-history', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          conversationId: context.conversation.id, 
-          history: commentHistory 
-        })
-      });
-      
-      console.log('🧪 DEBUG: Save response status:', saveResponse.status);
-      
-      if (saveResponse.ok) {
-        const saveData = await saveResponse.json();
-        console.log('🧪 DEBUG: Save response data:', saveData);
-      } else {
-        const saveError = await saveResponse.text();
-        console.log('🧪 DEBUG: Save error:', saveError);
-      }
-      
-      setStatus('Debug complete - check console');
-      
-    } catch (error) {
-      console.error('🧪 DEBUG: API test failed:', error);
-      setStatus('Debug failed - check console');
     }
   };
 
@@ -1163,76 +1524,164 @@ function App() {
       <html>
         <head>
           <title>AirOps Task Result</title>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1">
           <style>
             body { 
               font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
-              max-width: 800px; 
-              margin: 40px auto; 
+              max-width: 1000px; 
+              margin: 20px auto; 
               padding: 20px; 
               line-height: 1.6; 
               color: #0f172a;
+              background: #f8fafc;
+            }
+            .container {
+              background: white;
+              border-radius: 12px;
+              box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+              overflow: hidden;
             }
             .header { 
-              border-bottom: 2px solid #e2e8f0; 
-              padding-bottom: 20px; 
-              margin-bottom: 30px; 
+              background: linear-gradient(135deg, #6366f1, #8b5cf6);
+              color: white;
+              padding: 24px;
+              text-align: center;
             }
-            h1 { color: #0f172a; margin-bottom: 16px; }
+            h1 { margin: 0; font-size: 24px; font-weight: 600; }
             .meta { 
               background: #f8fafc; 
-              padding: 16px; 
-              border-radius: 8px; 
-              margin-bottom: 20px; 
+              padding: 20px; 
+              border-bottom: 1px solid #e2e8f0;
+              display: grid;
+              grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+              gap: 16px;
             }
-            .meta strong { color: #475569; }
+            .meta-item { 
+              background: white;
+              padding: 12px;
+              border-radius: 8px;
+              border: 1px solid #e2e8f0;
+            }
+            .meta-label { 
+              font-size: 12px; 
+              font-weight: 600; 
+              color: #6b7280; 
+              text-transform: uppercase; 
+              letter-spacing: 0.5px;
+              margin-bottom: 4px;
+            }
+            .meta-value { 
+              font-size: 14px; 
+              color: #0f172a; 
+              font-weight: 500;
+            }
             .content { 
-              background: white; 
-              border: 1px solid #e2e8f0; 
               padding: 24px; 
-              border-radius: 8px; 
             }
-            h2, h3 { color: #0f172a; margin: 20px 0 12px 0; }
-            p { margin-bottom: 16px; }
-            ul, ol { margin-left: 20px; margin-bottom: 16px; }
-            li { margin-bottom: 4px; }
-            table { 
+            .content h2, .content h3 { color: #0f172a; margin: 24px 0 12px 0; }
+            .content p { margin-bottom: 16px; }
+            .content ul, .content ol { margin: 16px 0; padding-left: 24px; }
+            .content li { margin-bottom: 8px; }
+            .content table { 
               border-collapse: collapse; 
               width: 100%; 
-              margin-bottom: 16px; 
+              margin: 20px 0; 
               border: 1px solid #e2e8f0;
               border-radius: 8px;
               overflow: hidden;
             }
-            th, td { border-bottom: 1px solid #e2e8f0; padding: 12px; text-align: left; }
-            th { background-color: #f8fafc; font-weight: 600; }
-            code { 
+            .content th, .content td { 
+              border-bottom: 1px solid #e2e8f0; 
+              padding: 12px 16px; 
+              text-align: left; 
+            }
+            .content th { 
+              background-color: #f8fafc; 
+              font-weight: 600; 
+              font-size: 14px;
+            }
+            .content td { font-size: 14px; }
+            .content blockquote {
+              border-left: 4px solid #6366f1;
+              background: #f8fafc;
+              margin: 20px 0;
+              padding: 16px 20px;
+              border-radius: 0 8px 8px 0;
+            }
+            .content code { 
               background: #f1f5f9; 
               padding: 2px 6px; 
               border-radius: 4px; 
-              font-family: monospace; 
+              font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace; 
+              font-size: 13px;
             }
-            pre { 
+            .content pre { 
               background: #0f172a; 
               color: #e2e8f0; 
-              padding: 16px; 
+              padding: 20px; 
               border-radius: 8px; 
               overflow-x: auto; 
+              margin: 20px 0;
+            }
+            .content pre code { 
+              background: none; 
+              padding: 0; 
+              color: inherit; 
+            }
+            .status-badge {
+              display: inline-block;
+              padding: 4px 12px;
+              border-radius: 20px;
+              font-size: 12px;
+              font-weight: 600;
+              text-transform: uppercase;
+              letter-spacing: 0.5px;
+            }
+            .status-completed { background: #dcfce7; color: #166534; }
+            .status-failed { background: #fee2e2; color: #dc2626; }
+            .status-pending { background: #fef3c7; color: #d97706; }
+            @media (max-width: 768px) {
+              body { margin: 10px; padding: 15px; }
+              .meta { grid-template-columns: 1fr; }
+              .header, .content { padding: 20px; }
             }
           </style>
         </head>
         <body>
-          <div class="header">
-            <h1>AirOps Task Result</h1>
-          </div>
-          <div class="meta">
-            <p><strong>Format:</strong> ${task.outputFormat || 'General Task'}</p>
-            <p><strong>Created:</strong> ${formatDate(task.createdAt)}</p>
-            <p><strong>Status:</strong> ${task.status}</p>
-            <p><strong>User:</strong> ${task.user}</p>
-            ${task.fileName ? `<p><strong>File:</strong> ${task.fileName}</p>` : ''}
-          </div>
-          <div class="content">
-            ${task.result || '<p>No result available yet.</p>'}
+          <div class="container">
+            <div class="header">
+              <h1>AirOps Task Result</h1>
+            </div>
+            <div class="meta">
+              <div class="meta-item">
+                <div class="meta-label">Format</div>
+                <div class="meta-value">${task.outputFormat || 'General Task'}</div>
+              </div>
+              <div class="meta-item">
+                <div class="meta-label">Status</div>
+                <div class="meta-value">
+                  <span class="status-badge status-${task.status}">${task.status}</span>
+                </div>
+              </div>
+              <div class="meta-item">
+                <div class="meta-label">Created</div>
+                <div class="meta-value">${formatDate(task.createdAt)}</div>
+              </div>
+              <div class="meta-item">
+                <div class="meta-label">User</div>
+                <div class="meta-value">${task.user}</div>
+              </div>
+              ${task.fileName ? `
+              <div class="meta-item">
+                <div class="meta-label">File</div>
+                <div class="meta-value">${task.fileName}</div>
+              </div>
+              ` : ''}
+            </div>
+            <div class="content">
+              ${task.result || '<p style="text-align: center; color: #6b7280; font-style: italic;">No result available yet.</p>'}
+            </div>
           </div>
         </body>
       </html>
@@ -1240,7 +1689,6 @@ function App() {
     newWindow.document.close();
   };
 
-  // View history entry in new window
   const viewHistoryEntryInNewWindow = (entry) => {
     const newWindow = window.open('', '_blank');
     const content = entry.result || entry.text;
@@ -1250,77 +1698,102 @@ function App() {
       <html>
         <head>
           <title>${title}</title>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1">
           <style>
             body { 
               font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
-              max-width: 800px; 
-              margin: 40px auto; 
+              max-width: 1000px; 
+              margin: 20px auto; 
               padding: 20px; 
               line-height: 1.6; 
               color: #0f172a;
+              background: #f8fafc;
             }
-            .header { 
-              border-bottom: 2px solid #e2e8f0; 
-              padding-bottom: 20px; 
-              margin-bottom: 30px; 
-            }
-            h1 { color: #0f172a; margin-bottom: 16px; }
-            .meta { 
-              background: #f8fafc; 
-              padding: 16px; 
-              border-radius: 8px; 
-              margin-bottom: 20px; 
-            }
-            .meta strong { color: #475569; }
-            .content { 
-              background: white; 
-              border: 1px solid #e2e8f0; 
-              padding: 24px; 
-              border-radius: 8px; 
-            }
-            h2, h3 { color: #0f172a; margin: 20px 0 12px 0; }
-            p { margin-bottom: 16px; }
-            ul, ol { margin-left: 20px; margin-bottom: 16px; }
-            li { margin-bottom: 4px; }
-            table { 
-              border-collapse: collapse; 
-              width: 100%; 
-              margin-bottom: 16px; 
-              border: 1px solid #e2e8f0;
-              border-radius: 8px;
+            .container {
+              background: white;
+              border-radius: 12px;
+              box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
               overflow: hidden;
             }
-            th, td { border-bottom: 1px solid #e2e8f0; padding: 12px; text-align: left; }
-            th { background-color: #f8fafc; font-weight: 600; }
-            code { 
-              background: #f1f5f9; 
-              padding: 2px 6px; 
-              border-radius: 4px; 
-              font-family: monospace; 
+            .header { 
+              background: ${entry.isTaskCompletion ? 'linear-gradient(135deg, #22c55e, #16a34a)' : 'linear-gradient(135deg, #6366f1, #8b5cf6)'};
+              color: white;
+              padding: 24px;
+              text-align: center;
             }
-            pre { 
-              background: #0f172a; 
-              color: #e2e8f0; 
-              padding: 16px; 
-              border-radius: 8px; 
-              overflow-x: auto; 
+            h1 { margin: 0; font-size: 24px; font-weight: 600; }
+            .meta { 
+              background: #f8fafc; 
+              padding: 20px; 
+              border-bottom: 1px solid #e2e8f0;
+              display: grid;
+              grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+              gap: 16px;
+            }
+            .meta-item { 
+              background: white;
+              padding: 12px;
+              border-radius: 8px;
+              border: 1px solid #e2e8f0;
+            }
+            .meta-label { 
+              font-size: 12px; 
+              font-weight: 600; 
+              color: #6b7280; 
+              text-transform: uppercase; 
+              letter-spacing: 0.5px;
+              margin-bottom: 4px;
+            }
+            .meta-value { 
+              font-size: 14px; 
+              color: #0f172a; 
+              font-weight: 500;
+            }
+            .content { 
+              padding: 24px; 
+            }
+            @media (max-width: 768px) {
+              body { margin: 10px; padding: 15px; }
+              .meta { grid-template-columns: 1fr; }
+              .header, .content { padding: 20px; }
             }
           </style>
         </head>
         <body>
-          <div class="header">
-            <h1>${title}</h1>
-          </div>
-          <div class="meta">
-            <p><strong>Type:</strong> ${entry.isTaskCompletion ? 'Task Completion' : entry.mode === 'email' ? 'Email Request' : 'Task Request'}</p>
-            <p><strong>Created:</strong> ${formatDate(entry.timestamp)}</p>
-            <p><strong>User:</strong> ${entry.user}</p>
-            ${entry.outputFormat ? `<p><strong>Format:</strong> ${entry.outputFormat}</p>` : ''}
-            ${entry.fileName ? `<p><strong>File:</strong> ${entry.fileName}</p>` : ''}
-            ${entry.status ? `<p><strong>Status:</strong> ${entry.status}</p>` : ''}
-          </div>
-          <div class="content">
-            ${content}
+          <div class="container">
+            <div class="header">
+              <h1>${title}</h1>
+            </div>
+            <div class="meta">
+              <div class="meta-item">
+                <div class="meta-label">Type</div>
+                <div class="meta-value">${entry.isTaskCompletion ? 'Task Completion' : entry.mode === 'email' ? 'Email Request' : 'Task Request'}</div>
+              </div>
+              <div class="meta-item">
+                <div class="meta-label">Created</div>
+                <div class="meta-value">${formatDate(entry.timestamp)}</div>
+              </div>
+              <div class="meta-item">
+                <div class="meta-label">User</div>
+                <div class="meta-value">${entry.user}</div>
+              </div>
+              ${entry.outputFormat ? `
+              <div class="meta-item">
+                <div class="meta-label">Format</div>
+                <div class="meta-value">${entry.outputFormat}</div>
+              </div>
+              ` : ''}
+              ${entry.fileName ? `
+              <div class="meta-item">
+                <div class="meta-label">File</div>
+                <div class="meta-value">${entry.fileName}</div>
+              </div>
+              ` : ''}
+            </div>
+            <div class="content">
+              ${content}
+            </div>
           </div>
         </body>
       </html>
@@ -1338,7 +1811,18 @@ function App() {
         fontSize: theme.fontSize.base,
         color: theme.colors.tertiary
       }}>
-        Loading...
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ marginBottom: theme.spacing.sm }}>Loading AirOps Plugin...</div>
+          <div style={{ 
+            width: '20px', 
+            height: '20px', 
+            border: `2px solid ${theme.colors.border}`,
+            borderTop: `2px solid ${theme.colors.accent}`,
+            borderRadius: '50%',
+            animation: 'spin 1s linear infinite',
+            margin: '0 auto'
+          }} />
+        </div>
       </div>
     );
   }
@@ -1349,9 +1833,21 @@ function App() {
         padding: theme.spacing.lg,
         fontSize: theme.fontSize.base,
         color: theme.colors.secondary,
-        textAlign: 'center'
+        textAlign: 'center',
+        background: theme.colors.background,
+        border: `1px solid ${theme.colors.border}`,
+        borderRadius: theme.borderRadius.lg,
+        margin: theme.spacing.md
       }}>
-        Select a conversation to use this plugin
+        <div style={{ marginBottom: theme.spacing.sm }}>
+          <EmailIcon size={24} color={theme.colors.tertiary} />
+        </div>
+        <div style={{ fontWeight: '500', marginBottom: theme.spacing.xs }}>
+          Select a conversation
+        </div>
+        <div style={{ fontSize: theme.fontSize.sm, color: theme.colors.tertiary }}>
+          Choose a conversation to use the AirOps plugin
+        </div>
       </div>
     );
   }
@@ -1366,7 +1862,7 @@ function App() {
         background: theme.colors.surface,
         border: `1px solid ${theme.colors.border}`,
         borderRadius: theme.borderRadius.lg,
-        padding: theme.spacing.md,
+        padding: theme.spacing.lg,
         fontSize: theme.fontSize.base,
         fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
         position: 'relative',
@@ -1381,7 +1877,6 @@ function App() {
         transition: isResizing ? 'none' : 'width 0.2s ease, height 0.2s ease'
       }}
     >
-      {/* Add CSS animations */}
       <style jsx>{`
         @keyframes spin {
           0% { transform: rotate(0deg); }
@@ -1392,7 +1887,8 @@ function App() {
           to { opacity: 1; transform: translateY(0); }
         }
       `}</style>
-      {/* Ultra-compact Header */}
+
+      {/* Enhanced Header with debug buttons */}
       <div style={{
         display: 'flex',
         alignItems: 'center',
@@ -1412,13 +1908,58 @@ function App() {
         <span style={{
           fontSize: theme.fontSize.lg,
           fontWeight: '600',
-          color: theme.colors.primary
+          color: theme.colors.primary,
+          flex: 1
         }}>
           {cardSize.width < 220 ? 'AirOps' : 'Send to AirOps'}
         </span>
+        
+        {/* Enhanced debug buttons */}
+        <div style={{ display: 'flex', gap: theme.spacing.xs }}>
+          <button
+            onClick={debugHistoryAPI}
+            style={{
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              padding: theme.spacing.xs,
+              borderRadius: theme.borderRadius.sm,
+              color: theme.colors.tertiary,
+              fontSize: theme.fontSize.lg,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
+            onMouseEnter={(e) => e.target.style.color = theme.colors.accent}
+            onMouseLeave={(e) => e.target.style.color = theme.colors.tertiary}
+            title="Debug API (check console)"
+          >
+            🧪
+          </button>
+          <button
+            onClick={manualRefresh}
+            style={{
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              padding: theme.spacing.xs,
+              borderRadius: theme.borderRadius.sm,
+              color: theme.colors.tertiary,
+              fontSize: theme.fontSize.lg,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
+            onMouseEnter={(e) => e.target.style.color = theme.colors.primary}
+            onMouseLeave={(e) => e.target.style.color = theme.colors.tertiary}
+            title="Manual refresh"
+          >
+            ↻
+          </button>
+        </div>
       </div>
 
-      {/* Ultra-compact Mode Tabs */}
+      {/* Mode Tabs */}
       <div style={{ marginBottom: theme.spacing.sm }}>
         <div style={{
           display: 'flex',
@@ -1482,14 +2023,14 @@ function App() {
         </div>
       </div>
       
-      {/* Ultra-compact Content Area */}
+      {/* Content Area */}
       <div style={{
         flex: 1,
         overflowY: 'auto',
         paddingRight: '2px',
         marginBottom: theme.spacing.sm
       }}>
-        {/* Ultra-compact Instructions Input */}
+        {/* Instructions Input */}
         <div ref={textareaContainerRef} style={{ position: 'relative', marginBottom: theme.spacing.sm }}>
           <textarea
             value={comment}
@@ -1518,7 +2059,6 @@ function App() {
           {/* Textarea resize handle */}
           <div
             onMouseDown={handleTextareaResizeStart}
-            className="textarea-resize-handle"
             style={{
               position: 'absolute',
               bottom: '2px',
@@ -1546,7 +2086,7 @@ function App() {
           </div>
         </div>
 
-        {/* Ultra-compact Task Mode Controls */}
+        {/* Task Mode Controls */}
         {mode === 'task' && (
           <div style={{ marginBottom: theme.spacing.sm }}>
             <label style={{
@@ -1583,14 +2123,15 @@ function App() {
               ))}
             </select>
 
-            {/* Ultra-compact File Upload - Much smaller */}
+            {/* Enhanced File Upload */}
             <div style={{ marginTop: theme.spacing.sm }}>
               <input
                 ref={fileInputRef}
                 type="file"
                 onChange={handleFileUpload}
-                accept=".txt,.csv,.json,.doc,.docx,.pdf,.png,.jpg,.jpeg"
+                accept=".txt,.csv,.json,.doc,.docx,.pdf,.png,.jpg,.jpeg,.js,.jsx,.ts,.tsx,.py,.html,.css,.md,.xml,.yaml,.yml,.sql,.sh,.bat"
                 style={{ display: 'none' }}
+                multiple={false}
               />
               
               {!uploadedFile ? (
@@ -1620,7 +2161,7 @@ function App() {
                   }}
                 >
                   <UploadIcon size={theme.iconSize.md} color={theme.colors.accent} style={{ marginRight: theme.spacing.xs }} />
-                  Upload file (optional)
+                  Upload reference file (optional)
                 </button>
               ) : (
                 <div style={{
@@ -1647,6 +2188,7 @@ function App() {
                       textOverflow: 'ellipsis'
                     }}>
                       {uploadedFile.name} ({(uploadedFile.size / 1024).toFixed(0)}KB)
+                      {uploadedFile.isProcessed && <span style={{ color: theme.colors.success }}> ✓</span>}
                     </div>
                   </div>
                   <button
@@ -1676,7 +2218,7 @@ function App() {
           </div>
         )}
 
-        {/* ✅ FIXED: Results and History sections with proper alignment */}
+        {/* Results and History */}
         {(taskResults.length > 0 || commentHistory.length > 0) && (
           <Accordion expandMode="multi">
             {taskResults.length > 0 && (
@@ -1799,10 +2341,10 @@ function App() {
                           </div>
                         </div>
                         
-                        {/* Action buttons - Don't trigger expand/collapse */}
+                        {/* Action buttons */}
                         <div 
                           style={{ display: 'flex', alignItems: 'center', gap: theme.spacing.xs }}
-                          onClick={(e) => e.stopPropagation()} // Prevent expand/collapse
+                          onClick={(e) => e.stopPropagation()}
                         >
                           {task.result && (
                             <button
@@ -1894,7 +2436,7 @@ function App() {
                                 marginBottom: theme.spacing.sm,
                                 maxHeight: '200px',
                                 overflowY: 'auto',
-                                fontSize: theme.fontSize.result, // BIGGER font for results
+                                fontSize: theme.fontSize.result,
                                 lineHeight: '1.5'
                               }}>
                                 <div 
@@ -1986,7 +2528,6 @@ function App() {
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        console.log('🗑️ Bulk delete history button clicked');
                         clearHistory();
                       }}
                       style={{
@@ -2036,7 +2577,6 @@ function App() {
                         <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
                           <span>{formatDate(entry.timestamp)} • </span>
                           
-                          {/* Entry Type Icon */}
                           {entry.isTaskCompletion ? (
                             <CheckmarkIcon size={theme.iconSize.sm} color={theme.colors.success} />
                           ) : entry.mode === 'email' ? (
@@ -2051,7 +2591,7 @@ function App() {
                             <AttachmentIcon size={theme.iconSize.sm} color={theme.colors.tertiary} style={{ marginLeft: '2px' }} />
                           )}
                           
-                          {entry.isTaskCompletion && entry.status && (
+                          {entry.isTaskCompletion && (
                             <span style={{ 
                               color: theme.colors.success, 
                               fontSize: theme.fontSize.xs,
@@ -2063,9 +2603,8 @@ function App() {
                           )}
                         </div>
                         
-                        {/* Individual History Entry Actions */}
+                        {/* Actions */}
                         <div style={{ display: 'flex', gap: '2px' }}>
-                          {/* View Button for ALL entries (not just task completions) */}
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
@@ -2089,7 +2628,6 @@ function App() {
                             <ViewIcon size={theme.iconSize.sm} color="currentColor" />
                           </button>
                           
-                          {/* Action Buttons for Task Completions */}
                           {entry.isTaskCompletion && entry.result && (
                             <>
                               <button
@@ -2139,7 +2677,6 @@ function App() {
                             </>
                           )}
                           
-                          {/* Individual Delete Button */}
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
@@ -2174,14 +2711,13 @@ function App() {
                         fontSize: theme.fontSize.xs,
                         marginBottom: entry.result ? '4px' : '0'
                       }}>
-                        {/* Remove "Task completed:" prefix since green checkmark already shows it's completed */}
                         {entry.isTaskCompletion ? 
                           entry.text.replace(/^Task completed:\s*/i, '') : 
                           entry.text
                         }
                       </div>
                       
-                      {/* Task Result Preview (for completed tasks) */}
+                      {/* Task Result Preview */}
                       {entry.isTaskCompletion && entry.result && (
                         <div style={{
                           background: theme.colors.surface,
@@ -2189,7 +2725,7 @@ function App() {
                           borderRadius: theme.borderRadius.sm,
                           padding: theme.spacing.xs,
                           marginTop: '2px',
-                          fontSize: theme.fontSize.sm, // Bigger font for history results
+                          fontSize: theme.fontSize.sm,
                           maxHeight: '60px',
                           overflowY: 'auto'
                         }}>
@@ -2227,7 +2763,7 @@ function App() {
         )}
       </div>
 
-      {/* Ultra-compact Bottom Section */}
+      {/* Bottom Section */}
       <div style={{
         borderTop: `1px solid ${theme.colors.border}`,
         paddingTop: theme.spacing.sm
@@ -2292,10 +2828,9 @@ function App() {
         )}
       </div>
 
-      {/* Ultra-compact resize handle */}
+      {/* Resize handle */}
       <div
         onMouseDown={handleCardResizeStart}
-        className="card-resize-handle"
         style={{
           position: 'absolute',
           bottom: '0px',
