@@ -38,7 +38,7 @@ function App() {
   const [expandedTasks, setExpandedTasks] = useState(new Set()); 
   const [expandedHistory, setExpandedHistory] = useState(new Set()); 
   
-  // Compact auto-resize state - 0.5" thinner (≈36px) from original 280px = 244px
+  // Compact auto-resize state
   const [cardSize, setCardSize] = useState({ width: 244, height: 360 });
   const [isResizing, setIsResizing] = useState(false);
   const [textareaHeight, setTextareaHeight] = useState(65);
@@ -64,7 +64,7 @@ function App() {
     { value: 'table', label: 'Table' }
   ];
 
-  // ✅ RESTORED: Enhanced adaptive theme based on card size
+  // ✅ Enhanced adaptive theme
   const theme = {
     colors: {
       primary: '#0f172a',
@@ -93,15 +93,15 @@ function App() {
       lg: '6px'
     },
     fontSize: {
-      xs: `${Math.max(9, Math.min(11, cardSize.width / 32))}px`,    // Adaptive 9-11px
-      sm: `${Math.max(10, Math.min(12, cardSize.width / 28))}px`,   // Adaptive 10-12px  
-      base: `${Math.max(11, Math.min(13, cardSize.width / 25))}px`, // Adaptive 11-13px
-      lg: `${Math.max(12, Math.min(14, cardSize.width / 22))}px`,   // Adaptive 12-14px
-      xl: `${Math.max(13, Math.min(15, cardSize.width / 20))}px`,   // Adaptive 13-15px
-      result: `${Math.max(12, Math.min(14, cardSize.width / 22))}px` // Bigger for results
+      xs: `${Math.max(9, Math.min(11, cardSize.width / 32))}px`,
+      sm: `${Math.max(10, Math.min(12, cardSize.width / 28))}px`,
+      base: `${Math.max(11, Math.min(13, cardSize.width / 25))}px`,
+      lg: `${Math.max(12, Math.min(14, cardSize.width / 22))}px`,
+      xl: `${Math.max(13, Math.min(15, cardSize.width / 20))}px`,
+      result: `${Math.max(12, Math.min(14, cardSize.width / 22))}px`
     },
     iconSize: {
-      sm: Math.max(8, Math.min(12, cardSize.width / 28)),          // Adaptive icon sizes
+      sm: Math.max(8, Math.min(12, cardSize.width / 28)),
       md: Math.max(10, Math.min(14, cardSize.width / 25)),
       lg: Math.max(12, Math.min(16, cardSize.width / 22))
     },
@@ -112,7 +112,7 @@ function App() {
     }
   };
 
-  // ✅ RESTORED: Toggle task expansion
+  // ✅ Toggle functions
   const toggleTaskExpansion = (taskId) => {
     setExpandedTasks(prev => {
       const newSet = new Set(prev);
@@ -125,7 +125,6 @@ function App() {
     });
   };
 
-  // ✅ NEW: Toggle history expansion
   const toggleHistoryExpansion = (historyIndex) => {
     setExpandedHistory(prev => {
       const newSet = new Set(prev);
@@ -138,9 +137,175 @@ function App() {
     });
   };
 
-  // ✅ RESTORED: Enhanced Front context logging
+  // ✅ FIXED: Enhanced Front context debugging based on the API definitions
+  const comprehensiveContextDebug = async () => {
+    console.log('🔍 COMPREHENSIVE FRONT CONTEXT DEBUG');
+    console.log('=====================================');
+    
+    // 1. Basic context info
+    console.log('1. BASIC CONTEXT:', {
+      hasContext: !!context,
+      contextType: context?.type,
+      contextConstructor: context?.constructor?.name
+    });
+    
+    // 2. ✅ ENHANCED: Check specific Front API methods based on the type definitions
+    if (context) {
+      console.log('2. FRONT API METHOD AVAILABILITY:');
+      
+      // Base methods that should be available on all contexts
+      const baseMethods = [
+        'createWidget', 'destroyWidget', 'sendHttp', 'relayHttp', 
+        'authenticate', 'deauthenticate', 'openUrl', 'openUrlInPopup',
+        'search', 'listTeammates', 'listInboxes', 'listChannels', 'listTags',
+        'createDraft', 'updateDraft'
+      ];
+      
+      // Context-specific methods
+      const conversationMethods = [
+        'addTopic', 'addLink', 'assign', 'move', 'setStatus', 'tag', 'untag', 
+        'removeLink', 'fetchPath'
+      ];
+      
+      const singleConversationMethods = [
+        'fetchDraft', 'listMessages', 'listComments', 'downloadAttachment', 'listRecipients'
+      ];
+      
+      const messageComposerMethods = [
+        'downloadComposerAttachment', 'close', 'closeDraft'
+      ];
+      
+      // Test all methods
+      const allMethods = [...baseMethods, ...conversationMethods, ...singleConversationMethods, ...messageComposerMethods];
+      
+      const methodStatus = {};
+      allMethods.forEach(method => {
+        const exists = typeof context[method] === 'function';
+        methodStatus[method] = exists;
+        console.log(`   ${exists ? '✅' : '❌'} ${method}: ${exists ? 'Available' : 'Missing'}`);
+      });
+      
+      console.log('3. METHOD SUMMARY:', methodStatus);
+      
+      // 4. ✅ ENHANCED: Check enumerable vs non-enumerable properties
+      const ownProps = Object.getOwnPropertyNames(context);
+      const enumerableProps = Object.keys(context);
+      const prototypeProps = Object.getOwnPropertyNames(Object.getPrototypeOf(context));
+      
+      console.log('4. PROPERTY ANALYSIS:', {
+        ownProperties: ownProps,
+        enumerableProperties: enumerableProps,
+        prototypeProperties: prototypeProps,
+        hiddenProperties: ownProps.filter(prop => !enumerableProps.includes(prop))
+      });
+      
+      // 5. ✅ NEW: Test function calls safely
+      console.log('5. SAFE FUNCTION TESTS:');
+      
+      if (typeof context.listMessages === 'function' && context.conversation) {
+        try {
+          console.log('   Testing listMessages...');
+          const messages = await context.listMessages();
+          console.log(`   ✅ listMessages: ${messages?.results?.length || 0} messages loaded`);
+        } catch (error) {
+          console.log(`   ❌ listMessages failed: ${error.message}`);
+        }
+      }
+      
+      if (typeof context.listTeammates === 'function') {
+        try {
+          console.log('   Testing listTeammates...');
+          const teammates = await context.listTeammates();
+          console.log(`   ✅ listTeammates: ${teammates?.results?.length || 0} teammates loaded`);
+        } catch (error) {
+          console.log(`   ❌ listTeammates failed: ${error.message}`);
+        }
+      }
+    }
+    
+    // 6. ✅ ENHANCED: Context-specific data analysis
+    if (context?.conversation) {
+      console.log('6. CONVERSATION CONTEXT:', {
+        conversationId: context.conversation.id,
+        conversationType: context.conversation.type,
+        hasSubject: !!context.conversation.subject,
+        hasDraft: !!context.conversation.draftId,
+        hasAssignee: !!context.conversation.assignee,
+        recipientCount: context.conversation.recipient ? 1 : 0,
+        inboxCount: context.conversation.inboxes?.length || 0,
+        tagCount: context.conversation.tags?.length || 0
+      });
+    }
+    
+    if (context?.draft) {
+      console.log('7. DRAFT CONTEXT:', {
+        draftId: context.draft.id,
+        hasBody: !!context.draft.body,
+        bodyLength: context.draft.body?.length || 0,
+        isEditable: context.draft.isEditable,
+        hasChannel: !!context.draft.channel,
+        recipientCount: context.draft.to?.length || 0,
+        hasAttachments: context.draft.content?.attachments?.length || 0
+      });
+    }
+    
+    setStatus('Enhanced debug complete - check console');
+  };
+
+  // ✅ ENHANCED: Test Front REST API with better error handling
+  const testFrontRESTAPI = async () => {
+    if (!context?.conversation?.id || !context?.teammate) {
+      console.log('❌ FRONT API TEST: Missing conversation or teammate');
+      return;
+    }
+    
+    const conversationId = context.conversation.id;
+    const teammateId = context.teammate.id;
+    const teammateEmail = context.teammate.email;
+    
+    console.log('🧪 FRONT REST API TEST');
+    console.log('====================');
+    console.log('Conversation ID:', conversationId);
+    console.log('Teammate ID:', teammateId);
+    console.log('Teammate Email:', teammateEmail);
+    
+    // Test 1: Get conversation details
+    try {
+      const convUrl = `https://api2.frontapp.com/conversations/${conversationId}`;
+      const headers = {
+        "accept": "application/json",
+        "authorization": "Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzY29wZXMiOlsicHJvdmlzaW9uaW5nIiwicHJpdmF0ZToqIiwic2hhcmVkOioiLCJrYiJdLCJpYXQiOjE3MjkyNTY3MzYsImlzcyI6ImZyb250Iiwic3ViIjoiYzRhYzc3Y2NjN2M5NWNiNzExNzYiLCJqdGkiOiIyNWRlOWQwMzA2ZTI0NGExIn0.KocFXR3MLCqqUU80e3BRZiLo7Zz5wtbee7kxo5V0Xw4"
+      };
+      
+      console.log('TEST 1: Getting conversation details...');
+      const response = await fetch(convUrl, { headers });
+      console.log('Response status:', response.status);
+      
+      if (response.ok) {
+        const data = await response.json();
+        console.log('✅ Conversation data:', {
+          id: data.id,
+          subject: data.subject,
+          status: data.status,
+          recipient: data.recipient,
+          assignee: data.assignee,
+          inboxes: data.inboxes,
+          channel: data.channel
+        });
+      } else {
+        const error = await response.text();
+        console.log('❌ Conversation fetch failed:', error);
+      }
+    } catch (e) {
+      console.log('❌ Conversation fetch error:', e.message);
+    }
+    
+    setStatus('API test complete - check console');
+  };
+
+  // ✅ ENHANCED: Front context debugging with proper method detection
   useEffect(() => {
-    console.log('🔍 AIROPS DEBUG: Front context update:', {
+    console.log('🔍 AIROPS DEBUG: Enhanced Front context analysis:', {
       type: context?.type,
       hasConversation: !!context?.conversation,
       conversationId: context?.conversation?.id,
@@ -148,11 +313,22 @@ function App() {
       draftId: context?.draft?.id,
       hasTeammate: !!context?.teammate,
       teammateId: context?.teammate?.id,
-      availableMethods: context ? Object.keys(context).filter(key => typeof context[key] === 'function') : []
+      // ✅ ENHANCED: Better method detection
+      availableMethodsEnumerable: context ? Object.keys(context).filter(key => typeof context[key] === 'function') : [],
+      // ✅ NEW: Check specific expected methods
+      hasCreateDraft: typeof context?.createDraft === 'function',
+      hasUpdateDraft: typeof context?.updateDraft === 'function',
+      hasListMessages: typeof context?.listMessages === 'function',
+      hasFetchDraft: typeof context?.fetchDraft === 'function',
+      // ✅ NEW: Context constructor info
+      contextConstructor: context?.constructor?.name,
+      // ✅ NEW: Check all properties (including non-enumerable)
+      allProperties: context ? Object.getOwnPropertyNames(context) : [],
+      prototypeProperties: context ? Object.getOwnPropertyNames(Object.getPrototypeOf(context)) : []
     });
   }, [context]);
 
-  // ✅ SIMPLIFIED: Basic container size detection without interference
+  // ✅ Container size detection
   useEffect(() => {
     const updateContainerSize = () => {
       if (!cardRef.current) return;
@@ -166,7 +342,6 @@ function App() {
     
     updateContainerSize();
     
-    // Simple resize observer without complex constraints
     if (window.ResizeObserver) {
       const resizeObserver = new ResizeObserver(updateContainerSize);
       const parent = cardRef.current?.parentElement;
@@ -184,18 +359,16 @@ function App() {
     }
   }, []);
 
-  // ✅ FIXED: Simplified and working resize handling
+  // ✅ Resize handling
   useEffect(() => {
     const handleMouseMove = (e) => {
       if (isResizing && !isTextareaResizing) {
         const cardRect = cardRef.current?.getBoundingClientRect();
         if (!cardRect) return;
         
-        // Simple calculation from card's current position
         const newWidth = e.clientX - cardRect.left;
         const newHeight = e.clientY - cardRect.top;
         
-        // Reasonable constraints
         const minWidth = 220;
         const maxWidth = 600;
         const minHeight = 300;
@@ -205,7 +378,6 @@ function App() {
         const constrainedHeight = Math.max(minHeight, Math.min(maxHeight, newHeight));
         
         setCardSize({ width: constrainedWidth, height: constrainedHeight });
-        console.log('🔧 RESIZE: Card resized to', { width: constrainedWidth, height: constrainedHeight });
       }
       
       if (isTextareaResizing) {
@@ -218,7 +390,6 @@ function App() {
     };
 
     const handleMouseUp = () => {
-      console.log('🔧 RESIZE: Mouse up - ending resize');
       setIsResizing(false);
       setIsTextareaResizing(false);
       document.body.style.cursor = '';
@@ -227,13 +398,12 @@ function App() {
     };
 
     if (isResizing || isTextareaResizing) {
-      console.log('🔧 RESIZE: Starting resize listeners', { isResizing, isTextareaResizing });
       document.addEventListener('mousemove', handleMouseMove);
       document.addEventListener('mouseup', handleMouseUp);
       document.addEventListener('mouseleave', handleMouseUp);
       document.body.style.cursor = isTextareaResizing ? 'ns-resize' : 'nw-resize';
       document.body.style.userSelect = 'none';
-      document.body.style.pointerEvents = 'none'; // Prevent other interactions
+      document.body.style.pointerEvents = 'none';
     }
 
     return () => {
@@ -246,29 +416,24 @@ function App() {
     };
   }, [isResizing, isTextareaResizing]);
 
-  // ✅ FIXED: Simplified resize start functions with logging
   const handleCardResizeStart = (e) => {
-    console.log('🔧 RESIZE: Card resize started');
     e.preventDefault();
     e.stopPropagation();
     setIsResizing(true);
   };
 
   const handleTextareaResizeStart = (e) => {
-    console.log('🔧 RESIZE: Textarea resize started');
     e.preventDefault();
     e.stopPropagation();
     setIsTextareaResizing(true);
   };
 
-  // ✅ ENHANCED: Better logging for context loading
+  // ✅ Data loading
   useEffect(() => {
     const conversationId = context?.conversation?.id;
     
     if (conversationId) {
       console.log('🔄 AIROPS: Loading data for conversation:', conversationId);
-      console.log('🔄 AIROPS: Context type:', context.type);
-      console.log('🔄 AIROPS: Available context methods:', Object.keys(context).filter(key => typeof context[key] === 'function'));
       loadHistoryFromNetlify(conversationId);
       loadTaskResultsFromNetlify(conversationId);
     } else {
@@ -278,17 +443,15 @@ function App() {
     }
   }, [context]);
 
-  // ✅ RESTORED: Enhanced manual refresh function for debugging
+  // ✅ Manual refresh
   const manualRefresh = async () => {
     if (!context?.conversation?.id) {
       console.log('❌ AIROPS REFRESH: No conversation ID');
-      console.log('❌ AIROPS REFRESH: Context:', context);
       setStatus('No conversation context');
       return;
     }
 
     console.log('🔄 AIROPS REFRESH: Manual refresh triggered for conversation:', context.conversation.id);
-    console.log('🔄 AIROPS REFRESH: Current state - History:', commentHistory.length, 'Tasks:', taskResults.length);
     setStatus('Refreshing...');
     
     try {
@@ -304,85 +467,41 @@ function App() {
     }
   };
 
-  // ✅ RESTORED: Complete debug function for testing history API
+  // ✅ ENHANCED: Combined debug function
   const debugHistoryAPI = async () => {
+    await comprehensiveContextDebug();
+    await testFrontRESTAPI();
+    
     if (!context?.conversation?.id) {
       console.error('❌ DEBUG: No conversation ID');
       setStatus('No conversation context');
       return;
     }
     
+    console.log('🧪 NETLIFY FUNCTIONS TEST');
+    console.log('=========================');
     console.log('🧪 DEBUG: Testing history API...');
     console.log('🧪 DEBUG: Conversation ID:', context.conversation.id);
-    console.log('🧪 DEBUG: Current history length:', commentHistory.length);
     setStatus('Running debug...');
     
     try {
-      // Test 1: Load current history
-      console.log('🧪 DEBUG: Test 1 - Loading current history');
+      // Test history loading
       const loadResponse = await fetch(`/.netlify/functions/get-conversation-history?conversationId=${context.conversation.id}`);
       console.log('🧪 DEBUG: Load response status:', loadResponse.status);
       
       if (loadResponse.ok) {
         const loadData = await loadResponse.json();
         console.log('🧪 DEBUG: Loaded history:', loadData);
-      } else {
-        const loadError = await loadResponse.text();
-        console.log('🧪 DEBUG: Load error:', loadError);
       }
       
-      // Test 2: Save current history back (should be no-op)
-      console.log('🧪 DEBUG: Test 2 - Saving current history back');
-      const saveResponse = await fetch('/.netlify/functions/save-conversation-history', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          conversationId: context.conversation.id, 
-          history: commentHistory 
-        })
-      });
-      
-      console.log('🧪 DEBUG: Save response status:', saveResponse.status);
-      
-      if (saveResponse.ok) {
-        const saveData = await saveResponse.json();
-        console.log('🧪 DEBUG: Save response data:', saveData);
-      } else {
-        const saveError = await saveResponse.text();
-        console.log('🧪 DEBUG: Save error:', saveError);
-      }
-      
-      // Test 3: Test task loading
-      console.log('🧪 DEBUG: Test 3 - Loading tasks');
+      // Test tasks loading
       const tasksResponse = await fetch(`/.netlify/functions/get-conversation-tasks?conversationId=${context.conversation.id}`);
       console.log('🧪 DEBUG: Tasks response status:', tasksResponse.status);
       
       if (tasksResponse.ok) {
         const tasksData = await tasksResponse.json();
         console.log('🧪 DEBUG: Tasks data:', tasksData);
-      } else {
-        const tasksError = await tasksResponse.text();
-        console.log('🧪 DEBUG: Tasks error:', tasksError);
       }
-      
-      // Test 4: Test Front context
-      console.log('🧪 DEBUG: Test 4 - Front context analysis');
-      console.log('🧪 DEBUG: Context type:', context.type);
-      console.log('🧪 DEBUG: Conversation:', {
-        id: context.conversation?.id,
-        subject: context.conversation?.subject,
-        participants: context.conversation?.participants?.length
-      });
-      console.log('🧪 DEBUG: Draft:', {
-        id: context.draft?.id,
-        hasBody: !!context.draft?.body,
-        bodyLength: context.draft?.body?.length
-      });
-      console.log('🧪 DEBUG: Teammate:', {
-        id: context.teammate?.id,
-        name: context.teammate?.name,
-        email: context.teammate?.email
-      });
       
       setStatus('Debug complete - check console');
       
@@ -392,12 +511,12 @@ function App() {
     }
   };
 
+  // ✅ Clear functions
   const clearAllTasks = async () => {
     if (!context?.conversation?.id) return;
     
     if (!confirm('Delete all tasks? This cannot be undone.')) return;
     
-    console.log('🗑️ AIROPS: Clearing all tasks');
     try {
       const response = await fetch('/.netlify/functions/save-conversation-tasks', {
         method: 'POST',
@@ -413,11 +532,6 @@ function App() {
         setPollingTasks(new Set());
         setExpandedTasks(new Set());
         setStatus('Tasks cleared');
-        console.log('✅ AIROPS: All tasks cleared successfully');
-      } else {
-        const errorText = await response.text();
-        console.error('❌ AIROPS: Failed to clear tasks:', errorText);
-        setStatus('Failed to clear');
       }
     } catch (error) {
       console.error('❌ AIROPS: Error clearing tasks:', error);
@@ -425,7 +539,7 @@ function App() {
     }
   };
 
-  // ✅ ENHANCED: Delete individual history entry with better debugging
+  // ✅ FIXED: Enhanced history deletion
   const deleteHistoryEntry = async (entryIndex) => {
     if (!context?.conversation?.id) {
       console.error('❌ AIROPS: No conversation ID for history deletion');
@@ -435,7 +549,6 @@ function App() {
     
     console.log(`🗑️ AIROPS: Deleting history entry at index: ${entryIndex}`);
     console.log(`🗑️ AIROPS: Current history length: ${commentHistory.length}`);
-    console.log(`🗑️ AIROPS: Entry to delete:`, commentHistory[entryIndex]);
     
     try {
       const updatedHistory = commentHistory.filter((_, index) => index !== entryIndex);
@@ -445,7 +558,6 @@ function App() {
         conversationId: context.conversation.id, 
         history: updatedHistory 
       };
-      console.log(`🗑️ AIROPS: Sending payload:`, payload);
       
       const response = await fetch('/.netlify/functions/save-conversation-history', {
         method: 'POST',
@@ -459,25 +571,23 @@ function App() {
         const result = await response.json();
         console.log(`✅ AIROPS: History deletion successful:`, result);
         
+        // ✅ FIXED: Update state immediately
         setCommentHistory(updatedHistory);
         
-        // Update expanded history indices after deletion
+        // ✅ FIXED: Update expanded history indices after deletion
         setExpandedHistory(prev => {
           const newSet = new Set();
           for (const expandedIndex of prev) {
             if (expandedIndex < entryIndex) {
-              // Keep indices before the deleted item
               newSet.add(expandedIndex);
             } else if (expandedIndex > entryIndex) {
-              // Shift indices after the deleted item down by 1
               newSet.add(expandedIndex - 1);
             }
-            // Skip the deleted index
           }
           return newSet;
         });
         
-        setStatus('History entry deleted');
+        setStatus(`Entry deleted (${updatedHistory.length} remain)`);
         console.log(`✅ AIROPS: Local state updated, new length: ${updatedHistory.length}`);
       } else {
         const errorText = await response.text();
@@ -490,80 +600,34 @@ function App() {
     }
   };
 
-  // ✅ ENHANCED: Clear history with better debugging
   const clearHistory = async () => {
-    if (!context?.conversation?.id) {
-      console.error('❌ AIROPS: No conversation ID for history clearing');
-      setStatus('No conversation context');
-      return;
-    }
-    
+    if (!context?.conversation?.id) return;
     if (!confirm('Delete all history? This cannot be undone.')) return;
     
-    console.log('🗑️ AIROPS: Clearing all history');
-    console.log(`🗑️ AIROPS: Current history length: ${commentHistory.length}`);
-    
     try {
-      // Try the most reliable method first - empty history array 
-      const payload = { 
-        conversationId: context.conversation.id, 
-        history: [] 
-      };
-      console.log(`🗑️ AIROPS: Sending clear payload:`, payload);
-      
       const response = await fetch('/.netlify/functions/save-conversation-history', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+        body: JSON.stringify({ 
+          conversationId: context.conversation.id, 
+          history: [] 
+        })
       });
       
-      console.log(`🗑️ AIROPS: Clear API response status: ${response.status}`);
-      
       if (response.ok) {
-        const result = await response.json();
-        console.log(`✅ AIROPS: History clearing successful:`, result);
-        
         setCommentHistory([]);
-        setExpandedHistory(new Set()); // Clear expanded state too
+        setExpandedHistory(new Set());
         setStatus('History cleared');
-        console.log('✅ AIROPS: Local history state cleared');
-      } else {
-        const errorText = await response.text();
-        console.error(`❌ AIROPS: History clearing failed - Status: ${response.status}`, errorText);
-        
-        // Try alternative method with clearAll flag
-        console.log('🗑️ AIROPS: Trying alternative clearAll method');
-        const altResponse = await fetch('/.netlify/functions/save-conversation-history', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            conversationId: context.conversation.id, 
-            clearAll: true 
-          })
-        });
-        
-        if (altResponse.ok) {
-          const altResult = await altResponse.json();
-          console.log(`✅ AIROPS: Alternative clear method successful:`, altResult);
-          setCommentHistory([]);
-          setExpandedHistory(new Set()); // Clear expanded state too
-          setStatus('History cleared');
-        } else {
-          const altErrorText = await altResponse.text();
-          console.error(`❌ AIROPS: Both clear methods failed:`, altErrorText);
-          setStatus('Failed to clear history');
-        }
       }
     } catch (error) {
-      console.error('❌ AIROPS: Network error clearing history:', error);
-      setStatus('Clear failed - network error');
+      console.error('❌ AIROPS: Error clearing history:', error);
+      setStatus('Clear failed');
     }
   };
 
   const deleteTask = async (taskId) => {
     if (!context?.conversation?.id) return;
     
-    console.log(`🗑️ AIROPS: Deleting task: ${taskId}`);
     try {
       const updatedTasks = taskResults.filter(task => task.id !== taskId);
       
@@ -589,11 +653,6 @@ function App() {
           return newSet;
         });
         setStatus('Task deleted');
-        console.log(`✅ AIROPS: Task ${taskId} deleted successfully`);
-      } else {
-        const errorText = await response.text();
-        console.error('❌ AIROPS: Failed to delete task:', errorText);
-        setStatus('Delete failed');
       }
     } catch (error) {
       console.error('❌ AIROPS: Error deleting task:', error);
@@ -601,8 +660,8 @@ function App() {
     }
   };
 
+  // ✅ Save/load functions
   const saveTaskResultsToNetlify = async (conversationId, tasks) => {
-    console.log(`💾 AIROPS: Saving ${tasks.length} tasks for conversation ${conversationId}`);
     try {
       const response = await fetch('/.netlify/functions/save-conversation-tasks', {
         method: 'POST',
@@ -611,34 +670,23 @@ function App() {
       });
       
       if (response.ok) {
-        const result = await response.json();
-        console.log('✅ AIROPS: Tasks saved successfully:', result);
         return true;
-      } else {
-        const errorText = await response.text();
-        console.error('❌ AIROPS: Failed to save tasks:', errorText);
-        return false;
       }
+      return false;
     } catch (error) {
       console.error('❌ AIROPS: Error saving tasks:', error);
       return false;
     }
   };
 
-  // ✅ ENHANCED: Better task status checking with comprehensive debug logs
   const checkTaskStatus = async (taskId) => {
-    console.log(`🔄 AIROPS POLLING: Checking status for task: ${taskId}`);
     try {
       const response = await fetch(`/.netlify/functions/task-status?taskId=${taskId}`);
-      console.log(`🔄 AIROPS POLLING: Task status API response: ${response.status}`);
       
       if (response.ok) {
         const result = await response.json();
-        console.log(`📋 AIROPS POLLING: Task ${taskId} status: ${result.status}`, result);
         
         if (result.status === 'completed' || result.status === 'failed') {
-          console.log(`✅ AIROPS POLLING: Task ${taskId} finished with status ${result.status}, updating UI`);
-          
           const updatedTasks = taskResults.map(task => 
             task.id === taskId 
               ? { 
@@ -652,38 +700,24 @@ function App() {
           );
           
           setTaskResults(updatedTasks);
-          console.log(`📋 AIROPS POLLING: Updated local task state for ${taskId}`);
           
-          // Auto-expand completed tasks
           if (result.status === 'completed') {
             setExpandedTasks(prev => new Set([...prev, taskId]));
-            console.log(`📋 AIROPS POLLING: Auto-expanded completed task ${taskId}`);
           }
           
-          // Save updated tasks to storage
           if (context?.conversation?.id) {
-            const saved = await saveTaskResultsToNetlify(context.conversation.id, updatedTasks);
-            if (saved) {
-              console.log(`✅ AIROPS POLLING: Task ${taskId} results saved to storage`);
-            }
+            await saveTaskResultsToNetlify(context.conversation.id, updatedTasks);
           }
           
-          // Stop polling this task
           setPollingTasks(prev => {
             const newSet = new Set(prev);
             newSet.delete(taskId);
-            console.log(`🔄 AIROPS POLLING: Stopped polling for ${taskId}, remaining: ${newSet.size}`);
             return newSet;
           });
           
           setStatus(`Task ${result.status}!`);
           return true;
-        } else {
-          console.log(`📋 AIROPS POLLING: Task ${taskId} still ${result.status}, continuing to poll`);
         }
-      } else {
-        const errorText = await response.text();
-        console.log(`❌ AIROPS POLLING: Task ${taskId} status check failed: ${response.status} - ${errorText}`);
       }
     } catch (error) {
       console.error(`❌ AIROPS POLLING: Error checking task ${taskId}:`, error);
@@ -691,40 +725,29 @@ function App() {
     return false;
   };
 
-  // ✅ ENHANCED: Comprehensive polling system with better logging and error handling
+  // ✅ Polling system
   useEffect(() => {
     if (pollingTasks.size > 0) {
-      console.log(`🔄 AIROPS POLLING: Starting polling for ${pollingTasks.size} tasks:`, Array.from(pollingTasks));
-      
       const checkAllTasks = async () => {
         const tasksToCheck = Array.from(pollingTasks);
-        console.log(`🔄 AIROPS POLLING: Checking ${tasksToCheck.length} pending tasks`);
         
-        // Check tasks sequentially to avoid overwhelming the API
         for (const taskId of tasksToCheck) {
           try {
             await checkTaskStatus(taskId);
-            // Small delay between checks to be nice to the API
             await new Promise(resolve => setTimeout(resolve, 200));
           } catch (error) {
             console.error(`❌ AIROPS POLLING: Error checking task ${taskId}:`, error);
           }
         }
-        
-        console.log(`✅ AIROPS POLLING: Completed polling cycle`);
       };
       
-      // Check immediately after 3 seconds, then every 8 seconds for faster updates
       const initialTimeout = setTimeout(checkAllTasks, 3000);
       const interval = setInterval(checkAllTasks, 8000);
       
       return () => {
-        console.log(`🔄 AIROPS POLLING: Stopping polling for ${pollingTasks.size} tasks`);
         clearTimeout(initialTimeout);
         clearInterval(interval);
       };
-    } else {
-      console.log(`🔄 AIROPS POLLING: No tasks to poll`);
     }
   }, [pollingTasks, taskResults, context]);
 
@@ -748,13 +771,10 @@ function App() {
       if (uploadedFile) {
         combinedText += `\n\nReference File: ${uploadedFile.name} (${uploadedFile.type}, ${(uploadedFile.size / 1024).toFixed(1)}KB)`;
         
-        // Enhanced file content inclusion
         if (uploadedFile.fullContent) {
           combinedText += `\n\nFull File Content:\n${uploadedFile.fullContent}`;
         } else if (uploadedFile.preview) {
           combinedText += `\n\nFile Content Preview:\n${uploadedFile.preview}`;
-        } else {
-          combinedText += `\n\nNote: Binary file attachment - content not shown in preview`;
         }
       }
     }
@@ -762,7 +782,6 @@ function App() {
     return combinedText;
   };
 
-  // ✅ ENHANCED: More comprehensive payload creation with better metadata
   const createCompletePayload = async (combinedInstructions, taskId = null) => {
     const timestamp = new Date().toISOString();
     const callbackUrl = taskId ? `${window.location.origin}/.netlify/functions/task-completion-webhook` : null;
@@ -781,34 +800,26 @@ function App() {
         assignee: context.conversation.assignee,
         recipient: context.conversation.recipient,
         participants: context.conversation.participants || [],
-        channel: context.conversation.channel,
-        priority: context.conversation.priority,
-        is_private: context.conversation.is_private,
-        folder: context.conversation.folder
+        channel: context.conversation.channel
       };
       
       try {
-        const messages = await context.listMessages();
-        messagesData = messages.results.map(msg => ({
-          id: msg.id,
-          type: msg.type,
-          body: msg.body,
-          subject: msg.subject,
-          author: {
-            id: msg.author?.id,
-            name: msg.author?.name,
-            email: msg.author?.email,
-            role: msg.author?.role
-          },
-          recipients: msg.recipients || [],
-          created_at: msg.created_at,
-          updated_at: msg.updated_at,
-          is_inbound: msg.is_inbound,
-          is_draft: msg.is_draft,
-          attachments: msg.attachments || [],
-          metadata: msg.metadata || {}
-        }));
-        console.log(`📨 AIROPS: Loaded ${messagesData.length} messages for context`);
+        if (typeof context.listMessages === 'function') {
+          const messages = await context.listMessages();
+          messagesData = messages.results.map(msg => ({
+            id: msg.id,
+            type: msg.type,
+            body: msg.body,
+            subject: msg.subject,
+            author: msg.author,
+            recipients: msg.recipients || [],
+            created_at: msg.created_at,
+            updated_at: msg.updated_at,
+            is_inbound: msg.is_inbound,
+            is_draft: msg.is_draft,
+            attachments: msg.attachments || []
+          }));
+        }
       } catch (err) {
         console.error('❌ AIROPS: Error loading messages:', err);
         messagesData = [];
@@ -823,22 +834,16 @@ function App() {
         subject: context.draft.subject,
         to: context.draft.to,
         cc: context.draft.cc,
-        bcc: context.draft.bcc,
-        reply_options: context.draft.reply_options
+        bcc: context.draft.bcc
       };
-      console.log(`📝 AIROPS: Including draft context:`, { id: draftData.id, hasBody: !!draftData.body });
     }
     
     const teammateData = context?.teammate ? {
       id: context.teammate.id,
       name: context.teammate.name,
-      email: context.teammate.email,
-      role: context.teammate.role,
-      avatar_url: context.teammate.avatar_url,
-      timezone: context.teammate.timezone
+      email: context.teammate.email
     } : null;
     
-    // Enhanced payload with better organization
     return {
       airops_request: {
         combined_instructions: combinedInstructions,
@@ -851,13 +856,8 @@ function App() {
           name: uploadedFile.name,
           type: uploadedFile.type,
           size: uploadedFile.size,
-          size_formatted: `${(uploadedFile.size / 1024).toFixed(1)}KB`,
-          last_modified: uploadedFile.lastModified ? new Date(uploadedFile.lastModified).toISOString() : null,
           content_preview: uploadedFile.preview || null,
-          full_content: uploadedFile.fullContent || null,
-          has_preview: !!uploadedFile.preview,
-          has_full_content: !!uploadedFile.fullContent,
-          is_text_file: uploadedFile.type?.startsWith('text/') || uploadedFile.name?.match(/\.(txt|csv|json|md|xml|log|js|jsx|ts|tsx|py|html|css|yaml|yml)$/i)
+          full_content: uploadedFile.fullContent || null
         } : null,
         request_info: {
           mode: mode,
@@ -865,68 +865,19 @@ function App() {
           plugin_context: context?.type,
           task_id: taskId,
           callback_url: callbackUrl,
-          user_agent: navigator.userAgent,
-          plugin_version: "1.1.0",
-          // Enhanced metadata for webhook processing
-          conversation_id: context?.conversation?.id, // Added for easier extraction
+          conversation_id: context?.conversation?.id,
           requesting_user_id: context?.teammate?.id
         },
         requesting_user: teammateData,
         front_conversation: {
           conversation: conversationData,
           messages: messagesData,
-          current_draft: draftData,
-          stats: {
-            total_messages: messagesData.length,
-            inbound_messages: messagesData.filter(m => m.is_inbound).length,
-            outbound_messages: messagesData.filter(m => !m.is_inbound).length,
-            draft_messages: messagesData.filter(m => m.is_draft).length,
-            has_attachments: messagesData.some(m => m.attachments && m.attachments.length > 0),
-            participants_count: conversationData.participants?.length || 0,
-            tags_count: conversationData.tags?.length || 0
-          },
-          latest_message: messagesData.length > 0 ? messagesData[0] : null,
-          original_message: messagesData.length > 0 ? messagesData[messagesData.length - 1] : null
-        },
-        request_history: {
-          previous_requests: commentHistory.slice(0, 5).map(entry => ({
-            text: entry.text,
-            mode: entry.mode,
-            output_format: entry.outputFormat,
-            selected_format: entry.selectedFormat,
-            had_file: entry.hasFile,
-            file_name: entry.fileName,
-            timestamp: entry.timestamp,
-            user: entry.user
-          })),
-          total_requests: commentHistory.length,
-          recent_tasks: taskResults.slice(0, 3).map(task => ({
-            id: task.id,
-            status: task.status,
-            output_format: task.outputFormat,
-            created_at: task.createdAt,
-            completed_at: task.completedAt,
-            had_file: task.hasFile,
-            user: task.user
-          }))
-        },
-        ai_context_hints: {
-          conversation_subject: conversationData.subject,
-          is_reply_context: !!draftData,
-          has_file_attachment: !!uploadedFile,
-          conversation_length: messagesData.length,
-          is_multi_participant: (conversationData.participants?.length || 0) > 2,
-          has_tags: (conversationData.tags?.length || 0) > 0,
-          conversation_age_hours: conversationData.created_at ? 
-            Math.round((new Date() - new Date(conversationData.created_at)) / (1000 * 60 * 60)) : null,
-          latest_message_age_hours: messagesData.length > 0 && messagesData[0].created_at ?
-            Math.round((new Date() - new Date(messagesData[0].created_at)) / (1000 * 60 * 60)) : null
+          current_draft: draftData
         }
       }
     };
   };
 
-  // ✅ RESTORED: Enhanced file upload handling with better file type detection
   const handleFileUpload = async (event) => {
     const file = event.target.files[0];
     if (!file) return;
@@ -936,13 +887,6 @@ function App() {
       return;
     }
 
-    console.log(`📎 AIROPS: Processing file upload:`, {
-      name: file.name,
-      type: file.type,
-      size: file.size,
-      lastModified: file.lastModified
-    });
-
     try {
       const fileData = {
         name: file.name,
@@ -951,44 +895,29 @@ function App() {
         lastModified: file.lastModified
       };
 
-      // Enhanced file type detection and processing
       const isTextFile = file.type.startsWith('text/') || 
                         file.name.match(/\.(txt|csv|json|md|xml|log|js|jsx|ts|tsx|py|html|css|yaml|yml|sql|sh|bat|dockerfile|gitignore|env)$/i);
       
       if (isTextFile) {
-        console.log(`📎 AIROPS: Reading text file: ${file.name}`);
         const reader = new FileReader();
         reader.onload = (e) => {
           const content = e.target.result;
-          console.log(`📎 AIROPS: File content length: ${content.length} characters`);
-          
-          // Enhanced preview with more context (up to 8000 characters for preview)
           const previewLength = Math.min(8000, content.length);
           fileData.preview = content.substring(0, previewLength) + 
                            (content.length > previewLength ? 
                              '\n\n[File preview truncated - full content available to AI]' : '');
-          
-          // Store full content for AI processing (respects 2MB file size limit)
           fileData.fullContent = content;
           fileData.isProcessed = true;
           
           setUploadedFile(fileData);
           setStatus('File uploaded and processed');
-          console.log(`✅ AIROPS: Text file processed successfully`);
-        };
-        reader.onerror = (error) => {
-          console.error('❌ AIROPS: Error reading file:', error);
-          setStatus('Error reading file');
         };
         reader.readAsText(file);
       } else {
-        // Handle non-text files (images, PDFs, etc.)
-        console.log(`📎 AIROPS: Processing binary file: ${file.name}`);
-        fileData.preview = `[Binary file: ${file.name}]\nType: ${file.type}\nSize: ${(file.size / 1024).toFixed(1)}KB\n\nThis file has been uploaded and will be available to the AI for processing.`;
+        fileData.preview = `[Binary file: ${file.name}]\nType: ${file.type}\nSize: ${(file.size / 1024).toFixed(1)}KB`;
         fileData.isProcessed = true;
         setUploadedFile(fileData);
         setStatus('File uploaded');
-        console.log(`✅ AIROPS: Binary file processed successfully`);
       }
       
     } catch (error) {
@@ -998,7 +927,6 @@ function App() {
   };
 
   const removeFile = () => {
-    console.log(`📎 AIROPS: Removing uploaded file: ${uploadedFile?.name}`);
     setUploadedFile(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
@@ -1006,28 +934,15 @@ function App() {
     setStatus('File removed');
   };
 
-  // ✅ ENHANCED: Load history with better error handling and logging
   const loadHistoryFromNetlify = async (conversationId) => {
-    console.log(`📚 AIROPS: Loading history for conversation: ${conversationId}`);
     try {
       const response = await fetch(`/.netlify/functions/get-conversation-history?conversationId=${conversationId}`);
-      console.log(`📚 AIROPS: History API response status: ${response.status}`);
       
       if (response.ok) {
         const { history } = await response.json();
-        console.log(`📚 AIROPS: Loaded ${history?.length || 0} history entries`);
-        
         if (history && Array.isArray(history)) {
           setCommentHistory(history);
-          console.log(`📚 AIROPS: History types:`, history.map(h => h.mode || 'unknown').join(', '));
-        } else {
-          console.log(`📚 AIROPS: Invalid history data:`, history);
-          setCommentHistory([]);
         }
-      } else {
-        const errorText = await response.text();
-        console.log(`📚 AIROPS: No history found (${response.status}): ${errorText}`);
-        setCommentHistory([]);
       }
     } catch (error) {
       console.error('❌ AIROPS: Error loading history:', error);
@@ -1035,15 +950,7 @@ function App() {
     }
   };
 
-  // ✅ ENHANCED: Save history with better error handling and logging
   const saveHistoryToNetlify = async (conversationId, entry) => {
-    console.log(`📚 AIROPS: Saving history entry for conversation: ${conversationId}`, {
-      text: entry.text.substring(0, 100) + '...',
-      mode: entry.mode,
-      user: entry.user,
-      timestamp: entry.timestamp
-    });
-    
     try {
       const response = await fetch('/.netlify/functions/save-conversation-history', {
         method: 'POST',
@@ -1052,63 +959,38 @@ function App() {
       });
       
       if (response.ok) {
-        const result = await response.json();
-        console.log('✅ AIROPS: History entry saved successfully:', {
-          success: result.success,
-          count: result.count
-        });
         return true;
-      } else {
-        const errorText = await response.text();
-        console.error('❌ AIROPS: Failed to save history - Status:', response.status, 'Error:', errorText);
-        return false;
       }
+      return false;
     } catch (error) {
       console.error('❌ AIROPS: Network error saving history:', error);
       return false;
     }
   };
 
-  // ✅ FIXED: Load task results with proper state merging
   const loadTaskResultsFromNetlify = async (conversationId) => {
-    console.log(`📋 AIROPS: Loading tasks for conversation: ${conversationId}`);
     try {
       const response = await fetch(`/.netlify/functions/get-conversation-tasks?conversationId=${conversationId}`);
-      console.log(`📋 AIROPS: Tasks API response status: ${response.status}`);
       
       if (response.ok) {
         const { tasks } = await response.json();
-        console.log(`📋 AIROPS: Loaded ${tasks?.length || 0} tasks`);
-        
         if (tasks && Array.isArray(tasks)) {
           setTaskResults(tasks);
-          console.log(`📋 AIROPS: Task statuses:`, tasks.map(t => `${t.id}: ${t.status}`).join(', '));
           
-          // ✅ FIXED: Auto-expand completed tasks by ADDING to existing expanded tasks
           const completedTaskIds = tasks.filter(task => task.status === 'completed').map(task => task.id);
           if (completedTaskIds.length > 0) {
             setExpandedTasks(prev => {
-              const newSet = new Set(prev); // Start with existing expanded tasks
-              completedTaskIds.forEach(taskId => newSet.add(taskId)); // Add completed tasks
+              const newSet = new Set(prev);
+              completedTaskIds.forEach(taskId => newSet.add(taskId));
               return newSet;
             });
-            console.log(`📋 AIROPS: Auto-expanded ${completedTaskIds.length} completed tasks`);
           }
           
-          // Resume polling for pending tasks
           const pendingTasks = tasks.filter(task => task.status === 'pending').map(task => task.id);
           if (pendingTasks.length > 0) {
             setPollingTasks(new Set(pendingTasks));
-            console.log(`🔄 AIROPS: Resuming polling for ${pendingTasks.length} pending tasks:`, pendingTasks);
           }
-        } else {
-          console.log(`📋 AIROPS: Invalid tasks data:`, tasks);
-          setTaskResults([]);
         }
-      } else {
-        const errorText = await response.text();
-        console.log(`📋 AIROPS: No tasks found (${response.status}): ${errorText}`); 
-        setTaskResults([]);
       }
     } catch (error) {
       console.error('❌ AIROPS: Error loading tasks:', error);
@@ -1116,7 +998,7 @@ function App() {
     }
   };
 
-  // ✅ ENHANCED: Front API integration with REST API for draft insertion
+  // ✅ ENHANCED: Draft insertion with multiple strategies
   const insertIntoDraft = async (content) => {
     console.log('🔍 AIROPS INSERT: Starting draft insertion process');
     console.log('🔍 AIROPS INSERT: Content length:', content.length);
@@ -1128,219 +1010,114 @@ function App() {
       return;
     }
 
-    // 🎯 STRATEGY 1: Direct Front REST API (PRIMARY METHOD)
+    // ✅ STRATEGY 1: Use Front context methods if available
+    if (typeof context.createDraft === 'function') {
+      console.log('🎯 AIROPS INSERT: Trying Front createDraft method');
+      try {
+        await context.createDraft({
+          body: content,
+          // Add other required fields based on context
+          ...(context.conversation?.id && { conversationId: context.conversation.id })
+        });
+        setStatus('Draft created via Front API!');
+        return;
+      } catch (error) {
+        console.error('❌ AIROPS INSERT: createDraft failed:', error);
+      }
+    }
+
+    if (typeof context.updateDraft === 'function' && context.draft?.id) {
+      console.log('🎯 AIROPS INSERT: Trying Front updateDraft method');
+      try {
+        const existingBody = context.draft.body || '';
+        const newBody = existingBody + (existingBody ? '\n\n' : '') + content;
+        
+        await context.updateDraft(context.draft.id, {
+          updateMode: 'replace', // or 'insert' depending on what's supported
+          body: newBody
+        });
+        setStatus('Draft updated via Front API!');
+        return;
+      } catch (error) {
+        console.error('❌ AIROPS INSERT: updateDraft failed:', error);
+      }
+    }
+
+    // ✅ STRATEGY 2: Front REST API
     if (context?.conversation?.id && context?.teammate) {
-      console.log('🎯 AIROPS INSERT: Using Front REST API');
-      console.log('🎯 AIROPS INSERT: Conversation ID:', context.conversation.id);
-      console.log('🎯 AIROPS INSERT: Teammate:', context.teammate.name, context.teammate.email);
+      console.log('🎯 AIROPS INSERT: Trying Front REST API');
       
       try {
         const conversationId = context.conversation.id;
-        const teammateEmail = context.teammate.email;
         const teammateId = context.teammate.id;
+        const teammateEmail = context.teammate.email;
         
-        // Create channel ID from email
-        const channelId = `alt:address:${teammateEmail}`;
+        // ✅ Try multiple channel ID formats
+        const channelFormats = [
+          `alt:address:${teammateEmail}`,
+          teammateEmail,
+          context.conversation.channel?.id
+        ].filter(Boolean);
         
-        const url = `https://api2.frontapp.com/conversations/${conversationId}/drafts`;
-        
-        const headers = {
-          "accept": "application/json",
-          "content-type": "application/json",
-          "authorization": "Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzY29wZXMiOlsicHJvdmlzaW9uaW5nIiwicHJpdmF0ZToqIiwic2hhcmVkOioiLCJrYiJdLCJpYXQiOjE3MjkyNTY3MzYsImlzcyI6ImZyb250Iiwic3ViIjoiYzRhYzc3Y2NjN2M5NWNiNzExNzYiLCJqdGkiOiIyNWRlOWQwMzA2ZTI0NGExIn0.KocFXR3MLCqqUU80e3BRZiLo7Zz5wtbee7kxo5V0Xw4"
-        };
-        
-        const payload = {
-          author_id: teammateId,
-          body: content, // Send HTML content directly
-          channel_id: channelId,
-          should_add_default_signature: true
-        };
-        
-        console.log('🎯 AIROPS INSERT: Making API request:', { url, payload: { ...payload, body: content.substring(0, 100) + '...' } });
-        
-        const response = await fetch(url, {
-          method: 'POST',
-          headers: headers,
-          body: JSON.stringify(payload)
-        });
-        
-        console.log('🎯 AIROPS INSERT: API response status:', response.status);
-        
-        if (response.ok) {
-          const result = await response.json();
-          console.log('✅ AIROPS INSERT: Draft created successfully via API:', result);
-          setStatus('Draft created via API!');
-          return;
-        } else {
-          const errorText = await response.text();
-          console.error('❌ AIROPS INSERT: API failed:', response.status, errorText);
-          // Fall through to other methods
-        }
-      } catch (error) {
-        console.error('❌ AIROPS INSERT: API error:', error);
-        // Fall through to other methods
-      }
-    }
-    
-    // Clean HTML content for fallback methods
-    const tempDiv = document.createElement('div');
-    tempDiv.innerHTML = content;
-    
-    // Replace HTML elements with text equivalents to preserve some formatting
-    tempDiv.querySelectorAll('br').forEach(br => br.replaceWith('\n'));
-    tempDiv.querySelectorAll('p').forEach(p => p.replaceWith(p.textContent + '\n\n'));
-    tempDiv.querySelectorAll('h1, h2, h3, h4, h5, h6').forEach(h => h.replaceWith(h.textContent + '\n\n'));
-    tempDiv.querySelectorAll('li').forEach(li => li.replaceWith('• ' + li.textContent + '\n'));
-    tempDiv.querySelectorAll('ul, ol').forEach(list => list.replaceWith(list.textContent + '\n'));
-    tempDiv.querySelectorAll('table').forEach(table => {
-      let tableText = '';
-      table.querySelectorAll('tr').forEach(row => {
-        const cells = Array.from(row.querySelectorAll('td, th')).map(cell => cell.textContent.trim());
-        tableText += cells.join(' | ') + '\n';
-      });
-      table.replaceWith(tableText + '\n');
-    });
-    
-    const cleanContent = tempDiv.textContent || tempDiv.innerText || content.replace(/<[^>]*>/g, '');
-    console.log('🔍 AIROPS INSERT: Cleaned content length:', cleanContent.length);
-    
-    // 🔍 DEBUG: Log context details
-    console.log('🔍 AIROPS INSERT: Context analysis:', {
-      type: context?.type,
-      hasContext: !!context,
-      hasDraft: !!context?.draft,
-      draftId: context?.draft?.id,
-      hasConversation: !!context?.conversation,
-      conversationId: context?.conversation?.id,
-      availableMethods: context ? Object.keys(context).filter(key => typeof context[key] === 'function') : []
-    });
-    
-    try {
-      // 🎯 STRATEGY 2: MessageComposer Context 
-      if (context.type === 'messageComposer' && context.draft) {
-        console.log('🎯 AIROPS INSERT: Using MessageComposer updateDraft API');
-        console.log('🎯 AIROPS INSERT: Draft info:', {
-          id: context.draft.id,
-          hasBody: !!context.draft.body,
-          bodyLength: context.draft.body?.length || 0
-        });
-        
-        const existingBody = context.draft.body || '';
-        const newBody = existingBody + (existingBody ? '\n\n' : '') + cleanContent;
-        
-        // Use the correct Front API: updateDraft(draftId, update, cancelToken)
-        await context.updateDraft(context.draft.id, {
-          body: newBody
-        });
-        
-        setStatus('Added to draft!');
-        console.log('✅ AIROPS INSERT: Successfully updated draft using updateDraft API');
-        return;
-      }
-      
-      // 🎯 STRATEGY 3: Single Conversation Context with updateDraft
-      if (context.type === 'singleConversation' && typeof context.updateDraft === 'function') {
-        console.log('🎯 AIROPS INSERT: Trying singleConversation updateDraft');
-        
-        // Find existing draft or create new one
-        if (context.conversation?.draft) {
-          console.log('🎯 AIROPS INSERT: Found conversation draft:', context.conversation.draft.id);
-          const existingBody = context.conversation.draft.body || '';
-          const newBody = existingBody + (existingBody ? '\n\n' : '') + cleanContent;
+        for (const channelId of channelFormats) {
+          const url = `https://api2.frontapp.com/conversations/${conversationId}/drafts`;
           
-          await context.updateDraft(context.conversation.draft.id, {
-            body: newBody
+          const headers = {
+            "accept": "application/json",
+            "content-type": "application/json",
+            "authorization": "Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzY29wZXMiOlsicHJvdmlzaW9uaW5nIiwicHJpdmF0ZToqIiwic2hhcmVkOioiLCJrYiJdLCJpYXQiOjE3MjkyNTY3MzYsImlzcyI6ImZyb250Iiwic3ViIjoiYzRhYzc3Y2NjN2M5NWNiNzExNzYiLCJqdGkiOiIyNWRlOWQwMzA2ZTI0NGExIn0.KocFXR3MLCqqUU80e3BRZiLo7Zz5wtbee7kxo5V0Xw4"
+          };
+          
+          const payload = {
+            author_id: teammateId,
+            body: content,
+            channel_id: channelId,
+            should_add_default_signature: true
+          };
+          
+          console.log(`🎯 AIROPS INSERT: Trying API with channel: ${channelId}`);
+          
+          const response = await fetch(url, {
+            method: 'POST',
+            headers: headers,
+            body: JSON.stringify(payload)
           });
           
-          setStatus('Added to draft!');
-          console.log('✅ AIROPS INSERT: Successfully updated conversation draft');
-          return;
-        }
-      }
-      
-      // 🎯 STRATEGY 4: Direct insertTextIntoBody method (if available)
-      if (typeof context.insertTextIntoBody === 'function') {
-        console.log('🎯 AIROPS INSERT: Using insertTextIntoBody method');
-        await context.insertTextIntoBody(cleanContent);
-        setStatus('Inserted into body!');
-        console.log('✅ AIROPS INSERT: Successfully used insertTextIntoBody');
-        return;
-      }
-      
-      // 🎯 STRATEGY 5: Create New Draft (universal fallback)
-      if (typeof context.createDraft === 'function') {
-        console.log('🎯 AIROPS INSERT: Creating new draft using createDraft API');
-        
-        const draftTemplate = {
-          body: cleanContent
-        };
-        
-        // Add conversation context if available
-        if (context.conversation) {
-          draftTemplate.conversationId = context.conversation.id;
-          console.log('🎯 AIROPS INSERT: Adding conversation context:', context.conversation.id);
-        }
-        
-        await context.createDraft(draftTemplate);
-        setStatus('New draft created!');
-        console.log('✅ AIROPS INSERT: Successfully created new draft');
-        return;
-      }
-      
-      // 🎯 STRATEGY 6: Generic insert method exploration
-      const insertMethods = Object.keys(context).filter(key => 
-        typeof context[key] === 'function' && 
-        (key.includes('insert') || key.includes('draft') || key.includes('text'))
-      );
-      
-      if (insertMethods.length > 0) {
-        console.log('🎯 AIROPS INSERT: Found potential insert methods:', insertMethods);
-        
-        // Try the most promising methods
-        for (const method of insertMethods) {
-          try {
-            console.log(`🎯 AIROPS INSERT: Trying method: ${method}`);
-            await context[method](cleanContent);
-            setStatus('Inserted using ' + method);
-            console.log(`✅ AIROPS INSERT: Successfully used ${method}`);
+          console.log(`🎯 AIROPS INSERT: API response status: ${response.status}`);
+          
+          if (response.ok) {
+            const result = await response.json();
+            console.log('✅ AIROPS INSERT: Draft created successfully via API:', result);
+            setStatus('Draft created via REST API!');
             return;
-          } catch (methodError) {
-            console.log(`❌ AIROPS INSERT: Method ${method} failed:`, methodError.message);
+          } else {
+            const errorText = await response.text();
+            console.error(`❌ AIROPS INSERT: API failed for ${channelId}:`, response.status, errorText);
           }
         }
+        
+      } catch (error) {
+        console.error('❌ AIROPS INSERT: REST API error:', error);
       }
-      
-      console.log('❌ AIROPS INSERT: No suitable draft API found, available methods:', Object.keys(context).filter(key => typeof context[key] === 'function'));
-      
-    } catch (error) {
-      console.error('❌ AIROPS INSERT: All insert strategies failed:', error);
-      setStatus('Insert failed: ' + error.message);
     }
     
-    // 📋 FALLBACK: Copy to clipboard with detailed status
-    console.log('📋 AIROPS INSERT: Falling back to clipboard copy');
+    // ✅ FALLBACK: Copy to clipboard
+    console.log('📋 AIROPS INSERT: All methods failed, copying to clipboard');
     copyToClipboard(content);
-    setStatus('Copied to clipboard');
+    setStatus('Copied - Front API unavailable');
   };
 
-  // ✅ RESTORED: Enhanced copy function with better formatting preservation
   const copyToClipboard = (content) => {
-    console.log('📋 AIROPS COPY: Starting copy process, content length:', content.length);
-    
-    // Create a temporary div to properly convert HTML to text while preserving some formatting
+    // Convert HTML to clean text
     const tempDiv = document.createElement('div');
     tempDiv.innerHTML = content;
     
-    // Enhanced HTML to text conversion with better formatting preservation
+    // Enhanced HTML to text conversion
     tempDiv.querySelectorAll('br').forEach(br => br.replaceWith('\n'));
     tempDiv.querySelectorAll('p').forEach(p => p.replaceWith(p.textContent + '\n\n'));
     tempDiv.querySelectorAll('h1, h2, h3, h4, h5, h6').forEach(h => h.replaceWith('# ' + h.textContent + '\n\n'));
     tempDiv.querySelectorAll('li').forEach(li => li.replaceWith('• ' + li.textContent + '\n'));
     tempDiv.querySelectorAll('ul, ol').forEach(list => list.replaceWith(list.textContent + '\n\n'));
-    tempDiv.querySelectorAll('blockquote').forEach(quote => quote.replaceWith('> ' + quote.textContent + '\n\n'));
-    tempDiv.querySelectorAll('code').forEach(code => code.replaceWith('`' + code.textContent + '`'));
-    tempDiv.querySelectorAll('pre').forEach(pre => pre.replaceWith('```\n' + pre.textContent + '\n```\n'));
     
     // Enhanced table handling
     tempDiv.querySelectorAll('table').forEach(table => {
@@ -1350,7 +1127,6 @@ function App() {
         const cells = Array.from(row.querySelectorAll('td, th')).map(cell => cell.textContent.trim());
         tableText += cells.join(' | ') + '\n';
         
-        // Add header separator for first row if it contains th elements
         if (index === 0 && row.querySelector('th')) {
           tableText += cells.map(() => '---').join(' | ') + '\n';
         }
@@ -1359,19 +1135,15 @@ function App() {
     });
     
     const cleanContent = tempDiv.textContent || tempDiv.innerText || content.replace(/<[^>]*>/g, '');
-    console.log('📋 AIROPS COPY: Cleaned content length:', cleanContent.length);
     
     // Modern clipboard API with fallback
     if (navigator.clipboard && window.isSecureContext) {
       navigator.clipboard.writeText(cleanContent).then(() => {
         setStatus('Copied!');
-        console.log('✅ AIROPS COPY: Successfully copied using modern API');
-      }).catch((error) => {
-        console.log('❌ AIROPS COPY: Modern API failed, trying fallback:', error);
+      }).catch(() => {
         fallbackCopy(cleanContent);
       });
     } else {
-      console.log('📋 AIROPS COPY: Using fallback copy method');
       fallbackCopy(cleanContent);
     }
     
@@ -1389,25 +1161,16 @@ function App() {
         const result = document.execCommand('copy');
         document.body.removeChild(textArea);
         
-        if (result) {
-          setStatus('Copied!');
-          console.log('✅ AIROPS COPY: Successfully copied using fallback');
-        } else {
-          setStatus('Copy failed');
-          console.log('❌ AIROPS COPY: Fallback copy failed');
-        }
+        setStatus(result ? 'Copied!' : 'Copy failed');
       } catch (err) {
         setStatus('Copy failed');
-        console.error('❌ AIROPS COPY: All copy methods failed:', err);
       }
     }
   };
 
-  // ✅ ENHANCED: Process request with comprehensive error handling and logging
   const processRequest = async () => {
     const now = Date.now();
     if (isProcessingRef.current || (now - lastCallTimeRef.current) < 1000) {
-      console.log('🚫 AIROPS: Request blocked - too frequent or already processing');
       return;
     }
 
@@ -1423,23 +1186,9 @@ function App() {
     
     try {
       const taskId = mode === 'task' ? `task_${Date.now()}_${Math.random().toString(36).substr(2, 9)}` : null;
-      console.log(`🚀 AIROPS: Creating ${mode} request${taskId ? ` with ID: ${taskId}` : ''}`);
-      console.log(`🚀 AIROPS: Request details:`, {
-        mode,
-        taskId,
-        hasFile: !!uploadedFile,
-        fileName: uploadedFile?.name,
-        outputFormat,
-        selectedFormat,
-        conversationId: context?.conversation?.id,
-        userId: context?.teammate?.id
-      });
       
       const combinedInstructions = createCombinedInstructions();
-      console.log(`🚀 AIROPS: Combined instructions length: ${combinedInstructions.length} characters`);
-      
       const payload = await createCompletePayload(combinedInstructions, taskId);
-      console.log(`🚀 AIROPS: Payload created, size: ${JSON.stringify(payload).length} characters`);
       
       if (context?.conversation) {
         const conversationId = context.conversation.id;
@@ -1456,17 +1205,9 @@ function App() {
           user: context.teammate ? context.teammate.name : 'Unknown user'
         };
         
-        console.log(`📚 AIROPS: Saving history entry:`, {
-          mode: newEntry.mode,
-          user: newEntry.user,
-          hasFile: newEntry.hasFile,
-          textLength: newEntry.text.length
-        });
-        
         const historySaved = await saveHistoryToNetlify(conversationId, newEntry);
         if (historySaved) {
           setCommentHistory([newEntry, ...commentHistory]);
-          console.log('✅ AIROPS: History updated locally');
         }
 
         // Create and save task if in task mode
@@ -1483,52 +1224,28 @@ function App() {
             user: context.teammate ? context.teammate.name : 'Unknown user'
           };
           
-          console.log(`📋 AIROPS: Creating task:`, {
-            id: newTask.id,
-            user: newTask.user,
-            outputFormat: newTask.outputFormat,
-            hasFile: newTask.hasFile
-          });
-          
           const updatedTasks = [newTask, ...taskResults];
           setTaskResults(updatedTasks);
-          console.log(`✅ AIROPS: Task ${taskId} created locally`);
           
-          // Save to storage with comprehensive error handling
+          // Save to storage
           try {
-            // Save individual task for status checking
-            const individualResponse = await fetch('/.netlify/functions/store-task', {
+            await fetch('/.netlify/functions/store-task', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ taskId, task: newTask })
             });
             
-            if (individualResponse.ok) {
-              console.log(`✅ AIROPS: Task ${taskId} saved individually`);
-            } else {
-              const errorText = await individualResponse.text();
-              console.error(`❌ AIROPS: Failed to save individual task: ${errorText}`);
-            }
-            
-            // Save to conversation tasks for UI persistence
-            const conversationSaved = await saveTaskResultsToNetlify(conversationId, updatedTasks);
-            if (conversationSaved) {
-              console.log(`✅ AIROPS: Task ${taskId} saved to conversation`);
-            }
-            
+            await saveTaskResultsToNetlify(conversationId, updatedTasks);
           } catch (storageError) {
             console.error('❌ AIROPS: Storage error:', storageError);
-            setStatus('Task created but storage failed');
           }
           
-          // Start polling for this task
+          // Start polling
           setPollingTasks(prev => new Set([...prev, taskId]));
-          console.log(`🔄 AIROPS: Started polling for task ${taskId}`);
         }
       }
       
       const webhookUrl = mode === 'email' ? EMAIL_WEBHOOK_URL : TASK_WEBHOOK_URL;
-      console.log(`🚀 AIROPS: Sending request to webhook: ${webhookUrl.substring(0, 50)}...`);
       
       const response = await fetch(webhookUrl, {
         method: 'POST',
@@ -1539,11 +1256,8 @@ function App() {
         body: JSON.stringify(payload)
       });
       
-      console.log(`🚀 AIROPS: Webhook response status: ${response.status}`);
-      
       if (!response.ok) {
         const errorText = await response.text();
-        console.error(`❌ AIROPS: Webhook error: ${response.status} - ${errorText}`);
         throw new Error(`HTTP ${response.status}: ${errorText}`);
       }
       
@@ -1551,7 +1265,6 @@ function App() {
       console.log('✅ AIROPS: Webhook response received:', responseData);
       
       setStatus(mode === 'email' ? 'Email sent!' : 'Task created!');
-      console.log(`✅ AIROPS: ${mode} request completed successfully`);
       
       // Clear form
       setComment('');
@@ -1616,103 +1329,7 @@ function App() {
               text-align: center;
             }
             h1 { margin: 0; font-size: 24px; font-weight: 600; }
-            .meta { 
-              background: #f8fafc; 
-              padding: 20px; 
-              border-bottom: 1px solid #e2e8f0;
-              display: grid;
-              grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-              gap: 16px;
-            }
-            .meta-item { 
-              background: white;
-              padding: 12px;
-              border-radius: 8px;
-              border: 1px solid #e2e8f0;
-            }
-            .meta-label { 
-              font-size: 12px; 
-              font-weight: 600; 
-              color: #6b7280; 
-              text-transform: uppercase; 
-              letter-spacing: 0.5px;
-              margin-bottom: 4px;
-            }
-            .meta-value { 
-              font-size: 14px; 
-              color: #0f172a; 
-              font-weight: 500;
-            }
-            .content { 
-              padding: 24px; 
-            }
-            .content h2, .content h3 { color: #0f172a; margin: 24px 0 12px 0; }
-            .content p { margin-bottom: 16px; }
-            .content ul, .content ol { margin: 16px 0; padding-left: 24px; }
-            .content li { margin-bottom: 8px; }
-            .content table { 
-              border-collapse: collapse; 
-              width: 100%; 
-              margin: 20px 0; 
-              border: 1px solid #e2e8f0;
-              border-radius: 8px;
-              overflow: hidden;
-            }
-            .content th, .content td { 
-              border-bottom: 1px solid #e2e8f0; 
-              padding: 12px 16px; 
-              text-align: left; 
-            }
-            .content th { 
-              background-color: #f8fafc; 
-              font-weight: 600; 
-              font-size: 14px;
-            }
-            .content td { font-size: 14px; }
-            .content blockquote {
-              border-left: 4px solid #6366f1;
-              background: #f8fafc;
-              margin: 20px 0;
-              padding: 16px 20px;
-              border-radius: 0 8px 8px 0;
-            }
-            .content code { 
-              background: #f1f5f9; 
-              padding: 2px 6px; 
-              border-radius: 4px; 
-              font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace; 
-              font-size: 13px;
-            }
-            .content pre { 
-              background: #0f172a; 
-              color: #e2e8f0; 
-              padding: 20px; 
-              border-radius: 8px; 
-              overflow-x: auto; 
-              margin: 20px 0;
-            }
-            .content pre code { 
-              background: none; 
-              padding: 0; 
-              color: inherit; 
-            }
-            .status-badge {
-              display: inline-block;
-              padding: 4px 12px;
-              border-radius: 20px;
-              font-size: 12px;
-              font-weight: 600;
-              text-transform: uppercase;
-              letter-spacing: 0.5px;
-            }
-            .status-completed { background: #dcfce7; color: #166534; }
-            .status-failed { background: #fee2e2; color: #dc2626; }
-            .status-pending { background: #fef3c7; color: #d97706; }
-            @media (max-width: 768px) {
-              body { margin: 10px; padding: 15px; }
-              .meta { grid-template-columns: 1fr; }
-              .header, .content { padding: 20px; }
-            }
+            .content { padding: 24px; }
           </style>
         </head>
         <body>
@@ -1720,34 +1337,8 @@ function App() {
             <div class="header">
               <h1>AirOps Task Result</h1>
             </div>
-            <div class="meta">
-              <div class="meta-item">
-                <div class="meta-label">Format</div>
-                <div class="meta-value">${task.outputFormat || 'General Task'}</div>
-              </div>
-              <div class="meta-item">
-                <div class="meta-label">Status</div>
-                <div class="meta-value">
-                  <span class="status-badge status-${task.status}">${task.status}</span>
-                </div>
-              </div>
-              <div class="meta-item">
-                <div class="meta-label">Created</div>
-                <div class="meta-value">${formatDate(task.createdAt)}</div>
-              </div>
-              <div class="meta-item">
-                <div class="meta-label">User</div>
-                <div class="meta-value">${task.user}</div>
-              </div>
-              ${task.fileName ? `
-              <div class="meta-item">
-                <div class="meta-label">File</div>
-                <div class="meta-value">${task.fileName}</div>
-              </div>
-              ` : ''}
-            </div>
             <div class="content">
-              ${task.result || '<p style="text-align: center; color: #6b7280; font-style: italic;">No result available yet.</p>'}
+              ${task.result || '<p>No result available yet.</p>'}
             </div>
           </div>
         </body>
@@ -1759,12 +1350,11 @@ function App() {
   const viewHistoryEntryInNewWindow = (entry) => {
     const newWindow = window.open('', '_blank');
     const content = entry.result || entry.text;
-    const title = entry.isTaskCompletion ? 'AirOps Task Result' : 'AirOps History Entry';
     
     newWindow.document.write(`
       <html>
         <head>
-          <title>${title}</title>
+          <title>AirOps History Entry</title>
           <meta charset="utf-8">
           <meta name="viewport" content="width=device-width, initial-scale=1">
           <style>
@@ -1784,79 +1374,19 @@ function App() {
               overflow: hidden;
             }
             .header { 
-              background: ${entry.isTaskCompletion ? 'linear-gradient(135deg, #22c55e, #16a34a)' : 'linear-gradient(135deg, #6366f1, #8b5cf6)'};
+              background: linear-gradient(135deg, #6366f1, #8b5cf6);
               color: white;
               padding: 24px;
               text-align: center;
             }
             h1 { margin: 0; font-size: 24px; font-weight: 600; }
-            .meta { 
-              background: #f8fafc; 
-              padding: 20px; 
-              border-bottom: 1px solid #e2e8f0;
-              display: grid;
-              grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-              gap: 16px;
-            }
-            .meta-item { 
-              background: white;
-              padding: 12px;
-              border-radius: 8px;
-              border: 1px solid #e2e8f0;
-            }
-            .meta-label { 
-              font-size: 12px; 
-              font-weight: 600; 
-              color: #6b7280; 
-              text-transform: uppercase; 
-              letter-spacing: 0.5px;
-              margin-bottom: 4px;
-            }
-            .meta-value { 
-              font-size: 14px; 
-              color: #0f172a; 
-              font-weight: 500;
-            }
-            .content { 
-              padding: 24px; 
-            }
-            @media (max-width: 768px) {
-              body { margin: 10px; padding: 15px; }
-              .meta { grid-template-columns: 1fr; }
-              .header, .content { padding: 20px; }
-            }
+            .content { padding: 24px; }
           </style>
         </head>
         <body>
           <div class="container">
             <div class="header">
-              <h1>${title}</h1>
-            </div>
-            <div class="meta">
-              <div class="meta-item">
-                <div class="meta-label">Type</div>
-                <div class="meta-value">${entry.isTaskCompletion ? 'Task Completion' : entry.mode === 'email' ? 'Email Request' : 'Task Request'}</div>
-              </div>
-              <div class="meta-item">
-                <div class="meta-label">Created</div>
-                <div class="meta-value">${formatDate(entry.timestamp)}</div>
-              </div>
-              <div class="meta-item">
-                <div class="meta-label">User</div>
-                <div class="meta-value">${entry.user}</div>
-              </div>
-              ${entry.outputFormat ? `
-              <div class="meta-item">
-                <div class="meta-label">Format</div>
-                <div class="meta-value">${entry.outputFormat}</div>
-              </div>
-              ` : ''}
-              ${entry.fileName ? `
-              <div class="meta-item">
-                <div class="meta-label">File</div>
-                <div class="meta-value">${entry.fileName}</div>
-              </div>
-              ` : ''}
+              <h1>AirOps History Entry</h1>
             </div>
             <div class="content">
               ${content}
@@ -1955,7 +1485,7 @@ function App() {
         }
       `}</style>
 
-      {/* Enhanced Header with debug buttons */}
+      {/* Header */}
       <div style={{
         display: 'flex',
         alignItems: 'center',
@@ -1981,7 +1511,7 @@ function App() {
           {cardSize.width < 220 ? 'AirOps' : 'Send to AirOps'}
         </span>
         
-        {/* Enhanced debug buttons */}
+        {/* Debug buttons */}
         <div style={{ display: 'flex', gap: theme.spacing.xs }}>
           <button
             onClick={debugHistoryAPI}
@@ -2123,7 +1653,7 @@ function App() {
             onBlur={(e) => e.target.style.borderColor = theme.colors.border}
           />
           
-          {/* ✅ FIXED: Enhanced textarea resize handle */}
+          {/* Textarea resize handle */}
           <div
             onMouseDown={handleTextareaResizeStart}
             style={{
@@ -2131,11 +1661,11 @@ function App() {
               bottom: '2px',
               right: theme.spacing.sm,
               left: theme.spacing.sm,
-              height: '16px',       // ✅ Larger hit area
+              height: '16px',
               cursor: 'ns-resize',
               background: `linear-gradient(90deg, transparent 30%, ${theme.colors.border} 30%, ${theme.colors.border} 35%, transparent 35%, transparent 65%, ${theme.colors.border} 65%, ${theme.colors.border} 70%, transparent 70%)`,
               backgroundSize: '8px 2px',
-              opacity: 0.5,         // ✅ More visible
+              opacity: 0.5,
               borderRadius: `0 0 ${theme.borderRadius.sm} ${theme.borderRadius.sm}`,
               transition: 'opacity 0.2s ease',
               display: 'flex',
@@ -2194,7 +1724,7 @@ function App() {
               ))}
             </select>
 
-            {/* Enhanced File Upload */}
+            {/* File Upload */}
             <div style={{ marginTop: theme.spacing.sm }}>
               <input
                 ref={fileInputRef}
@@ -2281,7 +1811,7 @@ function App() {
                     onMouseLeave={(e) => e.target.style.color = theme.colors.tertiary}
                     title="Remove file"
                   >
-                    <Icon name="Close" size={theme.iconSize.sm} />
+                    <CrossIcon size={theme.iconSize.sm} />
                   </button>
                 </div>
               )}
@@ -2289,7 +1819,7 @@ function App() {
           </div>
         )}
 
-        {/* Results and History */}
+        {/* ✅ FIXED: Results and History - Properly separated without syntax errors */}
         {(taskResults.length > 0 || commentHistory.length > 0) && (
           <Accordion expandMode="multi">
             {taskResults.length > 0 && (
@@ -2338,7 +1868,7 @@ function App() {
                         fontSize: theme.fontSize.xs
                       }}
                     >
-                      {/* Task Header - CLICKABLE */}
+                      {/* Task Header */}
                       <div 
                         onClick={() => toggleTaskExpansion(task.id)}
                         style={{ 
@@ -2356,7 +1886,6 @@ function App() {
                         title="Click to expand/collapse"
                       >
                         <div style={{ display: 'flex', alignItems: 'center', flex: 1 }}>
-                          {/* Expand/Collapse Icon */}
                           <div style={{ 
                             marginRight: theme.spacing.sm,
                             transform: expandedTasks.has(task.id) ? 'rotate(90deg)' : 'rotate(0deg)',
@@ -2367,7 +1896,6 @@ function App() {
                             ▶
                           </div>
                           
-                          {/* Status Icon */}
                           {task.status === 'pending' ? (
                             <div style={{ 
                               width: `${theme.iconSize.md}px`, 
@@ -2412,7 +1940,6 @@ function App() {
                           </div>
                         </div>
                         
-                        {/* Action buttons */}
                         <div 
                           style={{ display: 'flex', alignItems: 'center', gap: theme.spacing.xs }}
                           onClick={(e) => e.stopPropagation()}
@@ -2512,9 +2039,7 @@ function App() {
                               }}>
                                 <div 
                                   dangerouslySetInnerHTML={{ __html: task.result }}
-                                  style={{ 
-                                    color: theme.colors.primary
-                                  }}
+                                  style={{ color: theme.colors.primary }}
                                 />
                               </div>
                               
@@ -2547,7 +2072,7 @@ function App() {
                                     e.target.style.backgroundColor = theme.colors.background;
                                   }}
                                 >
-                                  <Icon name="Copy" size={theme.iconSize.sm} style={{ marginRight: theme.spacing.xs }} />
+                                  <CopyIcon size={theme.iconSize.sm} style={{ marginRight: theme.spacing.xs }} />
                                   Copy
                                 </button>
                                 <button
@@ -2643,30 +2168,6 @@ function App() {
                       if (entry.isTaskCompletion) return 'Task Completed';
                       if (entry.mode === 'email') return 'Email Request';
                       return 'Task Request';
-                    };
-
-                    const getExpandedStatusColor = () => {
-                      if (entry.isTaskCompletion) return theme.colors.success + '15';
-                      if (entry.mode === 'email') return theme.colors.info + '15';
-                      return theme.colors.secondary + '15';
-                    };
-
-                    const getExpandedBorderColor = () => {
-                      if (entry.isTaskCompletion) return theme.colors.success;
-                      if (entry.mode === 'email') return theme.colors.info;
-                      return theme.colors.secondary;
-                    };
-
-                    const getExpandedTextColor = () => {
-                      if (entry.isTaskCompletion) return theme.colors.success;
-                      if (entry.mode === 'email') return theme.colors.info;
-                      return theme.colors.secondary;
-                    };
-
-                    const getExpandedStatusText = () => {
-                      if (entry.isTaskCompletion) return 'COMPLETED';
-                      if (entry.mode === 'email') return 'EMAIL SENT';
-                      return 'TASK CREATED';
                     };
 
                     return (
@@ -2776,7 +2277,7 @@ function App() {
                               onMouseLeave={(e) => e.target.style.color = theme.colors.tertiary}
                               title="Copy content"
                             >
-                              <Icon name="Copy" size={theme.iconSize.md} />
+                              <CopyIcon size={theme.iconSize.md} />
                             </button>
                             
                             <button
@@ -2831,149 +2332,82 @@ function App() {
                             animation: 'fadeIn 0.2s ease-out'
                           }}>
                             <div style={{
-                              padding: `${theme.spacing.sm} ${theme.spacing.lg}`,
-                              background: getExpandedStatusColor(),
-                              border: `1px solid ${getExpandedBorderColor()}`,
-                              borderRadius: theme.borderRadius.sm,
-                              fontSize: theme.fontSize.sm,
-                              color: getExpandedTextColor(),
-                              marginBottom: theme.spacing.sm,
-                              fontWeight: '500'
-                            }}>
-                              {getExpandedStatusText()}
-                            </div>
-
-                            <div style={{
                               background: theme.colors.surface,
                               border: `1px solid ${theme.colors.border}`,
                               borderRadius: theme.borderRadius.md,
                               padding: theme.spacing.lg,
-                              marginBottom: theme.spacing.sm,
                               fontSize: theme.fontSize.base,
-                              lineHeight: '1.5'
+                              lineHeight: '1.5',
+                              color: theme.colors.secondary
                             }}>
-                              <div style={{ 
-                                fontWeight: '600', 
-                                color: theme.colors.primary,
-                                marginBottom: theme.spacing.xs,
-                                fontSize: theme.fontSize.sm
-                              }}>
-                                Original Request:
-                              </div>
-                              <div style={{ color: theme.colors.secondary }}>
-                                {entry.text}
-                              </div>
-                              
-                              {(entry.outputFormat || entry.fileName) && (
-                                <div style={{ 
-                                  marginTop: theme.spacing.sm,
-                                  padding: theme.spacing.sm,
-                                  background: theme.colors.background,
-                                  borderRadius: theme.borderRadius.sm,
-                                  fontSize: theme.fontSize.xs,
-                                  color: theme.colors.tertiary
-                                }}>
-                                  {entry.outputFormat && (
-                                    <div>
-                                      Format: {entry.selectedFormat ? 
-                                        formatOptions.find(f => f.value === entry.selectedFormat)?.label || entry.outputFormat 
-                                        : entry.outputFormat}
-                                    </div>
-                                  )}
-                                  {entry.fileName && (
-                                    <div>File: {entry.fileName}</div>
-                                  )}
-                                </div>
+                              {entry.result ? (
+                                <div dangerouslySetInnerHTML={{ __html: entry.result }} />
+                              ) : (
+                                entry.text
                               )}
                             </div>
-
-                            {entry.result && (
-                              <div>
-                                <div style={{
-                                  background: theme.colors.surface,
-                                  border: `1px solid ${theme.colors.success}30`,
-                                  borderRadius: theme.borderRadius.md,
-                                  padding: theme.spacing.lg,
-                                  marginBottom: theme.spacing.sm,
-                                  fontSize: theme.fontSize.result,
-                                  lineHeight: '1.5'
-                                }}>
-                                  <div style={{ 
-                                    fontWeight: '600', 
-                                    color: theme.colors.primary,
-                                    marginBottom: theme.spacing.xs,
-                                    fontSize: theme.fontSize.sm
-                                  }}>
-                                    Result:
-                                  </div>
-                                  <div 
-                                    dangerouslySetInnerHTML={{ __html: entry.result }}
-                                    style={{ color: theme.colors.primary }}
-                                  />
-                                </div>
-                                
-                                <div style={{ 
-                                  display: 'flex', 
-                                  gap: theme.spacing.sm,
-                                  flexWrap: 'wrap'
-                                }}>
-                                  <button
-                                    onClick={() => copyToClipboard(entry.result)}
-                                    style={{
-                                      padding: `${theme.spacing.sm} ${theme.spacing.lg}`,
-                                      fontSize: theme.fontSize.sm,
-                                      minHeight: 'auto',
-                                      display: 'flex',
-                                      alignItems: 'center',
-                                      background: theme.colors.background,
-                                      border: `1px solid ${theme.colors.border}`,
-                                      borderRadius: theme.borderRadius.sm,
-                                      cursor: 'pointer',
-                                      color: theme.colors.secondary,
-                                      transition: 'all 0.2s ease'
-                                    }}
-                                    onMouseEnter={(e) => {
-                                      e.target.style.borderColor = theme.colors.borderHover;
-                                      e.target.style.backgroundColor = theme.colors.surface;
-                                    }}
-                                    onMouseLeave={(e) => {
-                                      e.target.style.borderColor = theme.colors.border;
-                                      e.target.style.backgroundColor = theme.colors.background;
-                                    }}
-                                  >
-                                    <Icon name="Copy" size={theme.iconSize.sm} style={{ marginRight: theme.spacing.xs }} />
-                                    Copy Result
-                                  </button>
-                                  <button
-                                    onClick={() => insertIntoDraft(entry.result)}
-                                    style={{
-                                      padding: `${theme.spacing.sm} ${theme.spacing.lg}`,
-                                      fontSize: theme.fontSize.sm,
-                                      minHeight: 'auto',
-                                      display: 'flex',
-                                      alignItems: 'center',
-                                      background: theme.colors.background,
-                                      border: `1px solid ${theme.colors.border}`,
-                                      borderRadius: theme.borderRadius.sm,
-                                      cursor: 'pointer',
-                                      color: theme.colors.secondary,
-                                      transition: 'all 0.2s ease'
-                                    }}
-                                    onMouseEnter={(e) => {
-                                      e.target.style.borderColor = theme.colors.borderHover;
-                                      e.target.style.backgroundColor = theme.colors.surface;
-                                    }}
-                                    onMouseLeave={(e) => {
-                                      e.target.style.borderColor = theme.colors.border;
-                                      e.target.style.backgroundColor = theme.colors.background;
-                                    }}
-                                  >
-                                    <InsertIcon size={theme.iconSize.sm} color={theme.colors.secondary} style={{ marginRight: theme.spacing.xs }} />
-                                    Insert Result
-                                  </button>
-                                </div>
-                              </div>
-                            )}
+                            
+                            <div style={{ 
+                              display: 'flex', 
+                              gap: theme.spacing.sm,
+                              marginTop: theme.spacing.sm,
+                              flexWrap: 'wrap'
+                            }}>
+                              <button
+                                onClick={() => copyToClipboard(entry.result || entry.text)}
+                                style={{
+                                  padding: `${theme.spacing.sm} ${theme.spacing.lg}`,
+                                  fontSize: theme.fontSize.sm,
+                                  minHeight: 'auto',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  background: theme.colors.background,
+                                  border: `1px solid ${theme.colors.border}`,
+                                  borderRadius: theme.borderRadius.sm,
+                                  cursor: 'pointer',
+                                  color: theme.colors.secondary,
+                                  transition: 'all 0.2s ease'
+                                }}
+                                onMouseEnter={(e) => {
+                                  e.target.style.borderColor = theme.colors.borderHover;
+                                  e.target.style.backgroundColor = theme.colors.surface;
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.target.style.borderColor = theme.colors.border;
+                                  e.target.style.backgroundColor = theme.colors.background;
+                                }}
+                              >
+                                <CopyIcon size={theme.iconSize.sm} style={{ marginRight: theme.spacing.xs }} />
+                                Copy
+                              </button>
+                              <button
+                                onClick={() => insertIntoDraft(entry.result || entry.text)}
+                                style={{
+                                  padding: `${theme.spacing.sm} ${theme.spacing.lg}`,
+                                  fontSize: theme.fontSize.sm,
+                                  minHeight: 'auto',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  background: theme.colors.background,
+                                  border: `1px solid ${theme.colors.border}`,
+                                  borderRadius: theme.borderRadius.sm,
+                                  cursor: 'pointer',
+                                  color: theme.colors.secondary,
+                                  transition: 'all 0.2s ease'
+                                }}
+                                onMouseEnter={(e) => {
+                                  e.target.style.borderColor = theme.colors.borderHover;
+                                  e.target.style.backgroundColor = theme.colors.surface;
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.target.style.borderColor = theme.colors.border;
+                                  e.target.style.backgroundColor = theme.colors.background;
+                                }}
+                              >
+                                <InsertIcon size={theme.iconSize.sm} color={theme.colors.secondary} style={{ marginRight: theme.spacing.xs }} />
+                                Insert
+                              </button>
+                            </div>
                           </div>
                         )}
                       </div>
@@ -3051,25 +2485,25 @@ function App() {
         )}
       </div>
 
-      {/* ✅ FIXED: Enhanced resize handle - larger and more visible */}
+      {/* Card resize handle */}
       <div
         onMouseDown={handleCardResizeStart}
         style={{
           position: 'absolute',
           bottom: '0px',
           right: '0px',
-          width: '18px',        // ✅ Larger hit area
-          height: '18px',       // ✅ Larger hit area
+          width: '18px',
+          height: '18px',
           cursor: 'nw-resize',
           background: `linear-gradient(-45deg, transparent 30%, ${theme.colors.tertiary} 30%, ${theme.colors.tertiary} 35%, transparent 35%, transparent 65%, ${theme.colors.tertiary} 65%, ${theme.colors.tertiary} 70%, transparent 70%)`,
           backgroundSize: '4px 4px',
-          opacity: 0.6,         // ✅ More visible by default
+          opacity: 0.6,
           borderRadius: `0 0 ${theme.borderRadius.lg} 0`,
           transition: 'opacity 0.2s ease, background-color 0.2s ease',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          zIndex: 100          // ✅ Ensure it's on top
+          zIndex: 100
         }}
         onMouseEnter={(e) => {
           e.target.style.opacity = '1.0';
