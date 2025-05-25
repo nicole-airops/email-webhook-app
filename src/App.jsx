@@ -36,9 +36,9 @@ function App() {
   const [pollingTasks, setPollingTasks] = useState(new Set());
   
   // Auto-resize state - Better constraints for Front's UI
-  const [cardSize, setCardSize] = useState({ width: 280, height: 350 });
+  const [cardSize, setCardSize] = useState({ width: 320, height: 420 });
   const [isResizing, setIsResizing] = useState(false);
-  const [textareaHeight, setTextareaHeight] = useState(60);
+  const [textareaHeight, setTextareaHeight] = useState(80);
   const [isTextareaResizing, setIsTextareaResizing] = useState(false);
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
   
@@ -61,39 +61,47 @@ function App() {
     { value: 'table', label: 'Table' }
   ];
 
-  // Styling configuration
-  const styles = {
-    fontSize: {
-      base: 12,
-      small: 11,
-      tiny: 10,
-      header: 14
-    },
+  // Modern, consistent styling configuration
+  const theme = {
     colors: {
-      primary: '#1f2937',
-      secondary: '#4b5563',
-      tertiary: '#9ca3af',
-      background: '#f9fafb',
-      border: '#e5e7eb',
+      primary: '#0f172a',
+      secondary: '#475569',
+      tertiary: '#94a3b8',
+      background: '#f8fafc',
+      surface: '#ffffff',
+      border: '#e2e8f0',
+      borderHover: '#cbd5e1',
       error: '#ef4444',
-      success: '#10b981',
+      success: '#22c55e',
       warning: '#f59e0b',
-      info: '#3b82f6'
+      info: '#3b82f6',
+      accent: '#6366f1'
+    },
+    spacing: {
+      xs: '4px',
+      sm: '8px',
+      md: '12px',
+      lg: '16px',
+      xl: '20px'
+    },
+    borderRadius: {
+      sm: '4px',
+      md: '6px',
+      lg: '8px'
+    },
+    fontSize: {
+      xs: '10px',
+      sm: '11px',
+      base: '12px',
+      lg: '14px',
+      xl: '16px'
+    },
+    shadows: {
+      sm: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
+      md: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+      lg: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)'
     }
   };
-
-  // More conservative text sizing for Front's UI
-  const getAdaptiveTextSize = () => {
-    const baseSize = Math.max(10, Math.min(14, cardSize.width / 25));
-    return {
-      base: `${baseSize}px`,
-      small: `${Math.max(9, baseSize - 1)}px`,
-      tiny: `${Math.max(8, baseSize - 2)}px`,
-      header: `${Math.min(16, baseSize + 2)}px`
-    };
-  };
-
-  const textSizes = getAdaptiveTextSize();
 
   // Detect container size changes and auto-resize card responsively
   useEffect(() => {
@@ -108,9 +116,9 @@ function App() {
         const containerWidth = rect.width;
         const containerHeight = rect.height;
         
-        // More conservative auto-resize for Front's UI constraints
-        const newWidth = Math.max(260, Math.min(350, containerWidth - 16));
-        const newHeight = Math.max(300, Math.min(500, containerHeight - 16));
+        // Better auto-resize for Front's UI constraints
+        const newWidth = Math.max(280, Math.min(400, containerWidth - 16));
+        const newHeight = Math.max(320, Math.min(600, containerHeight - 16));
         
         setContainerSize({ width: containerWidth, height: containerHeight });
         setCardSize({ width: newWidth, height: newHeight });
@@ -163,8 +171,8 @@ function App() {
         const cardRect = cardRef.current.getBoundingClientRect();
         
         // More reasonable manual resize constraints
-        const newWidth = Math.max(260, Math.min(400, e.clientX - cardRect.left));
-        const newHeight = Math.max(300, Math.min(600, e.clientY - cardRect.top));
+        const newWidth = Math.max(280, Math.min(500, e.clientX - cardRect.left));
+        const newHeight = Math.max(320, Math.min(700, e.clientY - cardRect.top));
         
         setCardSize({ width: newWidth, height: newHeight });
       }
@@ -172,7 +180,7 @@ function App() {
       if (isTextareaResizing) {
         const rect = textareaContainerRef.current?.getBoundingClientRect();
         if (rect) {
-          const newHeight = Math.max(30, Math.min(300, e.clientY - rect.top));
+          const newHeight = Math.max(40, Math.min(300, e.clientY - rect.top));
           setTextareaHeight(newHeight);
         }
       }
@@ -221,11 +229,30 @@ function App() {
     const conversationId = context?.conversation?.id;
     if (conversationId) {
       loadHistoryFromNetlify(conversationId);
-      loadTaskResultsFromFrontContext();
+      loadTaskResultsFromNetlify(conversationId);
     }
   }, [context]);
 
-  // Check for completed tasks from webhook notifications
+  // ✅ FIXED: Save task results to Netlify storage
+  const saveTaskResultsToNetlify = async (conversationId, tasks) => {
+    try {
+      const response = await fetch('/.netlify/functions/save-conversation-tasks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ conversationId, tasks })
+      });
+      
+      if (response.ok) {
+        console.log('✅ Task results saved to Netlify');
+      } else {
+        console.error('Failed to save task results to Netlify');
+      }
+    } catch (error) {
+      console.error('Error saving task results to Netlify:', error);
+    }
+  };
+
+  // ✅ FIXED: Check for completed tasks and save results
   const checkTaskStatus = async (taskId) => {
     try {
       const response = await fetch(`/.netlify/functions/task-status?taskId=${taskId}`);
@@ -233,6 +260,7 @@ function App() {
         const result = await response.json();
         
         if (result.status === 'completed' || result.status === 'failed') {
+          // Update task results
           const updatedTasks = taskResults.map(task => 
             task.id === taskId 
               ? { ...task, status: result.status, result: result.data, completedAt: result.completedAt }
@@ -241,7 +269,12 @@ function App() {
           
           setTaskResults(updatedTasks);
           
-          // Save completed task to Netlify
+          // ✅ FIXED: Save updated tasks to Netlify storage
+          if (context?.conversation?.id) {
+            await saveTaskResultsToNetlify(context.conversation.id, updatedTasks);
+          }
+          
+          // Save completed task link to Front
           try {
             if (context.addLink && context.conversation) {
               const completedTask = updatedTasks.find(t => t.id === taskId);
@@ -602,7 +635,7 @@ function App() {
     }
   };
 
-  // Load task results from Netlify Blobs storage (persistent)
+  // ✅ FIXED: Load task results from Netlify Blobs storage (persistent)
   const loadTaskResultsFromNetlify = async (conversationId) => {
     try {
       const response = await fetch(`/.netlify/functions/get-conversation-tasks?conversationId=${conversationId}`);
@@ -624,39 +657,6 @@ function App() {
     } catch (error) {
       console.error('Error loading task results from Netlify:', error);
       setTaskResults([]);
-    }
-  };
-
-  // Load task results from Front context (legacy - for migration)
-  const loadTaskResultsFromFrontContext = async () => {
-    try {
-      if (context && context.conversation) {
-        const messages = await context.listMessages();
-        const taskEntries = [];
-        
-        // Look for task results in conversation
-        messages.results.forEach(message => {
-          if (message.body && message.body.includes('✅ AirOps Task Result:')) {
-            const taskMatch = message.body.match(/Task ID: (\w+)/);
-            if (taskMatch) {
-              taskEntries.push({
-                id: taskMatch[1],
-                status: 'completed',
-                result: message.body,
-                completedAt: message.created_at
-              });
-            }
-          }
-        });
-        
-        // Only use Front context results if we don't have any from Netlify
-        if (taskResults.length === 0 && taskEntries.length > 0) {
-          console.log('📋 Migrating tasks from Front context:', taskEntries.length);
-          setTaskResults(taskEntries);
-        }
-      }
-    } catch (error) {
-      console.error('Error loading task results from Front:', error);
     }
   };
 
@@ -704,6 +704,7 @@ function App() {
     });
   };
 
+  // ✅ ENHANCED PROCESS REQUEST with proper task saving
   const processRequest = async () => {
     // Prevent multiple calls
     const now = Date.now();
@@ -715,8 +716,6 @@ function App() {
       setStatus('Add instructions');
       return;
     }
-
-    // Note: Output format and file attachment are now optional for tasks
     
     // Set processing flags
     isProcessingRef.current = true;
@@ -770,12 +769,16 @@ function App() {
           const updatedTasks = [newTask, ...taskResults];
           setTaskResults(updatedTasks);
           
+          // ✅ FIXED: Save task to both individual and conversation storage
           try {
             await fetch('/.netlify/functions/store-task', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ taskId, task: newTask })
             });
+            
+            // Also save to conversation tasks
+            await saveTaskResultsToNetlify(conversationId, updatedTasks);
           } catch (blobError) {
             console.error('Error storing task in Netlify Blobs:', blobError);
           }
@@ -808,7 +811,7 @@ function App() {
       if (mode === 'email') {
         setStatus('Email sent successfully!');
       } else {
-        setStatus(`Task created successfully! (ID: ${taskId?.substring(0, 8)}...)`);
+        setStatus(`Task created successfully!`);
         console.log(`✅ Task created: ${taskId}`);
       }
       
@@ -848,8 +851,8 @@ function App() {
         alignItems: 'center',
         justifyContent: 'center',
         height: '200px',
-        fontSize: textSizes.base,
-        color: styles.colors.tertiary
+        fontSize: theme.fontSize.base,
+        color: theme.colors.tertiary
       }}>
         Loading context...
       </div>
@@ -859,9 +862,9 @@ function App() {
   if (context.type === 'messageComposer' && !context.conversation) {
     return (
       <div style={{
-        padding: '16px',
-        fontSize: textSizes.base,
-        color: styles.colors.secondary,
+        padding: theme.spacing.lg,
+        fontSize: theme.fontSize.base,
+        color: theme.colors.secondary,
         textAlign: 'center'
       }}>
         Select a conversation to use this plugin
@@ -876,208 +879,186 @@ function App() {
       style={{
         width: `${cardSize.width}px`,
         height: `${cardSize.height}px`,
-        background: 'white',
-        border: `1px solid ${styles.colors.border}`,
-        borderRadius: '8px',
-        padding: cardSize.width < 220 ? '8px' : '12px',
-        fontSize: textSizes.base,
+        background: theme.colors.surface,
+        border: `1px solid ${theme.colors.border}`,
+        borderRadius: theme.borderRadius.lg,
+        padding: theme.spacing.md,
+        fontSize: theme.fontSize.base,
         fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
         position: 'relative',
         overflow: 'hidden',
-        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
+        boxShadow: theme.shadows.md,
         display: 'flex',
         flexDirection: 'column',
-        minWidth: '260px',
-        minHeight: '300px',
+        minWidth: '280px',
+        minHeight: '320px',
         maxWidth: '100%',
         maxHeight: '100%',
-        transition: isResizing ? 'none' : 'width 0.1s ease, height 0.1s ease'
+        transition: isResizing ? 'none' : 'width 0.2s ease, height 0.2s ease'
       }}
     >
-      {/* Header - Responsive for both small and large cards */}
+      {/* Modern Header */}
       <div style={{
         display: 'flex',
         alignItems: 'center',
-        marginBottom: cardSize.width < 280 ? '8px' : cardSize.width > 320 ? '16px' : '12px',
-        fontSize: textSizes.header,
-        fontWeight: '600',
-        color: styles.colors.primary
+        marginBottom: theme.spacing.md,
+        paddingBottom: theme.spacing.sm,
+        borderBottom: `1px solid ${theme.colors.border}`
       }}>
         <img 
           src={AIROPS_LOGO_URL} 
           alt="" 
           style={{ 
-            width: cardSize.width < 280 ? '14px' : cardSize.width > 320 ? '18px' : '16px', 
-            height: cardSize.width < 280 ? '14px' : cardSize.width > 320 ? '18px' : '16px', 
-            marginRight: cardSize.width < 280 ? '6px' : cardSize.width > 320 ? '10px' : '8px' 
+            width: '18px', 
+            height: '18px', 
+            marginRight: theme.spacing.sm
           }}
         />
-        <span>
-          {cardSize.width < 280 ? 'AirOps' : 'Send to AirOps'}
+        <span style={{
+          fontSize: theme.fontSize.lg,
+          fontWeight: '600',
+          color: theme.colors.primary
+        }}>
+          Send to AirOps
         </span>
       </div>
 
+      {/* Modern Mode Tabs */}
       <div style={{ 
-        marginBottom: cardSize.width < 280 ? '8px' : '12px' 
+        marginBottom: theme.spacing.md 
       }}>
         <div style={{
           display: 'flex',
-          background: styles.colors.background,
-          borderRadius: '6px',
-          padding: '2px',
-          border: `1px solid ${styles.colors.border}`
+          background: theme.colors.background,
+          borderRadius: theme.borderRadius.md,
+          padding: '3px',
+          border: `1px solid ${theme.colors.border}`
         }}>
           <button
-            onClick={() => {
-              console.log('Switching to email mode');
-              setMode('email');
-            }}
-            onMouseEnter={(e) => {
-              if (mode !== 'email') {
-                e.target.style.background = '#f3f4f6';
-              }
-            }}
-            onMouseLeave={(e) => {
-              if (mode !== 'email') {
-                e.target.style.background = 'transparent';
-              }
-            }}
+            onClick={() => setMode('email')}
             style={{
               flex: 1,
-              padding: cardSize.width < 280 ? '6px 8px' : '8px 12px',
+              padding: `${theme.spacing.sm} ${theme.spacing.md}`,
               border: 'none',
-              borderRadius: '4px',
-              fontSize: textSizes.base,
+              borderRadius: theme.borderRadius.sm,
+              fontSize: theme.fontSize.base,
               fontWeight: '500',
               cursor: 'pointer',
-              background: mode === 'email' ? 'white' : 'transparent',
-              color: mode === 'email' ? styles.colors.primary : styles.colors.tertiary,
-              boxShadow: mode === 'email' ? '0 1px 2px rgba(0, 0, 0, 0.05)' : 'none',
-              transition: 'all 0.15s ease',
+              background: mode === 'email' ? theme.colors.surface : 'transparent',
+              color: mode === 'email' ? theme.colors.primary : theme.colors.secondary,
+              boxShadow: mode === 'email' ? theme.shadows.sm : 'none',
+              transition: 'all 0.2s ease',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center'
             }}
           >
             <EmailIcon 
-              size={cardSize.width < 280 ? 12 : 14} 
-              color={mode === 'email' ? styles.colors.primary : styles.colors.tertiary} 
-              style={{ marginRight: cardSize.width < 280 ? '4px' : '6px' }} 
+              size={14} 
+              color={mode === 'email' ? theme.colors.primary : theme.colors.secondary} 
+              style={{ marginRight: theme.spacing.xs }} 
             />
             Email
           </button>
           <button
-            onClick={() => {
-              console.log('Switching to task mode');
-              setMode('task');
-            }}
-            onMouseEnter={(e) => {
-              if (mode !== 'task') {
-                e.target.style.background = '#f3f4f6';
-              }
-            }}
-            onMouseLeave={(e) => {
-              if (mode !== 'task') {
-                e.target.style.background = 'transparent';
-              }
-            }}
+            onClick={() => setMode('task')}
             style={{
               flex: 1,
-              padding: cardSize.width < 280 ? '6px 8px' : '8px 12px',
+              padding: `${theme.spacing.sm} ${theme.spacing.md}`,
               border: 'none',
-              borderRadius: '4px',
-              fontSize: textSizes.base,
+              borderRadius: theme.borderRadius.sm,
+              fontSize: theme.fontSize.base,
               fontWeight: '500',
               cursor: 'pointer',
-              background: mode === 'task' ? 'white' : 'transparent',
-              color: mode === 'task' ? styles.colors.primary : styles.colors.tertiary,
-              boxShadow: mode === 'task' ? '0 1px 2px rgba(0, 0, 0, 0.05)' : 'none',
-              transition: 'all 0.15s ease',
+              background: mode === 'task' ? theme.colors.surface : 'transparent',
+              color: mode === 'task' ? theme.colors.primary : theme.colors.secondary,
+              boxShadow: mode === 'task' ? theme.shadows.sm : 'none',
+              transition: 'all 0.2s ease',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center'
             }}
           >
             <TaskIcon 
-              size={cardSize.width < 280 ? 12 : 14} 
-              color={mode === 'task' ? styles.colors.primary : styles.colors.tertiary} 
-              style={{ marginRight: cardSize.width < 280 ? '4px' : '6px' }} 
+              size={14} 
+              color={mode === 'task' ? theme.colors.primary : theme.colors.secondary} 
+              style={{ marginRight: theme.spacing.xs }} 
             />
             Task
           </button>
         </div>
       </div>
       
-      {/* Scrollable Content Area - Responsive for all sizes */}
+      {/* Scrollable Content Area */}
       <div style={{
         flex: 1,
         overflowY: 'auto',
-        paddingRight: cardSize.width < 280 ? '2px' : '4px',
-        marginBottom: cardSize.width < 280 ? '8px' : '12px'
+        paddingRight: theme.spacing.xs,
+        marginBottom: theme.spacing.md
       }}>
-        {/* Instructions Input - Contextual and adaptive */}
-        <div ref={textareaContainerRef} style={{ position: 'relative', marginBottom: '12px' }}>
-          <div style={{
-            marginBottom: '4px',
-            fontSize: textSizes.small,
-            fontWeight: '500',
-            color: styles.colors.primary
+        {/* Modern Instructions Input */}
+        <div ref={textareaContainerRef} style={{ position: 'relative', marginBottom: theme.spacing.md }}>
+          <label style={{
+            display: 'block',
+            marginBottom: theme.spacing.xs,
+            fontSize: theme.fontSize.sm,
+            fontWeight: '600',
+            color: theme.colors.primary
           }}>
-            Instructions <span style={{ color: styles.colors.error }}>*</span>
-          </div>
+            Instructions <span style={{ color: theme.colors.error }}>*</span>
+          </label>
           <textarea
             value={comment}
             onChange={(e) => setComment(e.target.value)}
             placeholder={
-              mode === 'email' ? "How should we respond?" : "What do you need created?"
+              mode === 'email' ? "How should we respond to this conversation?" : "What do you need created?"
             }
             style={{
               width: '100%',
               height: `${textareaHeight}px`,
-              padding: cardSize.width < 220 ? '6px 8px' : '8px 12px',
-              border: `1px solid ${styles.colors.border}`,
-              borderRadius: '6px',
-              fontSize: textSizes.base,
+              padding: theme.spacing.md,
+              border: `1px solid ${theme.colors.border}`,
+              borderRadius: theme.borderRadius.md,
+              fontSize: theme.fontSize.base,
               fontFamily: 'inherit',
               resize: 'none',
-              paddingBottom: '20px',
-              background: 'white',
-              color: styles.colors.primary
+              paddingBottom: theme.spacing.xl,
+              background: theme.colors.surface,
+              color: theme.colors.primary,
+              transition: 'border-color 0.2s ease'
             }}
-            onFocus={(e) => e.target.style.borderColor = styles.colors.info}
-            onBlur={(e) => e.target.style.borderColor = styles.colors.border}
+            onFocus={(e) => e.target.style.borderColor = theme.colors.accent}
+            onBlur={(e) => e.target.style.borderColor = theme.colors.border}
           />
           
-          {/* Helpful context text - more concise */}
-          {cardSize.width > 280 && (
-            <div style={{
-              fontSize: textSizes.tiny,
-              color: styles.colors.tertiary,
-              marginTop: '4px',
-              fontStyle: 'italic'
-            }}>
-              {mode === 'email' ? 
-                'AI will draft a response using conversation context' : 
-                'AI will create content based on your requirements'
-              }
-            </div>
-          )}
+          {/* Context hint */}
+          <div style={{
+            fontSize: theme.fontSize.xs,
+            color: theme.colors.tertiary,
+            marginTop: theme.spacing.xs,
+            fontStyle: 'italic'
+          }}>
+            {mode === 'email' ? 
+              'AI will draft a response using full conversation context' : 
+              'AI will create content based on your requirements'
+            }
+          </div>
           
-          {/* Textarea drag resize handle */}
+          {/* Textarea resize handle */}
           <div
             onMouseDown={handleTextareaResizeStart}
             className="textarea-resize-handle"
             style={{
               position: 'absolute',
               bottom: '2px',
-              right: '8px',
-              left: '8px',
+              right: theme.spacing.sm,
+              left: theme.spacing.sm,
               height: '12px',
               cursor: 'ns-resize',
-              background: `linear-gradient(90deg, transparent 30%, ${styles.colors.border} 30%, ${styles.colors.border} 35%, transparent 35%, transparent 65%, ${styles.colors.border} 65%, ${styles.colors.border} 70%, transparent 70%)`,
+              background: `linear-gradient(90deg, transparent 30%, ${theme.colors.border} 30%, ${theme.colors.border} 35%, transparent 35%, transparent 65%, ${theme.colors.border} 65%, ${theme.colors.border} 70%, transparent 70%)`,
               backgroundSize: '8px 2px',
               opacity: 0.3,
-              borderRadius: '0 0 4px 4px',
+              borderRadius: `0 0 ${theme.borderRadius.sm} ${theme.borderRadius.sm}`,
               transition: 'opacity 0.2s ease',
               display: 'flex',
               alignItems: 'center',
@@ -1088,7 +1069,7 @@ function App() {
             <div style={{
               width: '20px',
               height: '3px',
-              background: styles.colors.tertiary,
+              background: theme.colors.tertiary,
               borderRadius: '2px'
             }} />
           </div>
@@ -1096,29 +1077,33 @@ function App() {
 
         {/* Task Mode Controls */}
         {mode === 'task' && (
-          <div style={{ marginBottom: '12px' }}>
-            <div style={{
-              marginBottom: '4px',
-              fontSize: textSizes.small,
-              fontWeight: '500',
-              color: styles.colors.primary
+          <div style={{ marginBottom: theme.spacing.md }}>
+            <label style={{
+              display: 'block',
+              marginBottom: theme.spacing.xs,
+              fontSize: theme.fontSize.sm,
+              fontWeight: '600',
+              color: theme.colors.primary
             }}>
-              Output Format (Optional)
-            </div>
+              Output Format <span style={{ color: theme.colors.tertiary, fontWeight: '400' }}>(Optional)</span>
+            </label>
             <select
               value={selectedFormat}
               onChange={(e) => setSelectedFormat(e.target.value)}
               style={{
                 width: '100%',
-                padding: '8px 12px',
-                border: `1px solid ${styles.colors.border}`,
-                borderRadius: '6px',
-                fontSize: textSizes.base,
+                padding: theme.spacing.md,
+                border: `1px solid ${theme.colors.border}`,
+                borderRadius: theme.borderRadius.md,
+                fontSize: theme.fontSize.base,
                 fontFamily: 'inherit',
-                background: 'white',
+                background: theme.colors.surface,
                 cursor: 'pointer',
-                color: styles.colors.primary
+                color: theme.colors.primary,
+                transition: 'border-color 0.2s ease'
               }}
+              onFocus={(e) => e.target.style.borderColor = theme.colors.accent}
+              onBlur={(e) => e.target.style.borderColor = theme.colors.border}
             >
               {formatOptions.map(option => (
                 <option key={option.value} value={option.value}>
@@ -1127,14 +1112,15 @@ function App() {
               ))}
             </select>
 
-            {/* File Upload - Optional */}
+            {/* Modern File Upload */}
             <div style={{
-              border: `1px dashed ${styles.colors.border}`,
-              borderRadius: '6px',
-              padding: '12px',
+              border: `2px dashed ${theme.colors.border}`,
+              borderRadius: theme.borderRadius.md,
+              padding: theme.spacing.lg,
               textAlign: 'center',
-              background: styles.colors.background,
-              marginTop: '8px'
+              background: theme.colors.background,
+              marginTop: theme.spacing.md,
+              transition: 'border-color 0.2s ease'
             }}>
               <input
                 ref={fileInputRef}
@@ -1151,23 +1137,28 @@ function App() {
                     style={{ 
                       background: 'none',
                       border: 'none',
-                      color: styles.colors.info,
-                      textDecoration: 'underline',
-                      fontSize: textSizes.base,
+                      color: theme.colors.accent,
+                      textDecoration: 'none',
+                      fontSize: theme.fontSize.base,
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
                       cursor: 'pointer',
-                      width: '100%'
+                      width: '100%',
+                      padding: theme.spacing.sm,
+                      borderRadius: theme.borderRadius.sm,
+                      transition: 'background-color 0.2s ease'
                     }}
+                    onMouseEnter={(e) => e.target.style.backgroundColor = `${theme.colors.accent}10`}
+                    onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
                   >
-                    <UploadIcon size={14} color={styles.colors.info} style={{ marginRight: '6px' }} />
+                    <UploadIcon size={16} color={theme.colors.accent} style={{ marginRight: theme.spacing.sm }} />
                     Upload reference file (optional)
                   </button>
                   <div style={{ 
-                    fontSize: textSizes.small, 
-                    color: styles.colors.tertiary, 
-                    marginTop: '4px' 
+                    fontSize: theme.fontSize.xs, 
+                    color: theme.colors.tertiary, 
+                    marginTop: theme.spacing.xs 
                   }}>
                     CSV, JSON, TXT, DOC, PDF, images (max 2MB)
                   </div>
@@ -1175,33 +1166,36 @@ function App() {
               ) : (
                 <div>
                   <div style={{ 
-                    fontSize: textSizes.base, 
-                    color: styles.colors.primary, 
-                    marginBottom: '6px',
+                    fontSize: theme.fontSize.base, 
+                    color: theme.colors.primary, 
+                    marginBottom: theme.spacing.sm,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center'
                   }}>
-                    <AttachmentIcon size={14} color={styles.colors.secondary} style={{ marginRight: '6px' }} />
+                    <AttachmentIcon size={16} color={theme.colors.secondary} style={{ marginRight: theme.spacing.sm }} />
                     {uploadedFile.name} ({(uploadedFile.size / 1024).toFixed(1)}KB)
                   </div>
                   <button
                     onClick={removeFile}
                     style={{
-                      background: styles.colors.error,
+                      background: theme.colors.error,
                       color: 'white',
                       border: 'none',
-                      borderRadius: '4px',
-                      fontSize: textSizes.small,
-                      padding: '4px 8px',
+                      borderRadius: theme.borderRadius.sm,
+                      fontSize: theme.fontSize.sm,
+                      padding: `${theme.spacing.xs} ${theme.spacing.md}`,
                       cursor: 'pointer',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      margin: '0 auto'
+                      margin: '0 auto',
+                      transition: 'background-color 0.2s ease'
                     }}
+                    onMouseEnter={(e) => e.target.style.backgroundColor = '#dc2626'}
+                    onMouseLeave={(e) => e.target.style.backgroundColor = theme.colors.error}
                   >
-                    <CrossIcon size={12} color="white" style={{ marginRight: '4px' }} />
+                    <CrossIcon size={12} color="white" style={{ marginRight: theme.spacing.xs }} />
                     Remove
                   </button>
                 </div>
@@ -1223,12 +1217,12 @@ function App() {
                     <div
                       key={task.id}
                       style={{
-                        background: styles.colors.background,
-                        border: `1px solid ${styles.colors.border}`,
-                        borderRadius: '6px',
-                        padding: '8px',
-                        marginBottom: '6px',
-                        fontSize: textSizes.small
+                        background: theme.colors.background,
+                        border: `1px solid ${theme.colors.border}`,
+                        borderRadius: theme.borderRadius.md,
+                        padding: theme.spacing.md,
+                        marginBottom: theme.spacing.sm,
+                        fontSize: theme.fontSize.sm
                       }}
                     >
                       {/* Task Header */}
@@ -1236,46 +1230,46 @@ function App() {
                         display: 'flex', 
                         alignItems: 'center', 
                         justifyContent: 'space-between',
-                        marginBottom: '8px' 
+                        marginBottom: theme.spacing.sm 
                       }}>
                         <div style={{ display: 'flex', alignItems: 'center', flex: 1 }}>
                           {task.status === 'pending' ? (
                             <div style={{ 
                               width: '16px', 
                               height: '16px', 
-                              marginRight: '8px',
-                              border: `2px solid ${styles.colors.info}`,
+                              marginRight: theme.spacing.sm,
+                              border: `2px solid ${theme.colors.accent}`,
                               borderTop: '2px solid transparent',
                               borderRadius: '50%',
                               animation: 'spin 1s linear infinite'
                             }} />
                           ) : task.status === 'completed' ? (
-                            <CheckmarkIcon size={16} color={styles.colors.success} style={{ marginRight: '8px' }} />
+                            <CheckmarkIcon size={16} color={theme.colors.success} style={{ marginRight: theme.spacing.sm }} />
                           ) : (
-                            <WarningIcon size={16} color={styles.colors.error} style={{ marginRight: '8px' }} />
+                            <WarningIcon size={16} color={theme.colors.error} style={{ marginRight: theme.spacing.sm }} />
                           )}
                           
                           <div style={{ flex: 1 }}>
                             <div style={{ 
-                              color: styles.colors.primary,
-                              fontWeight: '500',
-                              fontSize: textSizes.base
+                              color: theme.colors.primary,
+                              fontWeight: '600',
+                              fontSize: theme.fontSize.base
                             }}>
                               {task.selectedFormat ? 
                                 formatOptions.find(f => f.value === task.selectedFormat)?.label || task.outputFormat 
-                                : task.outputFormat
+                                : task.outputFormat || 'General Task'
                               }
                               {task.hasFile && (
                                 <AttachmentIcon 
                                   size={12} 
-                                  color={styles.colors.tertiary} 
-                                  style={{ marginLeft: '6px' }} 
+                                  color={theme.colors.tertiary} 
+                                  style={{ marginLeft: theme.spacing.xs }} 
                                 />
                               )}
                             </div>
                             <div style={{ 
-                              color: styles.colors.tertiary, 
-                              fontSize: textSizes.tiny,
+                              color: theme.colors.tertiary, 
+                              fontSize: theme.fontSize.xs,
                               marginTop: '2px'
                             }}>
                               {formatDate(task.createdAt)} • {task.user}
@@ -1286,27 +1280,28 @@ function App() {
 
                       {/* Task Status */}
                       <div style={{
-                        padding: '6px 8px',
+                        padding: `${theme.spacing.xs} ${theme.spacing.sm}`,
                         background: task.status === 'completed' ? 
-                          `${styles.colors.success}15` : 
+                          `${theme.colors.success}15` : 
                           task.status === 'failed' ? 
-                          `${styles.colors.error}15` : 
-                          `${styles.colors.info}15`,
+                          `${theme.colors.error}15` : 
+                          `${theme.colors.accent}15`,
                         border: `1px solid ${
                           task.status === 'completed' ? 
-                          styles.colors.success : 
+                          theme.colors.success : 
                           task.status === 'failed' ? 
-                          styles.colors.error : 
-                          styles.colors.info
+                          theme.colors.error : 
+                          theme.colors.accent
                         }`,
-                        borderRadius: '4px',
-                        fontSize: textSizes.tiny,
+                        borderRadius: theme.borderRadius.sm,
+                        fontSize: theme.fontSize.xs,
                         color: task.status === 'completed' ? 
-                          styles.colors.success : 
+                          theme.colors.success : 
                           task.status === 'failed' ? 
-                          styles.colors.error : 
-                          styles.colors.info,
-                        marginBottom: task.result ? '8px' : '0'
+                          theme.colors.error : 
+                          theme.colors.accent,
+                        marginBottom: task.result ? theme.spacing.sm : '0',
+                        fontWeight: '500'
                       }}>
                         {task.status === 'pending' && 'Processing your request...'}
                         {task.status === 'completed' && 'Task completed successfully'}
@@ -1317,63 +1312,81 @@ function App() {
                       {task.result && (
                         <div>
                           <div style={{
-                            background: 'white',
-                            border: `1px solid ${styles.colors.border}`,
-                            borderRadius: '6px',
-                            padding: '12px',
-                            marginBottom: '8px',
+                            background: theme.colors.surface,
+                            border: `1px solid ${theme.colors.border}`,
+                            borderRadius: theme.borderRadius.md,
+                            padding: theme.spacing.md,
+                            marginBottom: theme.spacing.sm,
                             maxHeight: '200px',
                             overflowY: 'auto',
-                            fontSize: textSizes.small,
-                            lineHeight: '1.4'
+                            fontSize: theme.fontSize.sm,
+                            lineHeight: '1.5'
                           }}>
                             <div 
                               dangerouslySetInnerHTML={{ __html: task.result }}
                               style={{ 
-                                color: styles.colors.primary
+                                color: theme.colors.primary
                               }}
                             />
                           </div>
                           
                           <div style={{ 
                             display: 'flex', 
-                            gap: '6px',
+                            gap: theme.spacing.xs,
                             flexWrap: 'wrap'
                           }}>
                             <button
                               onClick={() => copyToClipboard(task.result)}
                               style={{
-                                padding: '6px 12px',
-                                fontSize: textSizes.small,
+                                padding: `${theme.spacing.xs} ${theme.spacing.sm}`,
+                                fontSize: theme.fontSize.xs,
                                 minHeight: 'auto',
                                 display: 'flex',
                                 alignItems: 'center',
-                                background: styles.colors.background,
-                                border: `1px solid ${styles.colors.border}`,
-                                borderRadius: '4px',
+                                background: theme.colors.background,
+                                border: `1px solid ${theme.colors.border}`,
+                                borderRadius: theme.borderRadius.sm,
                                 cursor: 'pointer',
-                                color: styles.colors.secondary
+                                color: theme.colors.secondary,
+                                transition: 'all 0.2s ease'
+                              }}
+                              onMouseEnter={(e) => {
+                                e.target.style.borderColor = theme.colors.borderHover;
+                                e.target.style.backgroundColor = theme.colors.surface;
+                              }}
+                              onMouseLeave={(e) => {
+                                e.target.style.borderColor = theme.colors.border;
+                                e.target.style.backgroundColor = theme.colors.background;
                               }}
                             >
-                              <CopyIcon size={10} color={styles.colors.secondary} style={{ marginRight: '3px' }} />
+                              <CopyIcon size={10} color={theme.colors.secondary} style={{ marginRight: '3px' }} />
                               Copy
                             </button>
                             <button
                               onClick={() => insertIntoDraft(task.result.replace(/<[^>]*>/g, ''))}
                               style={{
-                                padding: '6px 12px',
-                                fontSize: textSizes.small,
+                                padding: `${theme.spacing.xs} ${theme.spacing.sm}`,
+                                fontSize: theme.fontSize.xs,
                                 minHeight: 'auto',
                                 display: 'flex',
                                 alignItems: 'center',
-                                background: styles.colors.background,
-                                border: `1px solid ${styles.colors.border}`,
-                                borderRadius: '4px',
+                                background: theme.colors.background,
+                                border: `1px solid ${theme.colors.border}`,
+                                borderRadius: theme.borderRadius.sm,
                                 cursor: 'pointer',
-                                color: styles.colors.secondary
+                                color: theme.colors.secondary,
+                                transition: 'all 0.2s ease'
+                              }}
+                              onMouseEnter={(e) => {
+                                e.target.style.borderColor = theme.colors.borderHover;
+                                e.target.style.backgroundColor = theme.colors.surface;
+                              }}
+                              onMouseLeave={(e) => {
+                                e.target.style.borderColor = theme.colors.border;
+                                e.target.style.backgroundColor = theme.colors.background;
                               }}
                             >
-                              <InsertIcon size={10} color={styles.colors.secondary} style={{ marginRight: '3px' }} />
+                              <InsertIcon size={10} color={theme.colors.secondary} style={{ marginRight: '3px' }} />
                               Insert
                             </button>
                             <button
@@ -1391,21 +1404,22 @@ function App() {
                                           margin: 40px auto; 
                                           padding: 20px; 
                                           line-height: 1.6; 
+                                          color: #0f172a;
                                         }
-                                        h1, h2, h3 { color: #1f2937; }
+                                        h1, h2, h3 { color: #0f172a; margin-bottom: 16px; }
                                         p { margin-bottom: 16px; }
                                         ul, ol { margin-left: 20px; margin-bottom: 16px; }
                                         li { margin-bottom: 4px; }
                                         table { border-collapse: collapse; width: 100%; margin-bottom: 16px; }
-                                        th, td { border: 1px solid #e5e7eb; padding: 8px 12px; text-align: left; }
-                                        th { background-color: #f9fafb; font-weight: 600; }
+                                        th, td { border: 1px solid #e2e8f0; padding: 8px 12px; text-align: left; }
+                                        th { background-color: #f8fafc; font-weight: 600; }
                                       </style>
                                     </head>
                                     <body>
                                       <h1>AirOps Task Result</h1>
-                                      <p><strong>Format:</strong> ${task.outputFormat}</p>
+                                      <p><strong>Format:</strong> ${task.outputFormat || 'General Task'}</p>
                                       <p><strong>Created:</strong> ${formatDate(task.createdAt)}</p>
-                                      <hr style="margin: 20px 0; border: none; border-top: 1px solid #e5e7eb;">
+                                      <hr style="margin: 20px 0; border: none; border-top: 1px solid #e2e8f0;">
                                       ${task.result}
                                     </body>
                                   </html>
@@ -1413,19 +1427,28 @@ function App() {
                                 newWindow.document.close();
                               }}
                               style={{
-                                padding: '6px 12px',
-                                fontSize: textSizes.small,
+                                padding: `${theme.spacing.xs} ${theme.spacing.sm}`,
+                                fontSize: theme.fontSize.xs,
                                 minHeight: 'auto',
                                 display: 'flex',
                                 alignItems: 'center',
-                                background: styles.colors.background,
-                                border: `1px solid ${styles.colors.border}`,
-                                borderRadius: '4px',
+                                background: theme.colors.background,
+                                border: `1px solid ${theme.colors.border}`,
+                                borderRadius: theme.borderRadius.sm,
                                 cursor: 'pointer',
-                                color: styles.colors.secondary
+                                color: theme.colors.secondary,
+                                transition: 'all 0.2s ease'
+                              }}
+                              onMouseEnter={(e) => {
+                                e.target.style.borderColor = theme.colors.borderHover;
+                                e.target.style.backgroundColor = theme.colors.surface;
+                              }}
+                              onMouseLeave={(e) => {
+                                e.target.style.borderColor = theme.colors.border;
+                                e.target.style.backgroundColor = theme.colors.background;
                               }}
                             >
-                              <ViewIcon size={10} color={styles.colors.secondary} style={{ marginRight: '3px' }} />
+                              <ViewIcon size={10} color={theme.colors.secondary} style={{ marginRight: '3px' }} />
                               View
                             </button>
                           </div>
@@ -1440,22 +1463,22 @@ function App() {
             {commentHistory.length > 0 && (
               <AccordionSection
                 id="history"
-                title={`Plugin History (${commentHistory.length})`}
+                title={`Request History (${commentHistory.length})`}
               >
                 <div style={{ maxHeight: '120px', overflowY: 'auto' }}>
                   {commentHistory.slice(0, 3).map((entry, index) => (
                     <div key={index} style={{
-                      padding: '6px',
-                      background: styles.colors.background,
-                      border: `1px solid ${styles.colors.border}`,
-                      borderRadius: '4px',
-                      marginBottom: '4px',
-                      fontSize: textSizes.small
+                      padding: theme.spacing.sm,
+                      background: theme.colors.background,
+                      border: `1px solid ${theme.colors.border}`,
+                      borderRadius: theme.borderRadius.sm,
+                      marginBottom: theme.spacing.xs,
+                      fontSize: theme.fontSize.sm
                     }}>
                       <div style={{ 
-                        color: styles.colors.tertiary, 
+                        color: theme.colors.tertiary, 
                         marginBottom: '2px',
-                        fontSize: textSizes.tiny,
+                        fontSize: theme.fontSize.xs,
                         fontWeight: '500',
                         display: 'flex',
                         alignItems: 'center'
@@ -1463,27 +1486,27 @@ function App() {
                         <span>{formatDate(entry.timestamp)} • </span>
                         <span style={{ margin: '0 4px', display: 'flex', alignItems: 'center' }}>
                           {entry.mode === 'email' ? (
-                            <EmailIcon size={12} color={styles.colors.tertiary} />
+                            <EmailIcon size={12} color={theme.colors.tertiary} />
                           ) : (
-                            <TaskIcon size={12} color={styles.colors.tertiary} />
+                            <TaskIcon size={12} color={theme.colors.tertiary} />
                           )}
                         </span>
                         <span>• {entry.user}</span>
                         {entry.hasFile && (
-                          <AttachmentIcon size={12} color={styles.colors.tertiary} style={{ marginLeft: '4px' }} />
+                          <AttachmentIcon size={12} color={theme.colors.tertiary} style={{ marginLeft: '4px' }} />
                         )}
                       </div>
                       <div style={{ 
-                        color: styles.colors.secondary, 
-                        lineHeight: 1.3,
-                        fontSize: textSizes.small
+                        color: theme.colors.secondary, 
+                        lineHeight: 1.4,
+                        fontSize: theme.fontSize.sm
                       }}>
                         {entry.text}
                       </div>
                       {entry.outputFormat && (
                         <div style={{ 
-                          fontSize: textSizes.tiny,
-                          color: styles.colors.tertiary,
+                          fontSize: theme.fontSize.xs,
+                          color: theme.colors.tertiary,
                           fontStyle: 'italic',
                           marginTop: '2px'
                         }}>
@@ -1502,26 +1525,41 @@ function App() {
         )}
       </div>
 
-      {/* Bottom Section - Send Button and Status - Fully responsive */}
+      {/* Modern Bottom Section */}
       <div style={{
-        borderTop: `1px solid ${styles.colors.border}`,
-        paddingTop: cardSize.width < 280 ? '8px' : '12px'
+        borderTop: `1px solid ${theme.colors.border}`,
+        paddingTop: theme.spacing.md
       }}>
         <button
           onClick={processRequest}
           disabled={isSending}
           style={{
             width: '100%',
-            marginBottom: cardSize.width < 280 ? '6px' : '8px',
-            fontSize: textSizes.base,
-            padding: cardSize.width < 280 ? '8px' : '10px',
-            background: isSending ? styles.colors.tertiary : styles.colors.primary,
+            marginBottom: theme.spacing.sm,
+            fontSize: theme.fontSize.base,
+            fontWeight: '600',
+            padding: theme.spacing.md,
+            background: isSending ? theme.colors.tertiary : theme.colors.primary,
             color: 'white',
             border: 'none',
-            borderRadius: '6px',
-            fontWeight: '500',
+            borderRadius: theme.borderRadius.md,
             cursor: isSending ? 'not-allowed' : 'pointer',
-            transition: 'background-color 0.15s ease'
+            transition: 'all 0.2s ease',
+            boxShadow: isSending ? 'none' : theme.shadows.sm
+          }}
+          onMouseEnter={(e) => {
+            if (!isSending) {
+              e.target.style.backgroundColor = '#374151';
+              e.target.style.transform = 'translateY(-1px)';
+              e.target.style.boxShadow = theme.shadows.md;
+            }
+          }}
+          onMouseLeave={(e) => {
+            if (!isSending) {
+              e.target.style.backgroundColor = theme.colors.primary;
+              e.target.style.transform = 'translateY(0)';
+              e.target.style.boxShadow = theme.shadows.sm;
+            }
           }}
         >
           {isSending ? 'Processing...' : 'Send'}
@@ -1529,13 +1567,13 @@ function App() {
         
         {status && (
           <div style={{
-            padding: cardSize.width < 280 ? '4px 6px' : '6px 8px',
-            background: styles.colors.background,
-            border: `1px solid ${styles.colors.border}`,
-            borderRadius: '4px',
-            fontSize: textSizes.small,
+            padding: `${theme.spacing.sm} ${theme.spacing.md}`,
+            background: theme.colors.background,
+            border: `1px solid ${theme.colors.border}`,
+            borderRadius: theme.borderRadius.md,
+            fontSize: theme.fontSize.sm,
             color: status.includes('Error') || status.includes('failed') ? 
-              styles.colors.error : styles.colors.secondary,
+              theme.colors.error : theme.colors.secondary,
             textAlign: 'center',
             display: 'flex',
             alignItems: 'center',
@@ -1543,29 +1581,24 @@ function App() {
           }}>
             {(status.includes('Error') || status.includes('failed')) && (
               <WarningIcon 
-                size={cardSize.width < 220 ? 12 : 14} 
-                color={styles.colors.error} 
-                style={{ marginRight: cardSize.width < 280 ? '4px' : '6px' }} 
+                size={14} 
+                color={theme.colors.error} 
+                style={{ marginRight: theme.spacing.xs }} 
               />
             )}
             {(status.includes('success') || status.includes('completed') || status.includes('saved')) && (
               <SuccessIcon 
-                size={cardSize.width < 220 ? 12 : 14} 
-                color={styles.colors.success} 
-                style={{ marginRight: cardSize.width < 220 ? '4px' : '6px' }} 
+                size={14} 
+                color={theme.colors.success} 
+                style={{ marginRight: theme.spacing.xs }} 
               />
             )}
-            <span style={{ fontSize: cardSize.width < 200 ? textSizes.tiny : textSizes.small }}>
-              {cardSize.width < 200 && status.length > 20 ? 
-                status.substring(0, 20) + '...' : 
-                status
-              }
-            </span>
+            <span>{status}</span>
           </div>
         )}
       </div>
 
-      {/* Enhanced Card Resize Handle - Responsive size */}
+      {/* Modern resize handle */}
       <div
         onMouseDown={handleCardResizeStart}
         className="card-resize-handle"
@@ -1573,25 +1606,33 @@ function App() {
           position: 'absolute',
           bottom: '0px',
           right: '0px',
-          width: cardSize.width < 280 ? '16px' : '20px',
-          height: cardSize.width < 280 ? '16px' : '20px',
+          width: '20px',
+          height: '20px',
           cursor: 'nw-resize',
-          background: `linear-gradient(-45deg, transparent 30%, ${styles.colors.tertiary} 30%, ${styles.colors.tertiary} 35%, transparent 35%, transparent 65%, ${styles.colors.tertiary} 65%, ${styles.colors.tertiary} 70%, transparent 70%)`,
-          backgroundSize: cardSize.width < 280 ? '4px 4px' : '6px 6px',
-          opacity: 0.5,
-          borderRadius: '0 0 8px 0',
+          background: `linear-gradient(-45deg, transparent 30%, ${theme.colors.tertiary} 30%, ${theme.colors.tertiary} 35%, transparent 35%, transparent 65%, ${theme.colors.tertiary} 65%, ${theme.colors.tertiary} 70%, transparent 70%)`,
+          backgroundSize: '6px 6px',
+          opacity: 0.3,
+          borderRadius: `0 0 ${theme.borderRadius.lg} 0`,
           transition: 'opacity 0.2s ease, background-color 0.2s ease',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center'
         }}
+        onMouseEnter={(e) => {
+          e.target.style.opacity = '0.8';
+          e.target.style.background = `linear-gradient(-45deg, transparent 30%, ${theme.colors.accent} 30%, ${theme.colors.accent} 35%, transparent 35%, transparent 65%, ${theme.colors.accent} 65%, ${theme.colors.accent} 70%, transparent 70%)`;
+        }}
+        onMouseLeave={(e) => {
+          e.target.style.opacity = '0.3';
+          e.target.style.background = `linear-gradient(-45deg, transparent 30%, ${theme.colors.tertiary} 30%, ${theme.colors.tertiary} 35%, transparent 35%, transparent 65%, ${theme.colors.tertiary} 65%, ${theme.colors.tertiary} 70%, transparent 70%)`;
+        }}
         title="Drag to resize"
       >
         <div style={{
-          width: cardSize.width < 280 ? '6px' : '8px',
-          height: cardSize.width < 280 ? '6px' : '8px',
+          width: '8px',
+          height: '8px',
           background: 'transparent',
-          border: `1px solid ${styles.colors.tertiary}`,
+          border: `1px solid currentColor`,
           borderRadius: '1px',
           opacity: 0.7
         }} />

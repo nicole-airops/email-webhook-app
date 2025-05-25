@@ -23,10 +23,10 @@ export default async (request, context) => {
   }
 
   const url = new URL(request.url);
-  const taskId = url.searchParams.get('taskId');
+  const conversationId = url.searchParams.get('conversationId');
   
-  if (!taskId) {
-    return new Response(JSON.stringify({ error: 'taskId is required' }), {
+  if (!conversationId) {
+    return new Response(JSON.stringify({ error: 'conversationId is required' }), {
       status: 400,
       headers: {
         'Access-Control-Allow-Origin': '*',
@@ -36,28 +36,14 @@ export default async (request, context) => {
   }
 
   try {
-    const store = getStore('tasks');
-    const taskData = await store.get(taskId);
+    const store = getStore('conversation-tasks');
+    const tasksData = await store.get(conversationId);
     
-    if (!taskData) {
-      return new Response(JSON.stringify({ error: 'Task not found' }), {
-        status: 404,
-        headers: {
-          'Access-Control-Allow-Origin': '*',
-          'Content-Type': 'application/json'
-        }
-      });
-    }
-
-    const task = JSON.parse(taskData);
+    const tasks = tasksData ? JSON.parse(tasksData) : [];
     
-    console.log(`📋 Task status check for ${taskId}: ${task.status || 'pending'}`);
+    console.log(`📋 Loading tasks for conversation ${conversationId}: ${tasks.length} tasks found`);
     
-    return new Response(JSON.stringify({
-      status: task.status || 'pending',
-      data: task.result || null,
-      completedAt: task.completedAt || null
-    }), {
+    return new Response(JSON.stringify({ tasks }), {
       status: 200,
       headers: {
         'Content-Type': 'application/json',
@@ -65,8 +51,11 @@ export default async (request, context) => {
       }
     });
   } catch (error) {
-    console.error('Error fetching task status:', error);
-    return new Response(JSON.stringify({ error: 'Internal server error' }), {
+    console.error('Error loading conversation tasks:', error);
+    return new Response(JSON.stringify({ 
+      error: 'Internal server error',
+      tasks: []
+    }), {
       status: 500,
       headers: {
         'Access-Control-Allow-Origin': '*',
