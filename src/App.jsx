@@ -138,117 +138,88 @@ function App() {
     });
   }, [context]);
 
-  // ✅ RESTORED: Enhanced container size detection with better responsiveness
+  // ✅ SIMPLIFIED: Basic container size detection without interference
   useEffect(() => {
-    const observeContainerSize = () => {
+    const updateContainerSize = () => {
       if (!cardRef.current) return;
       
       const parent = cardRef.current.parentElement;
       if (!parent) return;
       
-      const updateSize = () => {
-        const rect = parent.getBoundingClientRect();
-        const containerWidth = rect.width;
-        const containerHeight = rect.height;
-        
-        // Enhanced adaptive constraints based on container
-        const minWidth = Math.max(200, Math.min(240, containerWidth * 0.6));
-        const maxWidth = Math.min(400, containerWidth - 12);
-        const minHeight = Math.max(280, Math.min(320, containerHeight * 0.5));
-        const maxHeight = Math.min(600, containerHeight - 12);
-        
-        const newWidth = Math.max(minWidth, Math.min(maxWidth, cardSize.width));
-        const newHeight = Math.max(minHeight, Math.min(maxHeight, cardSize.height));
-        
-        // Only update if there's a meaningful change
-        if (Math.abs(newWidth - cardSize.width) > 2 || Math.abs(newHeight - cardSize.height) > 2) {
-          setContainerSize({ width: containerWidth, height: containerHeight });
-          setCardSize({ width: newWidth, height: newHeight });
-        }
-      };
-      
-      updateSize();
-      
-      if (window.ResizeObserver) {
-        const resizeObserver = new ResizeObserver(() => {
-          requestAnimationFrame(updateSize);
-        });
-        resizeObserver.observe(parent);
-        window.addEventListener('resize', updateSize);
-        
-        // Also observe the parent's parent for nested resize scenarios
-        const grandParent = parent.parentElement;
-        if (grandParent) {
-          resizeObserver.observe(grandParent);
-        }
-        
-        return () => {
-          resizeObserver.disconnect();
-          window.removeEventListener('resize', updateSize);
-        };
-      } else {
-        // Enhanced fallback for older browsers
-        const handleResize = () => requestAnimationFrame(updateSize);
-        window.addEventListener('resize', handleResize);
-        const interval = setInterval(updateSize, 200); // Less frequent but still responsive
-        
-        return () => {
-          window.removeEventListener('resize', handleResize);
-          clearInterval(interval);
-        };
-      }
+      const rect = parent.getBoundingClientRect();
+      setContainerSize({ width: rect.width, height: rect.height });
     };
     
-    const cleanup = observeContainerSize();
-    return cleanup;
-  }, [cardSize.width, cardSize.height]);
+    updateContainerSize();
+    
+    // Simple resize observer without complex constraints
+    if (window.ResizeObserver) {
+      const resizeObserver = new ResizeObserver(updateContainerSize);
+      const parent = cardRef.current?.parentElement;
+      if (parent) {
+        resizeObserver.observe(parent);
+      }
+      
+      return () => {
+        resizeObserver.disconnect();
+      };
+    } else {
+      const handleResize = () => updateContainerSize();
+      window.addEventListener('resize', handleResize);
+      return () => window.removeEventListener('resize', handleResize);
+    }
+  }, []);
 
-  // ✅ RESTORED: Enhanced resize handling with better constraints
+  // ✅ FIXED: Simplified and working resize handling
   useEffect(() => {
     const handleMouseMove = (e) => {
-      e.preventDefault();
       if (isResizing && !isTextareaResizing) {
-        const parent = cardRef.current?.parentElement;
-        if (!parent) return;
+        const cardRect = cardRef.current?.getBoundingClientRect();
+        if (!cardRect) return;
         
-        const parentRect = parent.getBoundingClientRect();
-        const cardRect = cardRef.current.getBoundingClientRect();
+        // Simple calculation from card's current position
+        const newWidth = e.clientX - cardRect.left;
+        const newHeight = e.clientY - cardRect.top;
         
-        // Enhanced constraints based on container
-        const minWidth = Math.max(200, containerSize.width * 0.3);
-        const maxWidth = Math.min(450, containerSize.width - 12);
-        const minHeight = Math.max(280, containerSize.height * 0.4);
-        const maxHeight = Math.min(650, containerSize.height - 12);
+        // Reasonable constraints
+        const minWidth = 220;
+        const maxWidth = 600;
+        const minHeight = 300;
+        const maxHeight = 800;
         
-        const newWidth = Math.max(minWidth, Math.min(maxWidth, e.clientX - cardRect.left));
-        const newHeight = Math.max(minHeight, Math.min(maxHeight, e.clientY - cardRect.top));
+        const constrainedWidth = Math.max(minWidth, Math.min(maxWidth, newWidth));
+        const constrainedHeight = Math.max(minHeight, Math.min(maxHeight, newHeight));
         
-        setCardSize({ width: newWidth, height: newHeight });
+        setCardSize({ width: constrainedWidth, height: constrainedHeight });
+        console.log('🔧 RESIZE: Card resized to', { width: constrainedWidth, height: constrainedHeight });
       }
       
       if (isTextareaResizing) {
         const rect = textareaContainerRef.current?.getBoundingClientRect();
         if (rect) {
-          const newHeight = Math.max(35, Math.min(Math.min(200, cardSize.height * 0.4), e.clientY - rect.top));
+          const newHeight = Math.max(35, Math.min(200, e.clientY - rect.top));
           setTextareaHeight(newHeight);
         }
       }
     };
 
-    const handleMouseUp = (e) => {
-      e.preventDefault();
+    const handleMouseUp = () => {
+      console.log('🔧 RESIZE: Mouse up - ending resize');
       setIsResizing(false);
       setIsTextareaResizing(false);
       document.body.style.cursor = '';
       document.body.style.userSelect = '';
+      document.body.style.pointerEvents = '';
     };
 
     if (isResizing || isTextareaResizing) {
-      document.addEventListener('mousemove', handleMouseMove, { passive: false });
-      document.addEventListener('mouseup', handleMouseUp, { passive: false });
-      document.addEventListener('mouseleave', handleMouseUp, { passive: false });
+      console.log('🔧 RESIZE: Starting resize listeners', { isResizing, isTextareaResizing });
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      document.addEventListener('mouseleave', handleMouseUp);
       document.body.style.cursor = isTextareaResizing ? 'ns-resize' : 'nw-resize';
       document.body.style.userSelect = 'none';
+      document.body.style.pointerEvents = 'none'; // Prevent other interactions
     }
 
     return () => {
@@ -257,16 +228,20 @@ function App() {
       document.removeEventListener('mouseleave', handleMouseUp);
       document.body.style.cursor = '';
       document.body.style.userSelect = '';
+      document.body.style.pointerEvents = '';
     };
-  }, [isResizing, isTextareaResizing, containerSize, cardSize.height]);
+  }, [isResizing, isTextareaResizing]);
 
+  // ✅ FIXED: Simplified resize start functions with logging
   const handleCardResizeStart = (e) => {
+    console.log('🔧 RESIZE: Card resize started');
     e.preventDefault();
     e.stopPropagation();
     setIsResizing(true);
   };
 
   const handleTextareaResizeStart = (e) => {
+    console.log('🔧 RESIZE: Textarea resize started');
     e.preventDefault();
     e.stopPropagation();
     setIsTextareaResizing(true);
@@ -1061,7 +1036,7 @@ function App() {
     }
   };
 
-  // ✅ ENHANCED: Load task results with better error handling and state management
+  // ✅ FIXED: Load task results with proper state merging
   const loadTaskResultsFromNetlify = async (conversationId) => {
     console.log(`📋 AIROPS: Loading tasks for conversation: ${conversationId}`);
     try {
@@ -1076,10 +1051,14 @@ function App() {
           setTaskResults(tasks);
           console.log(`📋 AIROPS: Task statuses:`, tasks.map(t => `${t.id}: ${t.status}`).join(', '));
           
-          // Auto-expand completed tasks
+          // ✅ FIXED: Auto-expand completed tasks by ADDING to existing expanded tasks
           const completedTaskIds = tasks.filter(task => task.status === 'completed').map(task => task.id);
           if (completedTaskIds.length > 0) {
-            setExpandedTasks(new Set(completedTaskIds));
+            setExpandedTasks(prev => {
+              const newSet = new Set(prev); // Start with existing expanded tasks
+              completedTaskIds.forEach(taskId => newSet.add(taskId)); // Add completed tasks
+              return newSet;
+            });
             console.log(`📋 AIROPS: Auto-expanded ${completedTaskIds.length} completed tasks`);
           }
           
@@ -2056,7 +2035,7 @@ function App() {
             onBlur={(e) => e.target.style.borderColor = theme.colors.border}
           />
           
-          {/* Textarea resize handle */}
+          {/* ✅ FIXED: Enhanced textarea resize handle */}
           <div
             onMouseDown={handleTextareaResizeStart}
             style={{
@@ -2064,24 +2043,28 @@ function App() {
               bottom: '2px',
               right: theme.spacing.sm,
               left: theme.spacing.sm,
-              height: '12px',
+              height: '16px',       // ✅ Larger hit area
               cursor: 'ns-resize',
               background: `linear-gradient(90deg, transparent 30%, ${theme.colors.border} 30%, ${theme.colors.border} 35%, transparent 35%, transparent 65%, ${theme.colors.border} 65%, ${theme.colors.border} 70%, transparent 70%)`,
               backgroundSize: '8px 2px',
-              opacity: 0.3,
+              opacity: 0.5,         // ✅ More visible
               borderRadius: `0 0 ${theme.borderRadius.sm} ${theme.borderRadius.sm}`,
               transition: 'opacity 0.2s ease',
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'center'
+              justifyContent: 'center',
+              zIndex: 50
             }}
-            title="Drag to resize"
+            onMouseEnter={(e) => e.target.style.opacity = '0.8'}
+            onMouseLeave={(e) => e.target.style.opacity = '0.5'}
+            title="Drag to resize textarea"
           >
             <div style={{
-              width: '20px',
-              height: '3px',
+              width: '28px',
+              height: '4px',
               background: theme.colors.tertiary,
-              borderRadius: '2px'
+              borderRadius: '2px',
+              opacity: 0.8
             }} />
           </div>
         </div>
@@ -2129,7 +2112,7 @@ function App() {
                 ref={fileInputRef}
                 type="file"
                 onChange={handleFileUpload}
-                accept=".txt,.csv,.json,.doc,.docx,.pdf,.png,.jpg,.jpeg,.js,.jsx,.ts,.tsx,.py,.html,.css,.md,.xml,.yaml,.yml,.sql,.sh,.bat"
+                accept=".txt,.csv,.json,.doc,.docx,.pdf,.png,.jpg,.jpeg,.js,.jsx,.ts,.tsx,.py,.html,.css,.md,.xml,.yaml,.yml,.sql,.sh,.bat,.dockerfile,.gitignore,.env"
                 style={{ display: 'none' }}
                 multiple={false}
               />
@@ -2828,42 +2811,43 @@ function App() {
         )}
       </div>
 
-      {/* Resize handle */}
+      {/* ✅ FIXED: Enhanced resize handle - larger and more visible */}
       <div
         onMouseDown={handleCardResizeStart}
         style={{
           position: 'absolute',
           bottom: '0px',
           right: '0px',
-          width: '14px',
-          height: '14px',
+          width: '18px',        // ✅ Larger hit area
+          height: '18px',       // ✅ Larger hit area
           cursor: 'nw-resize',
           background: `linear-gradient(-45deg, transparent 30%, ${theme.colors.tertiary} 30%, ${theme.colors.tertiary} 35%, transparent 35%, transparent 65%, ${theme.colors.tertiary} 65%, ${theme.colors.tertiary} 70%, transparent 70%)`,
           backgroundSize: '4px 4px',
-          opacity: 0.3,
+          opacity: 0.6,         // ✅ More visible by default
           borderRadius: `0 0 ${theme.borderRadius.lg} 0`,
           transition: 'opacity 0.2s ease, background-color 0.2s ease',
           display: 'flex',
           alignItems: 'center',
-          justifyContent: 'center'
+          justifyContent: 'center',
+          zIndex: 100          // ✅ Ensure it's on top
         }}
         onMouseEnter={(e) => {
-          e.target.style.opacity = '0.8';
+          e.target.style.opacity = '1.0';
           e.target.style.background = `linear-gradient(-45deg, transparent 30%, ${theme.colors.accent} 30%, ${theme.colors.accent} 35%, transparent 35%, transparent 65%, ${theme.colors.accent} 65%, ${theme.colors.accent} 70%, transparent 70%)`;
         }}
         onMouseLeave={(e) => {
-          e.target.style.opacity = '0.3';
+          e.target.style.opacity = '0.6';
           e.target.style.background = `linear-gradient(-45deg, transparent 30%, ${theme.colors.tertiary} 30%, ${theme.colors.tertiary} 35%, transparent 35%, transparent 65%, ${theme.colors.tertiary} 65%, ${theme.colors.tertiary} 70%, transparent 70%)`;
         }}
-        title="Drag to resize"
+        title="Drag to resize card"
       >
         <div style={{
-          width: '6px',
-          height: '6px',
+          width: '8px',
+          height: '8px',
           background: 'transparent',
-          border: `1px solid currentColor`,
-          borderRadius: '1px',
-          opacity: 0.7
+          border: `2px solid currentColor`,
+          borderRadius: '2px',
+          opacity: 0.8
         }} />
       </div>
     </div>
