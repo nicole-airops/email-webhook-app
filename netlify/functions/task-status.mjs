@@ -1,5 +1,3 @@
-import { getStore } from '@netlify/blobs';
-
 export default async (request, context) => {
   if (request.method === 'OPTIONS') {
     return new Response('', {
@@ -7,12 +5,12 @@ export default async (request, context) => {
       headers: {
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Headers': 'Content-Type',
-        'Access-Control-Allow-Methods': 'GET, OPTIONS'
+        'Access-Control-Allow-Methods': 'POST, OPTIONS'
       }
     });
   }
 
-  if (request.method !== 'GET') {
+  if (request.method !== 'POST') {
     return new Response(JSON.stringify({ error: 'Method not allowed' }), {
       status: 405,
       headers: {
@@ -22,39 +20,16 @@ export default async (request, context) => {
     });
   }
 
-  const url = new URL(request.url);
-  const taskId = url.searchParams.get('taskId');
-  
-  if (!taskId) {
-    return new Response(JSON.stringify({ error: 'taskId is required' }), {
-      status: 400,
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Content-Type': 'application/json'
-      }
-    });
-  }
-
   try {
-    const store = getStore('tasks');
-    const taskData = await store.get(taskId);
+    const payload = await request.json();
+    console.log('AirOps callback received:', payload);
     
-    if (!taskData) {
-      return new Response(JSON.stringify({ error: 'Task not found' }), {
-        status: 404,
-        headers: {
-          'Access-Control-Allow-Origin': '*',
-          'Content-Type': 'application/json'
-        }
-      });
-    }
-
-    const task = JSON.parse(taskData);
+    // Process the callback data
+    // This is where you'd handle the response from AirOps
     
-    return new Response(JSON.stringify({
-      status: task.status || 'pending',
-      data: task.result || null,
-      completedAt: task.completedAt || null
+    return new Response(JSON.stringify({ 
+      success: true,
+      message: 'Callback processed successfully' 
     }), {
       status: 200,
       headers: {
@@ -63,8 +38,11 @@ export default async (request, context) => {
       }
     });
   } catch (error) {
-    console.error('Error fetching task status:', error);
-    return new Response(JSON.stringify({ error: 'Internal server error' }), {
+    console.error('Error processing AirOps callback:', error);
+    return new Response(JSON.stringify({ 
+      error: 'Internal server error',
+      details: error.message 
+    }), {
       status: 500,
       headers: {
         'Access-Control-Allow-Origin': '*',

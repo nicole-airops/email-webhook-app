@@ -35,8 +35,8 @@ function App() {
   const [taskResults, setTaskResults] = useState([]);
   const [pollingTasks, setPollingTasks] = useState(new Set());
   
-  // Auto-resize state - Better constraints for Front's UI
-  const [cardSize, setCardSize] = useState({ width: 280, height: 350 });
+  // Auto-resize state - Allow thinner for Front's sidebar
+  const [cardSize, setCardSize] = useState({ width: 260, height: 350 });
   const [isResizing, setIsResizing] = useState(false);
   const [textareaHeight, setTextareaHeight] = useState(60);
   const [isTextareaResizing, setIsTextareaResizing] = useState(false);
@@ -108,8 +108,8 @@ function App() {
         const containerWidth = rect.width;
         const containerHeight = rect.height;
         
-        // More conservative auto-resize for Front's UI constraints
-        const newWidth = Math.max(260, Math.min(350, containerWidth - 16));
+        // Allow much thinner for Front's narrow sidebars
+        const newWidth = Math.max(200, Math.min(350, containerWidth - 16));
         const newHeight = Math.max(300, Math.min(500, containerHeight - 16));
         
         setContainerSize({ width: containerWidth, height: containerHeight });
@@ -162,8 +162,8 @@ function App() {
         const parentRect = parent.getBoundingClientRect();
         const cardRect = cardRef.current.getBoundingClientRect();
         
-        // More reasonable manual resize constraints
-        const newWidth = Math.max(260, Math.min(400, e.clientX - cardRect.left));
+        // Allow manual resize to be much thinner
+        const newWidth = Math.max(200, Math.min(400, e.clientX - cardRect.left));
         const newHeight = Math.max(300, Math.min(600, e.clientY - cardRect.top));
         
         setCardSize({ width: newWidth, height: newHeight });
@@ -859,7 +859,7 @@ function App() {
         boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
         display: 'flex',
         flexDirection: 'column',
-        minWidth: '260px',
+        minWidth: '200px',
         minHeight: '300px',
         maxWidth: '100%',
         maxHeight: '100%',
@@ -870,7 +870,7 @@ function App() {
       <div style={{
         display: 'flex',
         alignItems: 'center',
-        marginBottom: cardSize.width < 280 ? '8px' : cardSize.width > 320 ? '16px' : '12px',
+        marginBottom: cardSize.width < 240 ? '8px' : cardSize.width > 320 ? '16px' : '12px',
         fontSize: textSizes.header,
         fontWeight: '600',
         color: styles.colors.primary
@@ -879,18 +879,18 @@ function App() {
           src={AIROPS_LOGO_URL} 
           alt="" 
           style={{ 
-            width: cardSize.width < 280 ? '14px' : cardSize.width > 320 ? '18px' : '16px', 
-            height: cardSize.width < 280 ? '14px' : cardSize.width > 320 ? '18px' : '16px', 
-            marginRight: cardSize.width < 280 ? '6px' : cardSize.width > 320 ? '10px' : '8px' 
+            width: cardSize.width < 240 ? '14px' : cardSize.width > 320 ? '18px' : '16px', 
+            height: cardSize.width < 240 ? '14px' : cardSize.width > 320 ? '18px' : '16px', 
+            marginRight: cardSize.width < 240 ? '6px' : cardSize.width > 320 ? '10px' : '8px' 
           }}
         />
         <span>
-          {cardSize.width < 280 ? 'AirOps' : 'Send to AirOps'}
+          {cardSize.width < 240 ? 'AirOps' : 'Send to AirOps'}
         </span>
       </div>
 
       <div style={{ 
-        marginBottom: cardSize.width < 280 ? '8px' : '12px' 
+        marginBottom: cardSize.width < 240 ? '8px' : '12px' 
       }}>
         <div style={{
           display: 'flex',
@@ -916,7 +916,7 @@ function App() {
             }}
             style={{
               flex: 1,
-              padding: cardSize.width < 280 ? '6px 8px' : '8px 12px',
+              padding: cardSize.width < 240 ? '6px 8px' : '8px 12px',
               border: 'none',
               borderRadius: '4px',
               fontSize: textSizes.base,
@@ -932,11 +932,11 @@ function App() {
             }}
           >
             <EmailIcon 
-              size={cardSize.width < 280 ? 12 : 14} 
+              size={cardSize.width < 240 ? 12 : 14} 
               color={mode === 'email' ? styles.colors.primary : styles.colors.tertiary} 
-              style={{ marginRight: cardSize.width < 280 ? '4px' : '6px' }} 
+              style={{ marginRight: cardSize.width < 240 ? '4px' : '6px' }} 
             />
-            Email
+            {cardSize.width < 220 ? 'E' : 'Email'}
           </button>
           <button
             onClick={() => {
@@ -955,7 +955,7 @@ function App() {
             }}
             style={{
               flex: 1,
-              padding: cardSize.width < 280 ? '6px 8px' : '8px 12px',
+              padding: cardSize.width < 240 ? '6px 8px' : '8px 12px',
               border: 'none',
               borderRadius: '4px',
               fontSize: textSizes.base,
@@ -971,11 +971,11 @@ function App() {
             }}
           >
             <TaskIcon 
-              size={cardSize.width < 280 ? 12 : 14} 
+              size={cardSize.width < 240 ? 12 : 14} 
               color={mode === 'task' ? styles.colors.primary : styles.colors.tertiary} 
-              style={{ marginRight: cardSize.width < 280 ? '4px' : '6px' }} 
+              style={{ marginRight: cardSize.width < 240 ? '4px' : '6px' }} 
             />
-            Task
+            {cardSize.width < 220 ? 'T' : 'Task'}
           </button>
         </div>
       </div>
