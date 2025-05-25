@@ -117,9 +117,9 @@ function App() {
         const containerWidth = rect.width;
         const containerHeight = rect.height;
         
-        // Even more compact constraints - 0.5" thinner than original 280px
-        const newWidth = Math.max(200, Math.min(260, containerWidth - 10));
-        const newHeight = Math.max(280, Math.min(480, containerHeight - 10));
+        // Compact constraints - 0.5" thinner but allow expansion
+        const newWidth = Math.max(200, Math.min(400, containerWidth - 10));
+        const newHeight = Math.max(280, Math.min(600, containerHeight - 10));
         
         setContainerSize({ width: containerWidth, height: containerHeight });
         setCardSize({ width: newWidth, height: newHeight });
@@ -165,8 +165,8 @@ function App() {
         const parentRect = parent.getBoundingClientRect();
         const cardRect = cardRef.current.getBoundingClientRect();
         
-        const newWidth = Math.max(200, Math.min(300, e.clientX - cardRect.left));
-        const newHeight = Math.max(280, Math.min(520, e.clientY - cardRect.top));
+        const newWidth = Math.max(200, Math.min(450, e.clientX - cardRect.left));
+        const newHeight = Math.max(280, Math.min(650, e.clientY - cardRect.top));
         
         setCardSize({ width: newWidth, height: newHeight });
       }
@@ -358,7 +358,7 @@ function App() {
     }
   };
 
-  // ✅ FIXED: Check task status and save results
+  // ✅ ENHANCED: Check task status and save results with history refresh
   const checkTaskStatus = async (taskId) => {
     try {
       const response = await fetch(`/.netlify/functions/task-status?taskId=${taskId}`);
@@ -381,6 +381,8 @@ function App() {
             const saved = await saveTaskResultsToNetlify(context.conversation.id, updatedTasks);
             if (saved) {
               console.log(`✅ Task ${taskId} results saved to storage`);
+              // ✅ NEW: Refresh history to show task completions
+              await loadHistoryFromNetlify(context.conversation.id);
             }
           }
           
@@ -446,9 +448,15 @@ function App() {
     return combinedText;
   };
 
+  // ✅ ENHANCED: Payload creation with conversation metadata for callbacks
   const createCompletePayload = async (combinedInstructions, taskId = null) => {
     const timestamp = new Date().toISOString();
-    const callbackUrl = taskId ? `${window.location.origin}/.netlify/functions/task-completion-webhook` : null;
+    const conversationId = context?.conversation?.id;
+    
+    // ✅ ENHANCED: Include conversation ID in callback URL and metadata
+    const callbackUrl = taskId ? 
+      `${window.location.origin}/.netlify/functions/task-completion-webhook?conversationId=${conversationId}&taskId=${taskId}` : 
+      null;
     
     let conversationData = {};
     let messagesData = [];
@@ -541,6 +549,8 @@ function App() {
           plugin_context: context?.type,
           task_id: taskId,
           callback_url: callbackUrl,
+          // ✅ CRITICAL: Explicit conversation ID for webhook
+          conversation_id: conversationId,
           user_agent: navigator.userAgent,
           plugin_version: "1.0.0"
         },
@@ -594,6 +604,14 @@ function App() {
             Math.round((new Date() - new Date(conversationData.created_at)) / (1000 * 60 * 60)) : null,
           latest_message_age_hours: messagesData.length > 0 && messagesData[0].created_at ?
             Math.round((new Date() - new Date(messagesData[0].created_at)) / (1000 * 60 * 60)) : null
+        },
+        // ✅ ENHANCED: Add callback metadata to ensure AirOps can route responses properly
+        callback_metadata: {
+          conversation_id: conversationId,
+          task_id: taskId,
+          plugin_version: "1.0.0",
+          webhook_url: callbackUrl,
+          created_at: timestamp
         }
       }
     };
@@ -733,15 +751,60 @@ function App() {
     }
   };
 
-  const copyToClipboard = (content) => {
-    const cleanContent = content.replace(/<[^>]*>/g, '');
+  // ✅ ENHANCED: Convert HTML to formatted text while preserving structure
+  const htmlToFormattedText = (html) => {
+    if (!html) return '';
     
-    navigator.clipboard.writeText(cleanContent).then(() => {
+    // Create a temporary div to parse HTML
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = html;
+    
+    // Convert common HTML elements to formatted text
+    let text = html
+      // Convert headers to text with line breaks
+      .replace(/<h[1-6][^>]*>(.*?)<\/h[1-6]>/gi, '\n$1\n')
+      // Convert paragraphs to text with line breaks
+      .replace(/<p[^>]*>(.*?)<\/p>/gi, '$1\n\n')
+      // Convert line breaks
+      .replace(/<br\s*\/?>/gi, '\n')
+      // Convert list items to bulleted text
+      .replace(/<li[^>]*>(.*?)<\/li>/gi, '• $1\n')
+      // Convert unordered lists
+      .replace(/<ul[^>]*>/gi, '\n').replace(/<\/ul>/gi, '\n')
+      // Convert ordered lists  
+      .replace(/<ol[^>]*>/gi, '\n').replace(/<\/ol>/gi, '\n')
+      // Convert bold/strong
+      .replace(/<(b|strong)[^>]*>(.*?)<\/(b|strong)>/gi, '**$2**')
+      // Convert italic/em
+      .replace(/<(i|em)[^>]*>(.*?)<\/(i|em)>/gi, '*$2*')
+      // Convert tables to basic text format
+      .replace(/<table[^>]*>/gi, '\n')
+      .replace(/<\/table>/gi, '\n')
+      .replace(/<tr[^>]*>/gi, '')
+      .replace(/<\/tr>/gi, '\n')
+      .replace(/<th[^>]*>(.*?)<\/th>/gi, '$1\t')
+      .replace(/<td[^>]*>(.*?)<\/td>/gi, '$1\t')
+      // Remove remaining HTML tags
+      .replace(/<[^>]*>/g, '')
+      // Clean up multiple line breaks
+      .replace(/\n\s*\n\s*\n/g, '\n\n')
+      .replace(/^\s+|\s+$/g, '')
+      // Clean up extra spaces and tabs
+      .replace(/\t+/g, '\t')
+      .replace(/[ ]+/g, ' ');
+      
+    return text;
+  };
+
+  const copyToClipboard = (content) => {
+    const formattedText = htmlToFormattedText(content);
+    
+    navigator.clipboard.writeText(formattedText).then(() => {
       setStatus('Copied!');
     }).catch(() => {
       try {
         const textArea = document.createElement('textarea');
-        textArea.value = cleanContent;
+        textArea.value = formattedText;
         document.body.appendChild(textArea);
         textArea.select();
         document.execCommand('copy');
@@ -753,7 +816,7 @@ function App() {
     });
   };
 
-  // ✅ ENHANCED: Process request with proper task creation and storage
+  // ✅ ENHANCED: Process request with proper task creation and conversation ID
   const processRequest = async () => {
     const now = Date.now();
     if (isProcessingRef.current || (now - lastCallTimeRef.current) < 1000) {
@@ -797,7 +860,7 @@ function App() {
           console.log('✅ History updated locally');
         }
 
-        // ✅ ENHANCED: Create and save task if in task mode  
+        // ✅ ENHANCED: Create and save task if in task mode with CONVERSATION ID
         if (mode === 'task' && taskId) {
           const newTask = {
             id: taskId,
@@ -808,12 +871,14 @@ function App() {
             fileName: uploadedFile?.name,
             status: 'pending',
             createdAt: new Date().toISOString(),
-            user: context.teammate ? context.teammate.name : 'Unknown user'
+            user: context.teammate ? context.teammate.name : 'Unknown user',
+            // ✅ CRITICAL: Include conversation ID for webhook callbacks
+            conversationId: conversationId
           };
           
           const updatedTasks = [newTask, ...taskResults];
           setTaskResults(updatedTasks);
-          console.log(`✅ Task ${taskId} created locally`);
+          console.log(`✅ Task ${taskId} created locally with conversationId: ${conversationId}`);
           
           // ✅ CRITICAL: Save to both individual storage and conversation storage immediately
           try {
@@ -1340,7 +1405,7 @@ function App() {
           </div>
         )}
 
-        {/* ✅ IMPROVED: Results using Accordion with better UI and icons */}
+        {/* ✅ ENHANCED: Results and History with Task Completion Integration */}
         {(taskResults.length > 0 || commentHistory.length > 0) && (
           <Accordion expandMode="multi">
             {taskResults.length > 0 && (
@@ -1606,6 +1671,7 @@ function App() {
               </AccordionSection>
             )}
 
+            {/* ✅ ENHANCED: History section that shows both regular history and task completions */}
             {commentHistory.length > 0 && (
               <AccordionSection
                 id="history"
@@ -1639,53 +1705,151 @@ function App() {
                   </div>
                 }
               >
-                <div style={{ maxHeight: '80px', overflowY: 'auto' }}>
-                  {commentHistory.slice(0, 5).map((entry, index) => (
+                <div style={{ maxHeight: '120px', overflowY: 'auto' }}>
+                  {commentHistory.slice(0, 8).map((entry, index) => (
                     <div key={index} style={{
                       padding: theme.spacing.xs,
-                      background: theme.colors.background,
-                      border: `1px solid ${theme.colors.border}`,
+                      background: entry.isTaskCompletion ? 
+                        `${theme.colors.success}08` : 
+                        theme.colors.background,
+                      border: `1px solid ${entry.isTaskCompletion ? 
+                        theme.colors.success : 
+                        theme.colors.border}`,
                       borderRadius: theme.borderRadius.sm,
                       marginBottom: '2px',
                       fontSize: theme.fontSize.xs
                     }}>
+                      {/* Entry Header */}
                       <div style={{ 
                         color: theme.colors.tertiary, 
-                        marginBottom: '1px',
+                        marginBottom: '2px',
                         fontSize: theme.fontSize.xs,
                         fontWeight: '500',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'space-between'
                       }}>
-                        <div style={{ display: 'flex', alignItems: 'center' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
                           <span>{formatDate(entry.timestamp)} • </span>
-                          <span style={{ margin: '0 2px', display: 'flex', alignItems: 'center' }}>
-                            {entry.mode === 'email' ? (
-                              <EmailIcon size={8} color={theme.colors.tertiary} />
-                            ) : (
-                              <TaskIcon size={8} color={theme.colors.tertiary} />
-                            )}
-                          </span>
+                          
+                          {/* Entry Type Icon */}
+                          {entry.isTaskCompletion ? (
+                            <CheckmarkIcon size={8} color={theme.colors.success} />
+                          ) : entry.mode === 'email' ? (
+                            <EmailIcon size={8} color={theme.colors.tertiary} />
+                          ) : (
+                            <TaskIcon size={8} color={theme.colors.tertiary} />
+                          )}
+                          
                           <span>• {entry.user}</span>
+                          
                           {entry.hasFile && (
                             <AttachmentIcon size={8} color={theme.colors.tertiary} style={{ marginLeft: '2px' }} />
                           )}
+                          
+                          {entry.isTaskCompletion && entry.status && (
+                            <span style={{ 
+                              color: theme.colors.success, 
+                              fontSize: theme.fontSize.xs,
+                              fontWeight: '600',
+                              marginLeft: '4px'
+                            }}>
+                              • COMPLETED
+                            </span>
+                          )}
                         </div>
+                        
+                        {/* Action Buttons for Task Completions */}
+                        {entry.isTaskCompletion && entry.result && (
+                          <div style={{ display: 'flex', gap: '2px' }}>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                copyToClipboard(entry.result);
+                              }}
+                              style={{
+                                background: 'none',
+                                border: 'none',
+                                cursor: 'pointer',
+                                padding: theme.spacing.xs,
+                                borderRadius: theme.borderRadius.sm,
+                                color: theme.colors.tertiary,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center'
+                              }}
+                              onMouseEnter={(e) => e.target.style.color = theme.colors.secondary}
+                              onMouseLeave={(e) => e.target.style.color = theme.colors.tertiary}
+                              title="Copy result"
+                            >
+                              <Icon name="Copy" size={8} />
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                insertIntoDraft(entry.result.replace(/<[^>]*>/g, ''));
+                              }}
+                              style={{
+                                background: 'none',
+                                border: 'none',
+                                cursor: 'pointer',
+                                padding: theme.spacing.xs,
+                                borderRadius: theme.borderRadius.sm,
+                                color: theme.colors.tertiary,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center'
+                              }}
+                              onMouseEnter={(e) => e.target.style.color = theme.colors.secondary}
+                              onMouseLeave={(e) => e.target.style.color = theme.colors.tertiary}
+                              title="Insert into draft"
+                            >
+                              <InsertIcon size={8} color={theme.colors.tertiary} />
+                            </button>
+                          </div>
+                        )}
                       </div>
+                      
+                      {/* Entry Content */}
                       <div style={{ 
-                        color: theme.colors.secondary, 
+                        color: entry.isTaskCompletion ? theme.colors.success : theme.colors.secondary, 
                         lineHeight: 1.3,
-                        fontSize: theme.fontSize.xs
+                        fontSize: theme.fontSize.xs,
+                        marginBottom: entry.result ? '4px' : '0'
                       }}>
                         {entry.text}
                       </div>
+                      
+                      {/* Task Result Preview (for completed tasks) */}
+                      {entry.isTaskCompletion && entry.result && (
+                        <div style={{
+                          background: theme.colors.surface,
+                          border: `1px solid ${theme.colors.success}30`,
+                          borderRadius: theme.borderRadius.sm,
+                          padding: theme.spacing.xs,
+                          marginTop: '2px',
+                          fontSize: theme.fontSize.xs,
+                          maxHeight: '60px',
+                          overflowY: 'auto'
+                        }}>
+                          <div 
+                            dangerouslySetInnerHTML={{ 
+                              __html: entry.result.length > 200 ? 
+                                entry.result.substring(0, 200) + '...' : 
+                                entry.result 
+                            }}
+                            style={{ color: theme.colors.primary }}
+                          />
+                        </div>
+                      )}
+                      
+                      {/* Format Info */}
                       {entry.outputFormat && (
                         <div style={{ 
                           fontSize: theme.fontSize.xs,
                           color: theme.colors.tertiary,
                           fontStyle: 'italic',
-                          marginTop: '1px'
+                          marginTop: '2px'
                         }}>
                           Format: {entry.selectedFormat ? 
                             formatOptions.find(f => f.value === entry.selectedFormat)?.label || entry.outputFormat 
