@@ -35,8 +35,8 @@ function App() {
   const [taskResults, setTaskResults] = useState([]);
   const [pollingTasks, setPollingTasks] = useState(new Set());
   
-  // Auto-resize state - Small minimum, reasonable default, large maximum
-  const [cardSize, setCardSize] = useState({ width: 320, height: 380 });
+  // Auto-resize state - Better constraints for Front's UI
+  const [cardSize, setCardSize] = useState({ width: 280, height: 350 });
   const [isResizing, setIsResizing] = useState(false);
   const [textareaHeight, setTextareaHeight] = useState(60);
   const [isTextareaResizing, setIsTextareaResizing] = useState(false);
@@ -82,14 +82,14 @@ function App() {
     }
   };
 
-  // Adaptive text size based on card size - Scales from small to large
+  // More conservative text sizing for Front's UI
   const getAdaptiveTextSize = () => {
-    const baseSize = Math.max(9, Math.min(16, cardSize.width / 22));
+    const baseSize = Math.max(10, Math.min(14, cardSize.width / 25));
     return {
       base: `${baseSize}px`,
-      small: `${Math.max(8, baseSize - 1)}px`,
-      tiny: `${Math.max(7, baseSize - 2)}px`,
-      header: `${Math.min(18, baseSize + 2)}px`
+      small: `${Math.max(9, baseSize - 1)}px`,
+      tiny: `${Math.max(8, baseSize - 2)}px`,
+      header: `${Math.min(16, baseSize + 2)}px`
     };
   };
 
@@ -108,9 +108,9 @@ function App() {
         const containerWidth = rect.width;
         const containerHeight = rect.height;
         
-        // Smart auto-resize: use available space but don't force tiny sizes
-        const newWidth = Math.max(180, Math.min(500, containerWidth - 8));
-        const newHeight = Math.max(200, Math.min(600, containerHeight - 8));
+        // More conservative auto-resize for Front's UI constraints
+        const newWidth = Math.max(260, Math.min(350, containerWidth - 16));
+        const newHeight = Math.max(300, Math.min(500, containerHeight - 16));
         
         setContainerSize({ width: containerWidth, height: containerHeight });
         setCardSize({ width: newWidth, height: newHeight });
@@ -162,9 +162,9 @@ function App() {
         const parentRect = parent.getBoundingClientRect();
         const cardRect = cardRef.current.getBoundingClientRect();
         
-        // Calculate new size based on mouse position - Allow much larger sizes
-        const newWidth = Math.max(180, Math.min(1200, e.clientX - cardRect.left));
-        const newHeight = Math.max(200, Math.min(800, e.clientY - cardRect.top));
+        // More reasonable manual resize constraints
+        const newWidth = Math.max(260, Math.min(400, e.clientX - cardRect.left));
+        const newHeight = Math.max(300, Math.min(600, e.clientY - cardRect.top));
         
         setCardSize({ width: newWidth, height: newHeight });
       }
@@ -859,8 +859,8 @@ function App() {
         boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
         display: 'flex',
         flexDirection: 'column',
-        minWidth: '180px',
-        minHeight: '200px',
+        minWidth: '260px',
+        minHeight: '300px',
         maxWidth: '100%',
         maxHeight: '100%',
         transition: isResizing ? 'none' : 'width 0.1s ease, height 0.1s ease'
@@ -870,7 +870,7 @@ function App() {
       <div style={{
         display: 'flex',
         alignItems: 'center',
-        marginBottom: cardSize.width < 220 ? '8px' : cardSize.width > 400 ? '16px' : '12px',
+        marginBottom: cardSize.width < 280 ? '8px' : cardSize.width > 320 ? '16px' : '12px',
         fontSize: textSizes.header,
         fontWeight: '600',
         color: styles.colors.primary
@@ -879,25 +879,24 @@ function App() {
           src={AIROPS_LOGO_URL} 
           alt="" 
           style={{ 
-            width: cardSize.width < 220 ? '12px' : cardSize.width > 400 ? '20px' : '16px', 
-            height: cardSize.width < 220 ? '12px' : cardSize.width > 400 ? '20px' : '16px', 
-            marginRight: cardSize.width < 220 ? '4px' : cardSize.width > 400 ? '12px' : '8px' 
+            width: cardSize.width < 280 ? '14px' : cardSize.width > 320 ? '18px' : '16px', 
+            height: cardSize.width < 280 ? '14px' : cardSize.width > 320 ? '18px' : '16px', 
+            marginRight: cardSize.width < 280 ? '6px' : cardSize.width > 320 ? '10px' : '8px' 
           }}
         />
         <span>
-          {cardSize.width < 220 ? 'AirOps' : cardSize.width > 500 ? 'Send to AirOps ✨' : 'Send to AirOps'}
+          {cardSize.width < 280 ? 'AirOps' : 'Send to AirOps'}
         </span>
       </div>
 
-      {/* Mode Selection - Responsive for all sizes */}
       <div style={{ 
-        marginBottom: cardSize.width < 220 ? '8px' : cardSize.width > 400 ? '16px' : '12px' 
+        marginBottom: cardSize.width < 280 ? '8px' : '12px' 
       }}>
         <div style={{
           display: 'flex',
           background: styles.colors.background,
-          borderRadius: cardSize.width > 400 ? '8px' : '6px',
-          padding: cardSize.width > 400 ? '3px' : '2px',
+          borderRadius: '6px',
+          padding: '2px',
           border: `1px solid ${styles.colors.border}`
         }}>
           <button
@@ -917,7 +916,7 @@ function App() {
             }}
             style={{
               flex: 1,
-              padding: cardSize.width < 220 ? '6px 8px' : cardSize.width > 400 ? '10px 16px' : '8px 12px',
+              padding: cardSize.width < 280 ? '6px 8px' : '8px 12px',
               border: 'none',
               borderRadius: '4px',
               fontSize: textSizes.base,
@@ -933,11 +932,11 @@ function App() {
             }}
           >
             <EmailIcon 
-              size={cardSize.width < 220 ? 12 : cardSize.width > 400 ? 16 : 14} 
+              size={cardSize.width < 280 ? 12 : 14} 
               color={mode === 'email' ? styles.colors.primary : styles.colors.tertiary} 
-              style={{ marginRight: cardSize.width < 220 ? '3px' : cardSize.width > 400 ? '8px' : '6px' }} 
+              style={{ marginRight: cardSize.width < 280 ? '4px' : '6px' }} 
             />
-            {cardSize.width < 200 ? 'E' : 'Email'}
+            Email
           </button>
           <button
             onClick={() => {
@@ -956,7 +955,7 @@ function App() {
             }}
             style={{
               flex: 1,
-              padding: cardSize.width < 220 ? '6px 8px' : cardSize.width > 400 ? '10px 16px' : '8px 12px',
+              padding: cardSize.width < 280 ? '6px 8px' : '8px 12px',
               border: 'none',
               borderRadius: '4px',
               fontSize: textSizes.base,
@@ -972,11 +971,11 @@ function App() {
             }}
           >
             <TaskIcon 
-              size={cardSize.width < 220 ? 12 : cardSize.width > 400 ? 16 : 14} 
+              size={cardSize.width < 280 ? 12 : 14} 
               color={mode === 'task' ? styles.colors.primary : styles.colors.tertiary} 
-              style={{ marginRight: cardSize.width < 220 ? '3px' : cardSize.width > 400 ? '8px' : '6px' }} 
+              style={{ marginRight: cardSize.width < 280 ? '4px' : '6px' }} 
             />
-            {cardSize.width < 200 ? 'T' : 'Task'}
+            Task
           </button>
         </div>
       </div>
@@ -985,8 +984,8 @@ function App() {
       <div style={{
         flex: 1,
         overflowY: 'auto',
-        paddingRight: cardSize.width < 220 ? '2px' : cardSize.width > 400 ? '8px' : '4px',
-        marginBottom: cardSize.width < 220 ? '8px' : cardSize.width > 400 ? '16px' : '12px'
+        paddingRight: cardSize.width < 280 ? '2px' : '4px',
+        marginBottom: cardSize.width < 280 ? '8px' : '12px'
       }}>
         {/* Instructions Input - Contextual and adaptive */}
         <div ref={textareaContainerRef} style={{ position: 'relative', marginBottom: '12px' }}>
@@ -1002,9 +1001,7 @@ function App() {
             value={comment}
             onChange={(e) => setComment(e.target.value)}
             placeholder={
-              cardSize.width < 220 ?
-                (mode === 'email' ? "Reply instructions..." : "Task details...") :
-                (mode === 'email' ? "Describe how we should respond to this conversation" : "Describe what you need AirOps to create or analyze")
+              mode === 'email' ? "How should we respond?" : "What do you need created?"
             }
             style={{
               width: '100%',
@@ -1023,7 +1020,7 @@ function App() {
             onBlur={(e) => e.target.style.borderColor = styles.colors.border}
           />
           
-          {/* Helpful context text - adaptive */}
+          {/* Helpful context text - more concise */}
           {cardSize.width > 280 && (
             <div style={{
               fontSize: textSizes.tiny,
@@ -1032,8 +1029,8 @@ function App() {
               fontStyle: 'italic'
             }}>
               {mode === 'email' ? 
-                'AI will draft a response based on the full conversation context' : 
-                'AI will create content based on your requirements and optional attachments'
+                'AI will draft a response using conversation context' : 
+                'AI will create content based on your requirements'
               }
             </div>
           )}
@@ -1200,9 +1197,9 @@ function App() {
                       style={{
                         background: styles.colors.background,
                         border: `1px solid ${styles.colors.border}`,
-                        borderRadius: cardSize.width < 220 ? '6px' : '8px',
-                        padding: cardSize.width < 220 ? '8px' : '12px',
-                        marginBottom: cardSize.width < 220 ? '6px' : '8px',
+                        borderRadius: '6px',
+                        padding: '8px',
+                        marginBottom: '6px',
                         fontSize: textSizes.small
                       }}
                     >
@@ -1310,16 +1307,15 @@ function App() {
                             />
                           </div>
                           
-                          {/* ✅ ACTION BUTTONS WITH COPY FUNCTIONALITY */}
                           <div style={{ 
                             display: 'flex', 
-                            gap: cardSize.width < 220 ? '4px' : '8px',
+                            gap: '6px',
                             flexWrap: 'wrap'
                           }}>
                             <button
                               onClick={() => copyToClipboard(task.result)}
                               style={{
-                                padding: cardSize.width < 220 ? '4px 8px' : '6px 12px',
+                                padding: '6px 12px',
                                 fontSize: textSizes.small,
                                 minHeight: 'auto',
                                 display: 'flex',
@@ -1332,12 +1328,12 @@ function App() {
                               }}
                             >
                               <CopyIcon size={10} color={styles.colors.secondary} style={{ marginRight: '3px' }} />
-                              {cardSize.width < 200 ? 'Copy' : 'Copy'}
+                              Copy
                             </button>
                             <button
                               onClick={() => insertIntoDraft(task.result.replace(/<[^>]*>/g, ''))}
                               style={{
-                                padding: cardSize.width < 220 ? '4px 8px' : '6px 12px',
+                                padding: '6px 12px',
                                 fontSize: textSizes.small,
                                 minHeight: 'auto',
                                 display: 'flex',
@@ -1350,62 +1346,60 @@ function App() {
                               }}
                             >
                               <InsertIcon size={10} color={styles.colors.secondary} style={{ marginRight: '3px' }} />
-                              {cardSize.width < 200 ? 'Ins' : 'Insert'}
+                              Insert
                             </button>
-                            {cardSize.width > 200 && (
-                              <button
-                                onClick={() => {
-                                  // Show full result in a modal or expanded view
-                                  const newWindow = window.open('', '_blank');
-                                  newWindow.document.write(`
-                                    <html>
-                                      <head>
-                                        <title>AirOps Task Result</title>
-                                        <style>
-                                          body { 
-                                            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
-                                            max-width: 800px; 
-                                            margin: 40px auto; 
-                                            padding: 20px; 
-                                            line-height: 1.6; 
-                                          }
-                                          h1, h2, h3 { color: #1f2937; }
-                                          p { margin-bottom: 16px; }
-                                          ul, ol { margin-left: 20px; margin-bottom: 16px; }
-                                          li { margin-bottom: 4px; }
-                                          table { border-collapse: collapse; width: 100%; margin-bottom: 16px; }
-                                          th, td { border: 1px solid #e5e7eb; padding: 8px 12px; text-align: left; }
-                                          th { background-color: #f9fafb; font-weight: 600; }
-                                        </style>
-                                      </head>
-                                      <body>
-                                        <h1>AirOps Task Result</h1>
-                                        <p><strong>Format:</strong> ${task.outputFormat}</p>
-                                        <p><strong>Created:</strong> ${formatDate(task.createdAt)}</p>
-                                        <hr style="margin: 20px 0; border: none; border-top: 1px solid #e5e7eb;">
-                                        ${task.result}
-                                      </body>
-                                    </html>
-                                  `);
-                                  newWindow.document.close();
-                                }}
-                                style={{
-                                  padding: cardSize.width < 220 ? '4px 8px' : '6px 12px',
-                                  fontSize: textSizes.small,
-                                  minHeight: 'auto',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  background: styles.colors.background,
-                                  border: `1px solid ${styles.colors.border}`,
-                                  borderRadius: '4px',
-                                  cursor: 'pointer',
-                                  color: styles.colors.secondary
-                                }}
-                              >
-                                <ViewIcon size={10} color={styles.colors.secondary} style={{ marginRight: '3px' }} />
-                                Expand
-                              </button>
-                            )}
+                            <button
+                              onClick={() => {
+                                // Show full result in a modal or expanded view
+                                const newWindow = window.open('', '_blank');
+                                newWindow.document.write(`
+                                  <html>
+                                    <head>
+                                      <title>AirOps Task Result</title>
+                                      <style>
+                                        body { 
+                                          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
+                                          max-width: 800px; 
+                                          margin: 40px auto; 
+                                          padding: 20px; 
+                                          line-height: 1.6; 
+                                        }
+                                        h1, h2, h3 { color: #1f2937; }
+                                        p { margin-bottom: 16px; }
+                                        ul, ol { margin-left: 20px; margin-bottom: 16px; }
+                                        li { margin-bottom: 4px; }
+                                        table { border-collapse: collapse; width: 100%; margin-bottom: 16px; }
+                                        th, td { border: 1px solid #e5e7eb; padding: 8px 12px; text-align: left; }
+                                        th { background-color: #f9fafb; font-weight: 600; }
+                                      </style>
+                                    </head>
+                                    <body>
+                                      <h1>AirOps Task Result</h1>
+                                      <p><strong>Format:</strong> ${task.outputFormat}</p>
+                                      <p><strong>Created:</strong> ${formatDate(task.createdAt)}</p>
+                                      <hr style="margin: 20px 0; border: none; border-top: 1px solid #e5e7eb;">
+                                      ${task.result}
+                                    </body>
+                                  </html>
+                                `);
+                                newWindow.document.close();
+                              }}
+                              style={{
+                                padding: '6px 12px',
+                                fontSize: textSizes.small,
+                                minHeight: 'auto',
+                                display: 'flex',
+                                alignItems: 'center',
+                                background: styles.colors.background,
+                                border: `1px solid ${styles.colors.border}`,
+                                borderRadius: '4px',
+                                cursor: 'pointer',
+                                color: styles.colors.secondary
+                              }}
+                            >
+                              <ViewIcon size={10} color={styles.colors.secondary} style={{ marginRight: '3px' }} />
+                              View
+                            </button>
                           </div>
                         </div>
                       )}
@@ -1483,16 +1477,16 @@ function App() {
       {/* Bottom Section - Send Button and Status - Fully responsive */}
       <div style={{
         borderTop: `1px solid ${styles.colors.border}`,
-        paddingTop: cardSize.width < 220 ? '8px' : cardSize.width > 400 ? '16px' : '12px'
+        paddingTop: cardSize.width < 280 ? '8px' : '12px'
       }}>
         <button
           onClick={processRequest}
           disabled={isSending}
           style={{
             width: '100%',
-            marginBottom: cardSize.width < 220 ? '6px' : cardSize.width > 400 ? '12px' : '8px',
+            marginBottom: cardSize.width < 280 ? '6px' : '8px',
             fontSize: textSizes.base,
-            padding: cardSize.width < 220 ? '8px' : cardSize.width > 400 ? '12px' : '10px',
+            padding: cardSize.width < 280 ? '8px' : '10px',
             background: isSending ? styles.colors.tertiary : styles.colors.primary,
             color: 'white',
             border: 'none',
@@ -1507,7 +1501,7 @@ function App() {
         
         {status && (
           <div style={{
-            padding: cardSize.width < 220 ? '4px 6px' : '6px 8px',
+            padding: cardSize.width < 280 ? '4px 6px' : '6px 8px',
             background: styles.colors.background,
             border: `1px solid ${styles.colors.border}`,
             borderRadius: '4px',
@@ -1523,7 +1517,7 @@ function App() {
               <WarningIcon 
                 size={cardSize.width < 220 ? 12 : 14} 
                 color={styles.colors.error} 
-                style={{ marginRight: cardSize.width < 220 ? '4px' : '6px' }} 
+                style={{ marginRight: cardSize.width < 280 ? '4px' : '6px' }} 
               />
             )}
             {(status.includes('success') || status.includes('completed') || status.includes('saved')) && (
@@ -1551,11 +1545,11 @@ function App() {
           position: 'absolute',
           bottom: '0px',
           right: '0px',
-          width: cardSize.width < 220 ? '16px' : '20px',
-          height: cardSize.width < 220 ? '16px' : '20px',
+          width: cardSize.width < 280 ? '16px' : '20px',
+          height: cardSize.width < 280 ? '16px' : '20px',
           cursor: 'nw-resize',
           background: `linear-gradient(-45deg, transparent 30%, ${styles.colors.tertiary} 30%, ${styles.colors.tertiary} 35%, transparent 35%, transparent 65%, ${styles.colors.tertiary} 65%, ${styles.colors.tertiary} 70%, transparent 70%)`,
-          backgroundSize: cardSize.width < 220 ? '4px 4px' : '6px 6px',
+          backgroundSize: cardSize.width < 280 ? '4px 4px' : '6px 6px',
           opacity: 0.5,
           borderRadius: '0 0 8px 0',
           transition: 'opacity 0.2s ease, background-color 0.2s ease',
@@ -1566,8 +1560,8 @@ function App() {
         title="Drag to resize"
       >
         <div style={{
-          width: cardSize.width < 220 ? '6px' : '8px',
-          height: cardSize.width < 220 ? '6px' : '8px',
+          width: cardSize.width < 280 ? '6px' : '8px',
+          height: cardSize.width < 280 ? '6px' : '8px',
           background: 'transparent',
           border: `1px solid ${styles.colors.tertiary}`,
           borderRadius: '1px',
