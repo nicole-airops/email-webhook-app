@@ -23,10 +23,10 @@ export default async (request, context) => {
   }
 
   try {
-    const { conversationId, entry } = await request.json();
+    const { conversationId, entry, clear } = await request.json();
     
-    if (!conversationId || !entry) {
-      return new Response(JSON.stringify({ error: 'conversationId and entry are required' }), {
+    if (!conversationId) {
+      return new Response(JSON.stringify({ error: 'conversationId is required' }), {
         status: 400,
         headers: {
           'Access-Control-Allow-Origin': '*',
@@ -36,6 +36,31 @@ export default async (request, context) => {
     }
 
     const store = getStore('conversation-history');
+    
+    // Handle clear all history
+    if (clear) {
+      await store.delete(conversationId);
+      console.log('🗑️ Cleared all history for conversation:', conversationId);
+      
+      return new Response(JSON.stringify({ success: true, message: 'History cleared' }), {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*'
+        }
+      });
+    }
+    
+    // Handle adding new entry
+    if (!entry) {
+      return new Response(JSON.stringify({ error: 'entry is required when not clearing' }), {
+        status: 400,
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Content-Type': 'application/json'
+        }
+      });
+    }
     
     // Get existing history
     const existingData = await store.get(conversationId);
@@ -50,7 +75,7 @@ export default async (request, context) => {
     // Save updated history
     await store.set(conversationId, JSON.stringify(limitedHistory));
     
-    console.log('Conversation history saved:', conversationId);
+    console.log('💾 Conversation history saved:', conversationId);
     
     return new Response(JSON.stringify({ success: true }), {
       status: 200,
@@ -60,8 +85,11 @@ export default async (request, context) => {
       }
     });
   } catch (error) {
-    console.error('Error saving conversation history:', error);
-    return new Response(JSON.stringify({ error: 'Internal server error' }), {
+    console.error('❌ Error saving conversation history:', error);
+    return new Response(JSON.stringify({ 
+      error: 'Internal server error',
+      details: error.message 
+    }), {
       status: 500,
       headers: {
         'Access-Control-Allow-Origin': '*',

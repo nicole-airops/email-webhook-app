@@ -4,7 +4,8 @@ import {
   Accordion, 
   AccordionSection,
   Button,
-  ButtonGroup
+  ButtonGroup,
+  TrashIcon
 } from '@frontapp/ui-kit';
 import {
   SuccessIcon,
@@ -17,8 +18,7 @@ import {
   UploadIcon,
   DocumentIcon,
   InsertIcon,
-  CheckmarkIcon,
-  CrossIcon
+  CheckmarkIcon
 } from './CustomIcons';
 import './App.css';
 
@@ -235,6 +235,90 @@ function App() {
       loadTaskResultsFromNetlify(conversationId);
     }
   }, [context]);
+
+  // ✅ DELETE FUNCTIONALITY: Delete individual tasks or clear all
+  const deleteTask = async (taskId) => {
+    if (!context?.conversation?.id) return;
+    
+    console.log(`🗑️ Deleting task: ${taskId}`);
+    try {
+      const response = await fetch(`/.netlify/functions/save-conversation-tasks?conversationId=${context.conversation.id}&taskId=${taskId}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      
+      if (response.ok) {
+        // Remove from local state
+        const updatedTasks = taskResults.filter(task => task.id !== taskId);
+        setTaskResults(updatedTasks);
+        setStatus('Task deleted');
+        console.log(`✅ Task ${taskId} deleted successfully`);
+      } else {
+        console.error('❌ Failed to delete task');
+        setStatus('Failed to delete task');
+      }
+    } catch (error) {
+      console.error('❌ Error deleting task:', error);
+      setStatus('Error deleting task');
+    }
+  };
+
+  const clearAllTasks = async () => {
+    if (!context?.conversation?.id) return;
+    
+    if (!confirm('Are you sure you want to delete all task history? This cannot be undone.')) {
+      return;
+    }
+    
+    console.log('🗑️ Clearing all tasks');
+    try {
+      const response = await fetch(`/.netlify/functions/save-conversation-tasks?conversationId=${context.conversation.id}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      
+      if (response.ok) {
+        setTaskResults([]);
+        setStatus('All tasks cleared');
+        console.log('✅ All tasks cleared successfully');
+      } else {
+        console.error('❌ Failed to clear tasks');
+        setStatus('Failed to clear tasks');
+      }
+    } catch (error) {
+      console.error('❌ Error clearing tasks:', error);
+      setStatus('Error clearing tasks');
+    }
+  };
+
+  const clearHistory = async () => {
+    if (!context?.conversation?.id) return;
+    
+    if (!confirm('Are you sure you want to delete all plugin history? This cannot be undone.')) {
+      return;
+    }
+    
+    console.log('🗑️ Clearing plugin history');
+    try {
+      const response = await fetch(`/.netlify/functions/save-conversation-history`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ conversationId: context.conversation.id, entry: null, clear: true })
+      });
+      
+      if (response.ok) {
+        setCommentHistory([]);
+        setStatus('History cleared');
+        console.log('✅ History cleared successfully');
+      } else {
+        console.error('❌ Failed to clear history');
+        setStatus('Failed to clear history');
+      }
+    } catch (error) {
+      console.error('❌ Error clearing history:', error);
+      setStatus('Error clearing history');
+    }
+  };
 
   // ✅ FIXED: Save task results to Netlify storage with debugging
   const saveTaskResultsToNetlify = async (conversationId, tasks) => {
@@ -1245,7 +1329,7 @@ function App() {
                     onMouseLeave={(e) => e.target.style.color = theme.colors.tertiary}
                     title="Remove file"
                   >
-                    <CrossIcon size={12} />
+                    <TrashIcon style={{ width: '12px', height: '12px' }} />
                   </button>
                 </div>
               )}
@@ -1253,17 +1337,17 @@ function App() {
           </div>
         )}
 
-          {/* Debug/Refresh Section - TEMPORARY: Remove after testing */}
-          {context?.conversation?.id && (
+          {/* Temporary Debug Panel - Remove when stable */}
+          {taskResults.length === 0 && context?.conversation?.id && (
             <div style={{ 
               padding: theme.spacing.xs, 
-              background: '#fef3c7', 
-              border: '1px solid #f59e0b',
+              background: '#f0f9ff', 
+              border: '1px solid #0ea5e9',
               borderRadius: theme.borderRadius.sm,
               marginBottom: theme.spacing.sm
             }}>
-              <div style={{ fontSize: theme.fontSize.xs, color: '#92400e', marginBottom: theme.spacing.xs }}>
-                Debug: Tasks: {taskResults.length} | Conv: {context.conversation.id.substring(0, 8)}...
+              <div style={{ fontSize: theme.fontSize.xs, color: '#0369a1', marginBottom: theme.spacing.xs }}>
+                💡 No tasks found. Conv: {context.conversation.id.substring(0, 8)}...
               </div>
               <button
                 onClick={() => {
@@ -1274,7 +1358,7 @@ function App() {
                 style={{
                   padding: `${theme.spacing.xs} ${theme.spacing.sm}`,
                   fontSize: theme.fontSize.xs,
-                  background: '#f59e0b',
+                  background: '#0ea5e9',
                   color: 'white',
                   border: 'none',
                   borderRadius: theme.borderRadius.sm,
@@ -1292,7 +1376,33 @@ function App() {
             {taskResults.length > 0 && (
               <AccordionSection
                 id="tasks"
-                title={`Tasks (${taskResults.length})`}
+                title={
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                    <span>Tasks ({taskResults.length})</span>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        clearAllTasks();
+                      }}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: theme.colors.error,
+                        fontSize: theme.fontSize.xs,
+                        cursor: 'pointer',
+                        padding: '2px 4px',
+                        borderRadius: theme.borderRadius.sm,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '2px'
+                      }}
+                      title="Clear all tasks"
+                    >
+                      <TrashIcon style={{ width: '10px', height: '10px' }} />
+                      Clear All
+                    </button>
+                  </div>
+                }
               >
                 <div>
                   {taskResults.slice(0, 3).map((task) => (
@@ -1307,7 +1417,7 @@ function App() {
                         fontSize: theme.fontSize.xs
                       }}
                     >
-                      {/* Compact Task Header */}
+                      {/* Compact Task Header with Delete Button */}
                       <div style={{ 
                         display: 'flex', 
                         alignItems: 'center', 
@@ -1358,6 +1468,28 @@ function App() {
                             </div>
                           </div>
                         </div>
+                        
+                        {/* Delete Task Button */}
+                        <button
+                          onClick={() => deleteTask(task.id)}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            color: theme.colors.tertiary,
+                            cursor: 'pointer',
+                            padding: theme.spacing.xs,
+                            borderRadius: theme.borderRadius.sm,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            marginLeft: theme.spacing.xs
+                          }}
+                          onMouseEnter={(e) => e.target.style.color = theme.colors.error}
+                          onMouseLeave={(e) => e.target.style.color = theme.colors.tertiary}
+                          title="Delete this task"
+                        >
+                          <TrashIcon style={{ width: '10px', height: '10px' }} />
+                        </button>
                       </div>
 
                       {/* Compact Task Status */}
@@ -1545,7 +1677,33 @@ function App() {
             {commentHistory.length > 0 && (
               <AccordionSection
                 id="history"
-                title={`Plugin History (${commentHistory.length})`}
+                title={
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                    <span>Plugin History ({commentHistory.length})</span>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        clearHistory();
+                      }}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: theme.colors.error,
+                        fontSize: theme.fontSize.xs,
+                        cursor: 'pointer',
+                        padding: '2px 4px',
+                        borderRadius: theme.borderRadius.sm,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '2px'
+                      }}
+                      title="Clear all history"
+                    >
+                      <TrashIcon style={{ width: '10px', height: '10px' }} />
+                      Clear All
+                    </button>
+                  </div>
+                }
               >
                 <div style={{ maxHeight: '100px', overflowY: 'auto' }}>
                   {commentHistory.slice(0, 3).map((entry, index) => (
