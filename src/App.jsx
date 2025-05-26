@@ -467,49 +467,129 @@ function App() {
     }
   };
 
-  // ✅ ENHANCED: Combined debug function
-  const debugHistoryAPI = async () => {
-    await comprehensiveContextDebug();
-    await testFrontRESTAPI();
+// ✅ Add this debug function to your App component
+
+const debugHistoryAPI = async () => {
+  console.log('🧪 HISTORY API DEBUG: Testing history operations');
+  
+  if (!context?.conversation?.id) {
+    console.error('❌ HISTORY DEBUG: No conversation ID');
+    return;
+  }
+  
+  const conversationId = context.conversation.id;
+  console.log('🧪 HISTORY DEBUG: Conversation ID:', conversationId);
+  console.log('🧪 HISTORY DEBUG: Current history length:', commentHistory.length);
+  
+  // Test 1: Load current history
+  try {
+    console.log('🧪 TEST 1: Loading current history...');
+    const loadResponse = await fetch(`/.netlify/functions/get-conversation-history?conversationId=${conversationId}`);
+    console.log('🧪 TEST 1: Load response status:', loadResponse.status);
     
-    if (!context?.conversation?.id) {
-      console.error('❌ DEBUG: No conversation ID');
-      setStatus('No conversation context');
-      return;
+    if (loadResponse.ok) {
+      const loadData = await loadResponse.json();
+      console.log('🧪 TEST 1: ✅ Current history from API:', {
+        length: loadData.history?.length || 0,
+        firstEntry: loadData.history?.[0] || null
+      });
+    } else {
+      const errorText = await loadResponse.text();
+      console.error('🧪 TEST 1: ❌ Load failed:', errorText);
     }
+  } catch (error) {
+    console.error('🧪 TEST 1: ❌ Load error:', error);
+  }
+  
+  // Test 2: Save empty history (clear test)
+  try {
+    console.log('🧪 TEST 2: Testing clear history...');
+    const clearPayload = {
+      conversationId: conversationId,
+      history: [],
+      clearAll: true
+    };
     
-    console.log('🧪 NETLIFY FUNCTIONS TEST');
-    console.log('=========================');
-    console.log('🧪 DEBUG: Testing history API...');
-    console.log('🧪 DEBUG: Conversation ID:', context.conversation.id);
-    setStatus('Running debug...');
+    const clearResponse = await fetch('/.netlify/functions/save-conversation-history', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(clearPayload)
+    });
     
-    try {
-      // Test history loading
-      const loadResponse = await fetch(`/.netlify/functions/get-conversation-history?conversationId=${context.conversation.id}`);
-      console.log('🧪 DEBUG: Load response status:', loadResponse.status);
-      
-      if (loadResponse.ok) {
-        const loadData = await loadResponse.json();
-        console.log('🧪 DEBUG: Loaded history:', loadData);
-      }
-      
-      // Test tasks loading
-      const tasksResponse = await fetch(`/.netlify/functions/get-conversation-tasks?conversationId=${context.conversation.id}`);
-      console.log('🧪 DEBUG: Tasks response status:', tasksResponse.status);
-      
-      if (tasksResponse.ok) {
-        const tasksData = await tasksResponse.json();
-        console.log('🧪 DEBUG: Tasks data:', tasksData);
-      }
-      
-      setStatus('Debug complete - check console');
-      
-    } catch (error) {
-      console.error('🧪 DEBUG: API test failed:', error);
-      setStatus('Debug failed - check console');
+    console.log('🧪 TEST 2: Clear response status:', clearResponse.status);
+    
+    if (clearResponse.ok) {
+      const clearResult = await clearResponse.json();
+      console.log('🧪 TEST 2: ✅ Clear successful:', clearResult);
+    } else {
+      const errorText = await clearResponse.text();
+      console.error('🧪 TEST 2: ❌ Clear failed:', errorText);
     }
-  };
+  } catch (error) {
+    console.error('🧪 TEST 2: ❌ Clear error:', error);
+  }
+  
+  // Test 3: Add test entry
+  try {
+    console.log('🧪 TEST 3: Adding test entry...');
+    const testEntry = {
+      text: 'Test entry from debug',
+      mode: 'test',
+      timestamp: new Date().toISOString(),
+      user: context.teammate?.name || 'Debug User'
+    };
+    
+    const addPayload = {
+      conversationId: conversationId,
+      entry: testEntry
+    };
+    
+    const addResponse = await fetch('/.netlify/functions/save-conversation-history', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(addPayload)
+    });
+    
+    console.log('🧪 TEST 3: Add response status:', addResponse.status);
+    
+    if (addResponse.ok) {
+      const addResult = await addResponse.json();
+      console.log('🧪 TEST 3: ✅ Add successful:', addResult);
+    } else {
+      const errorText = await addResponse.text();
+      console.error('🧪 TEST 3: ❌ Add failed:', errorText);
+    }
+  } catch (error) {
+    console.error('🧪 TEST 3: ❌ Add error:', error);
+  }
+  
+  // Reload data
+  await manualRefresh();
+  
+  setStatus('History debug complete - check console');
+};
+
+// ✅ Add this button next to your other debug buttons:
+<button
+  onClick={debugHistoryAPI}
+  style={{
+    background: 'none',
+    border: 'none',
+    cursor: 'pointer',
+    padding: theme.spacing.xs,
+    borderRadius: theme.borderRadius.sm,
+    color: theme.colors.tertiary,
+    fontSize: theme.fontSize.lg,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center'
+  }}
+  onMouseEnter={(e) => e.target.style.color = theme.colors.warning}
+  onMouseLeave={(e) => e.target.style.color = theme.colors.tertiary}
+  title="Debug history API (check console)"
+>
+  🗑️
+</button>
 
   // ✅ Clear functions
   const clearAllTasks = async () => {
@@ -539,91 +619,163 @@ function App() {
     }
   };
 
-  // ✅ FIXED: Enhanced history deletion
-  const deleteHistoryEntry = async (entryIndex) => {
-    if (!context?.conversation?.id) {
-      console.error('❌ AIROPS: No conversation ID for history deletion');
-      setStatus('No conversation context');
-      return;
-    }
-    
-    console.log(`🗑️ AIROPS: Deleting history entry at index: ${entryIndex}`);
-    console.log(`🗑️ AIROPS: Current history length: ${commentHistory.length}`);
-    
-    try {
-      const updatedHistory = commentHistory.filter((_, index) => index !== entryIndex);
-      console.log(`🗑️ AIROPS: Updated history length: ${updatedHistory.length}`);
-      
-      const payload = { 
-        conversationId: context.conversation.id, 
-        history: updatedHistory 
-      };
-      
-      const response = await fetch('/.netlify/functions/save-conversation-history', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      
-      console.log(`🗑️ AIROPS: API response status: ${response.status}`);
-      
-      if (response.ok) {
-        const result = await response.json();
-        console.log(`✅ AIROPS: History deletion successful:`, result);
-        
-        // ✅ FIXED: Update state immediately
-        setCommentHistory(updatedHistory);
-        
-        // ✅ FIXED: Update expanded history indices after deletion
-        setExpandedHistory(prev => {
-          const newSet = new Set();
-          for (const expandedIndex of prev) {
-            if (expandedIndex < entryIndex) {
-              newSet.add(expandedIndex);
-            } else if (expandedIndex > entryIndex) {
-              newSet.add(expandedIndex - 1);
-            }
-          }
-          return newSet;
-        });
-        
-        setStatus(`Entry deleted (${updatedHistory.length} remain)`);
-        console.log(`✅ AIROPS: Local state updated, new length: ${updatedHistory.length}`);
-      } else {
-        const errorText = await response.text();
-        console.error(`❌ AIROPS: History deletion failed - Status: ${response.status}`, errorText);
-        setStatus(`Delete failed (${response.status})`);
-      }
-    } catch (error) {
-      console.error('❌ AIROPS: Network error deleting history entry:', error);
-      setStatus('Delete failed - network error');
-    }
-  };
+// ✅ ENHANCED: Better history deletion with comprehensive debugging
 
-  const clearHistory = async () => {
-    if (!context?.conversation?.id) return;
-    if (!confirm('Delete all history? This cannot be undone.')) return;
+const deleteHistoryEntry = async (entryIndex) => {
+  console.log(`🗑️ AIROPS DELETE: Starting deletion process`);
+  console.log(`🗑️ AIROPS DELETE: Entry index: ${entryIndex}`);
+  console.log(`🗑️ AIROPS DELETE: Current history length: ${commentHistory.length}`);
+  console.log(`🗑️ AIROPS DELETE: Conversation ID: ${context?.conversation?.id}`);
+  
+  if (!context?.conversation?.id) {
+    console.error('❌ AIROPS DELETE: No conversation ID available');
+    setStatus('❌ No conversation context');
+    return;
+  }
+  
+  if (entryIndex < 0 || entryIndex >= commentHistory.length) {
+    console.error(`❌ AIROPS DELETE: Invalid index ${entryIndex} for array length ${commentHistory.length}`);
+    setStatus('❌ Invalid entry index');
+    return;
+  }
+  
+  const entryToDelete = commentHistory[entryIndex];
+  console.log(`🗑️ AIROPS DELETE: Entry to delete:`, {
+    index: entryIndex,
+    timestamp: entryToDelete.timestamp,
+    user: entryToDelete.user,
+    mode: entryToDelete.mode,
+    textLength: entryToDelete.text?.length || 0
+  });
+  
+  try {
+    // Create updated history array
+    const updatedHistory = commentHistory.filter((_, index) => index !== entryIndex);
+    console.log(`🗑️ AIROPS DELETE: Updated history length: ${updatedHistory.length}`);
     
-    try {
-      const response = await fetch('/.netlify/functions/save-conversation-history', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          conversationId: context.conversation.id, 
-          history: [] 
-        })
+    const payload = { 
+      conversationId: context.conversation.id, 
+      history: updatedHistory 
+    };
+    
+    console.log(`🗑️ AIROPS DELETE: API payload:`, {
+      conversationId: payload.conversationId,
+      historyLength: payload.history.length,
+      url: '/.netlify/functions/save-conversation-history'
+    });
+    
+    // Make API call
+    const response = await fetch('/.netlify/functions/save-conversation-history', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    
+    console.log(`🗑️ AIROPS DELETE: API response status: ${response.status}`);
+    console.log(`🗑️ AIROPS DELETE: API response ok: ${response.ok}`);
+    
+    if (response.ok) {
+      const result = await response.json();
+      console.log(`✅ AIROPS DELETE: API success response:`, result);
+      
+      // ✅ Update local state
+      setCommentHistory(updatedHistory);
+      console.log(`✅ AIROPS DELETE: Local state updated to ${updatedHistory.length} entries`);
+      
+      // ✅ Update expanded history indices
+      setExpandedHistory(prev => {
+        const newSet = new Set();
+        for (const expandedIndex of prev) {
+          if (expandedIndex < entryIndex) {
+            newSet.add(expandedIndex);
+          } else if (expandedIndex > entryIndex) {
+            newSet.add(expandedIndex - 1);
+          }
+          // Skip the deleted index
+        }
+        console.log(`✅ AIROPS DELETE: Updated expanded indices:`, Array.from(newSet));
+        return newSet;
       });
       
-      if (response.ok) {
-        setCommentHistory([]);
-        setExpandedHistory(new Set());
-        setStatus('History cleared');
+      setStatus(`✅ Entry deleted (${updatedHistory.length} remain)`);
+      
+    } else {
+      const errorText = await response.text();
+      console.error(`❌ AIROPS DELETE: API failed - Status: ${response.status}`);
+      console.error(`❌ AIROPS DELETE: Error response:`, errorText);
+      
+      // Try to parse error details
+      try {
+        const errorJson = JSON.parse(errorText);
+        console.error(`❌ AIROPS DELETE: Error details:`, errorJson);
+      } catch (e) {
+        console.error(`❌ AIROPS DELETE: Raw error text:`, errorText);
       }
-    } catch (error) {
-      console.error('❌ AIROPS: Error clearing history:', error);
-      setStatus('Clear failed');
+      
+      setStatus(`❌ Delete failed (${response.status})`);
     }
-  };
+    
+  } catch (error) {
+    console.error('❌ AIROPS DELETE: Network/JS error:', error);
+    console.error('❌ AIROPS DELETE: Error stack:', error.stack);
+    setStatus('❌ Delete failed - network error');
+  }
+};
+
+// ✅ ENHANCED: Clear all history with better debugging
+const clearHistory = async () => {
+  console.log(`🗑️ AIROPS CLEAR ALL: Starting clear all process`);
+  console.log(`🗑️ AIROPS CLEAR ALL: Current history length: ${commentHistory.length}`);
+  console.log(`🗑️ AIROPS CLEAR ALL: Conversation ID: ${context?.conversation?.id}`);
+  
+  if (!context?.conversation?.id) {
+    console.error('❌ AIROPS CLEAR ALL: No conversation ID');
+    setStatus('❌ No conversation context');
+    return;
+  }
+  
+  if (!confirm(`Delete all ${commentHistory.length} history entries? This cannot be undone.`)) {
+    console.log('🗑️ AIROPS CLEAR ALL: User cancelled');
+    return;
+  }
+  
+  try {
+    const payload = { 
+      conversationId: context.conversation.id, 
+      history: [],
+      clearAll: true // Explicit flag for clearing
+    };
+    
+    console.log(`🗑️ AIROPS CLEAR ALL: API payload:`, payload);
+    
+    const response = await fetch('/.netlify/functions/save-conversation-history', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    
+    console.log(`🗑️ AIROPS CLEAR ALL: API response status: ${response.status}`);
+    
+    if (response.ok) {
+      const result = await response.json();
+      console.log(`✅ AIROPS CLEAR ALL: API success:`, result);
+      
+      setCommentHistory([]);
+      setExpandedHistory(new Set());
+      setStatus('✅ All history cleared');
+      console.log(`✅ AIROPS CLEAR ALL: Local state cleared`);
+      
+    } else {
+      const errorText = await response.text();
+      console.error(`❌ AIROPS CLEAR ALL: API failed:`, response.status, errorText);
+      setStatus(`❌ Clear failed (${response.status})`);
+    }
+    
+  } catch (error) {
+    console.error('❌ AIROPS CLEAR ALL: Error:', error);
+    setStatus('❌ Clear failed - network error');
+  }
+};
 
   const deleteTask = async (taskId) => {
     if (!context?.conversation?.id) return;
@@ -2017,9 +2169,14 @@ const debugDraftAPI = async () => {
                               fontWeight: '600',
                               fontSize: theme.fontSize.sm
                             }}>
-                              {task.selectedFormat ? 
-                                formatOptions.find(f => f.value === task.selectedFormat)?.label || task.outputFormat 
-                                : task.outputFormat || 'General Task'
+                              {/* ✅ NEW: Priority order for task names */}
+                              {task.taskName || // From webhook metadata
+                               task.displayName || // Alternative name field
+                               (task.selectedFormat ? 
+                                 formatOptions.find(f => f.value === task.selectedFormat)?.label 
+                                 : null) ||
+                               task.outputFormat || 
+                               'General Task'
                               }
                               {task.hasFile && (
                                 <AttachmentIcon 

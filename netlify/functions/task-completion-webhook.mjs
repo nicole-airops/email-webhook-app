@@ -53,6 +53,24 @@ export default async (request, context) => {
     console.log('- payload.request_info?.conversation_id:', payload.request_info?.conversation_id);
     console.log('- Final conversationId:', conversationId);
     
+    // ✅ NEW: Multiple strategies to extract task name
+    const taskName = payload.metadata?.task_name || 
+                     payload.task_name ||
+                     payload.originalPayload?.metadata?.task_name ||
+                     payload.debug?.originalPayload?.metadata?.task_name ||
+                     payload.metadata?.taskName ||
+                     payload.taskName ||
+                     null;
+    
+    console.log('🔍 AIROPS WEBHOOK: Task name extraction attempts:');
+    console.log('- payload.metadata?.task_name:', payload.metadata?.task_name);
+    console.log('- payload.task_name:', payload.task_name);
+    console.log('- payload.originalPayload?.metadata?.task_name:', payload.originalPayload?.metadata?.task_name);
+    console.log('- payload.debug?.originalPayload?.metadata?.task_name:', payload.debug?.originalPayload?.metadata?.task_name);
+    console.log('- payload.metadata?.taskName:', payload.metadata?.taskName);
+    console.log('- payload.taskName:', payload.taskName);
+    console.log('- Final taskName:', taskName);
+    
     // Extract other data
     const status = payload.status || 'completed';
     const result = payload.result || payload.output || payload.data;
@@ -61,6 +79,7 @@ export default async (request, context) => {
     console.log('🔍 AIROPS WEBHOOK: Extracted data:');
     console.log('- taskId:', taskId);
     console.log('- conversationId:', conversationId);
+    console.log('- taskName:', taskName);
     console.log('- status:', status);
     console.log('- result length:', result ? result.length : 0);
     console.log('- error:', error);
@@ -82,13 +101,13 @@ export default async (request, context) => {
       });
     }
 
-    console.log(`📋 AIROPS WEBHOOK: Processing completion for task: ${taskId}, status: ${status}, conversation: ${conversationId}`);
+    console.log(`📋 AIROPS WEBHOOK: Processing completion for task: ${taskId}, status: ${status}, conversation: ${conversationId}, taskName: ${taskName}`);
 
     const tasksStore = getStore('tasks');
     const conversationTasksStore = getStore('conversation-tasks');
     const historyStore = getStore('conversation-history');
     
-    // 1. ✅ ENHANCED: Update individual task storage with better logging
+    // 1. ✅ ENHANCED: Update individual task storage with task name
     console.log(`📋 AIROPS WEBHOOK: Looking for individual task: ${taskId}`);
     const existingTaskData = await tasksStore.get(taskId);
     let individualTask = {};
@@ -106,6 +125,13 @@ export default async (request, context) => {
     individualTask.completedAt = new Date().toISOString();
     individualTask.conversationId = conversationId || individualTask.conversationId;
     
+    // ✅ NEW: Update task name if provided
+    if (taskName) {
+      individualTask.taskName = taskName;
+      individualTask.displayName = taskName; // For backwards compatibility
+      console.log(`📋 AIROPS WEBHOOK: Updated task name to: ${taskName}`);
+    }
+    
     if (result) {
       individualTask.result = result;
       console.log(`📋 AIROPS WEBHOOK: Added result of length ${result.length} to task ${taskId}`);
@@ -121,7 +147,7 @@ export default async (request, context) => {
     await tasksStore.set(taskId, JSON.stringify(individualTask));
     console.log(`✅ AIROPS WEBHOOK: Updated individual task storage for: ${taskId}`);
 
-    // 2. ✅ ENHANCED: Update conversation-level task storage with better logging
+    // 2. ✅ ENHANCED: Update conversation-level task storage with task name
     const finalConversationId = conversationId || individualTask.conversationId;
     
     if (finalConversationId) {
@@ -148,7 +174,12 @@ export default async (request, context) => {
             status: individualTask.status,
             result: result,
             completedAt: individualTask.completedAt,
-            error: error || null
+            error: error || null,
+            // ✅ NEW: Update task name in conversation storage too
+            ...(taskName && { 
+              taskName: taskName,
+              displayName: taskName 
+            })
           };
           
           console.log(`📋 AIROPS WEBHOOK: Updated task:`, conversationTasks[taskIndex]);
@@ -157,7 +188,7 @@ export default async (request, context) => {
           await conversationTasksStore.set(finalConversationId, JSON.stringify(conversationTasks));
           console.log(`✅ AIROPS WEBHOOK: Updated conversation task storage for: ${finalConversationId}, task: ${taskId}`);
           
-          // 3. ✅ ENHANCED: Save completed task result to conversation history
+          // 3. ✅ ENHANCED: Save completed task result to conversation history with task name
           if (result && status === 'completed') {
             try {
               console.log(`📚 AIROPS WEBHOOK: Adding task completion to history for conversation: ${finalConversationId}`);
@@ -165,12 +196,15 @@ export default async (request, context) => {
               const historyData = await historyStore.get(finalConversationId);
               const currentHistory = historyData ? JSON.parse(historyData) : [];
               
-              // Create history entry for completed task
+              // Create history entry for completed task with enhanced data
               const historyEntry = {
                 text: `${individualTask.comment || 'Task'}`,
                 result: result,
                 mode: 'task_completion',
                 taskId: taskId,
+                // ✅ NEW: Include task name in history
+                taskName: taskName || null,
+                displayName: taskName || null,
                 outputFormat: individualTask.outputFormat || 'General Task',
                 selectedFormat: individualTask.selectedFormat,
                 hasFile: individualTask.hasFile || false,
@@ -216,6 +250,7 @@ export default async (request, context) => {
       taskId: taskId,
       status: individualTask.status,
       conversationId: finalConversationId,
+      taskName: taskName,
       conversationUpdated: !!finalConversationId,
       historySaved: !!(finalConversationId && result && status === 'completed'),
       debug: {
@@ -223,6 +258,7 @@ export default async (request, context) => {
         extractedData: {
           taskId,
           conversationId,
+          taskName,
           status,
           resultLength: result ? result.length : 0
         }
