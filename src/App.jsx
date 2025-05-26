@@ -1150,158 +1150,222 @@ const clearHistory = async () => {
     }
   };
 
-// ✅ FIXED: Enhanced draft insertion with correct payload structures
+// ✅ FIXED: Create drafts within the conversation context
+
 const insertIntoDraft = async (content) => {
-  console.log('🔍 AIROPS INSERT: Starting draft insertion process');
+  console.log('🔍 AIROPS INSERT: Starting conversation draft insertion');
   console.log('🔍 AIROPS INSERT: Content length:', content.length);
-  console.log('🔍 AIROPS INSERT: Content preview:', content.substring(0, 200) + '...');
+  console.log('🔍 AIROPS INSERT: Context type:', context?.type);
+  console.log('🔍 AIROPS INSERT: Conversation ID:', context?.conversation?.id);
+  console.log('🔍 AIROPS INSERT: Existing draft ID:', context?.conversation?.draftId);
   
   if (!context) {
-    console.log('❌ AIROPS INSERT: No context available');
     copyToClipboard(content);
     setStatus('Copied to clipboard (no context)');
     return;
   }
 
-  // ✅ STRATEGY 1: Use Front context createDraft with CORRECT structure
-  if (typeof context.createDraft === 'function') {
-    console.log('🎯 AIROPS INSERT: Trying Front createDraft method');
+  // ✅ STRATEGY 1: Update existing conversation draft
+  if (context.conversation?.draftId && typeof context.updateDraft === 'function') {
+    console.log('🎯 AIROPS INSERT: Found existing conversation draft, updating...');
+    console.log('🎯 AIROPS INSERT: Draft ID:', context.conversation.draftId);
+    
     try {
+      // Get the existing draft first to preserve its content
+      let existingDraft = null;
+      if (typeof context.fetchDraft === 'function') {
+        existingDraft = await context.fetchDraft(context.conversation.draftId);
+        console.log('🎯 AIROPS INSERT: Existing draft content:', existingDraft?.content?.body?.length || 0, 'chars');
+      }
+      
+      const existingBody = existingDraft?.content?.body || '';
+      const separator = existingBody ? '\n\n---\n\n' : '';
+      const newBody = existingBody + separator + content;
+      
+      await context.updateDraft(context.conversation.draftId, {
+        updateMode: 'replace',
+        content: {
+          body: newBody,
+          type: 'html'
+        }
+      });
+      
+      console.log('✅ AIROPS INSERT: Updated existing conversation draft');
+      setStatus('✅ Content added to conversation draft!');
+      return;
+      
+    } catch (error) {
+      console.error('❌ AIROPS INSERT: Update failed, will create new:', error);
+    }
+  }
+
+  // ✅ STRATEGY 2: Create new draft in conversation context
+  if (typeof context.createDraft === 'function' && context.conversation) {
+    console.log('🎯 AIROPS INSERT: Creating new conversation draft...');
+    console.log('🎯 AIROPS INSERT: Conversation channel:', context.conversation.channel?.id);
+    console.log('🎯 AIROPS INSERT: Conversation recipient:', context.conversation.recipient?.handle);
+    
+    try {
+      // ✅ Build draft template with conversation context
       const draftTemplate = {
         content: {
           body: content,
-          type: 'html' // or 'text' if content is plain text
+          type: 'html'
         }
       };
-      
-      console.log('🎯 AIROPS INSERT: Draft template:', draftTemplate);
+
+      // ✅ Add conversation context if available
+      if (context.conversation.channel?.id) {
+        draftTemplate.channelId = context.conversation.channel.id;
+        console.log('🎯 AIROPS INSERT: Using channel ID:', draftTemplate.channelId);
+      }
+
+      // ✅ Add recipient if available
+      if (context.conversation.recipient?.handle) {
+        draftTemplate.to = [context.conversation.recipient.handle];
+        console.log('🎯 AIROPS INSERT: Adding recipient:', draftTemplate.to);
+      }
+
+      // ✅ Add subject if conversation has one
+      if (context.conversation.subject) {
+        draftTemplate.subject = `Re: ${context.conversation.subject}`;
+        console.log('🎯 AIROPS INSERT: Adding subject:', draftTemplate.subject);
+      }
+
+      console.log('🎯 AIROPS INSERT: Complete draft template:', draftTemplate);
       
       const result = await context.createDraft(draftTemplate);
-      console.log('✅ AIROPS INSERT: Draft created successfully:', result);
-      setStatus('Draft created via Front API!');
+      
+      console.log('✅ AIROPS INSERT: New conversation draft created:', result);
+      setStatus('✅ New conversation draft created!');
       return;
+      
     } catch (error) {
-      console.error('❌ AIROPS INSERT: createDraft failed:', error);
+      console.error('❌ AIROPS INSERT: Conversation draft creation failed:', error);
       console.error('❌ AIROPS INSERT: Error details:', {
         message: error.message,
-        stack: error.stack,
-        name: error.name
+        name: error.name,
+        stack: error.stack?.split('\n')[0]
       });
     }
   }
 
-  // ✅ STRATEGY 2: Use Front context updateDraft with CORRECT structure
-  if (typeof context.updateDraft === 'function' && context.draft?.id) {
-    console.log('🎯 AIROPS INSERT: Trying Front updateDraft method');
-    console.log('🎯 AIROPS INSERT: Current draft ID:', context.draft.id);
-    console.log('🎯 AIROPS INSERT: Current draft body length:', context.draft.content?.body?.length || 0);
+  // ✅ STRATEGY 3: Try simple draft creation (your current working method)
+  if (typeof context.createDraft === 'function') {
+    console.log('🎯 AIROPS INSERT: Trying simple draft creation...');
     
     try {
-      const existingBody = context.draft.content?.body || '';
-      const newBody = existingBody + (existingBody ? '\n\n' : '') + content;
-      
-      const updatePayload = {
-        updateMode: 'replace', // or 'insert' depending on behavior you want
+      const result = await context.createDraft({
         content: {
-          body: newBody,
-          type: 'html' // or 'text' if content is plain text  
+          body: content,
+          type: 'html'
         }
-      };
-      
-      console.log('🎯 AIROPS INSERT: Update payload:', {
-        updateMode: updatePayload.updateMode,
-        contentType: updatePayload.content.type,
-        bodyLength: updatePayload.content.body.length
       });
       
-      await context.updateDraft(context.draft.id, updatePayload);
-      console.log('✅ AIROPS INSERT: Draft updated successfully');
-      setStatus('Draft updated via Front API!');
+      console.log('✅ AIROPS INSERT: Simple draft created:', result);
+      setStatus('✅ Draft created!');
       return;
+      
     } catch (error) {
-      console.error('❌ AIROPS INSERT: updateDraft failed:', error);
-      console.error('❌ AIROPS INSERT: Error details:', {
-        message: error.message,
-        stack: error.stack,
-        name: error.name
-      });
+      console.error('❌ AIROPS INSERT: Simple draft creation failed:', error);
     }
   }
 
-  // ✅ STRATEGY 3: Front REST API with CORRECT payload
-  if (context?.conversation?.id && context?.teammate) {
-    console.log('🎯 AIROPS INSERT: Trying Front REST API');
-    
-    try {
-      const conversationId = context.conversation.id;
-      const teammateId = context.teammate.id;
-      const teammateEmail = context.teammate.email;
-      
-      // ✅ Better channel ID detection
-      const channelFormats = [
-        context.conversation.channel?.id, // Try conversation's channel first
-        `alt:address:${teammateEmail}`,
-        teammateEmail
-      ].filter(Boolean);
-      
-      for (const channelId of channelFormats) {
-        const url = `https://api2.frontapp.com/conversations/${conversationId}/drafts`;
-        
-        const headers = {
-          "accept": "application/json",
-          "content-type": "application/json",
-          "authorization": "Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzY29wZXMiOlsicHJvdmlzaW9uaW5nIiwicHJpdmF0ZToqIiwic2hhcmVkOioiLCJrYiJdLCJpYXQiOjE3MjkyNTY3MzYsImlzcyI6ImZyb250Iiwic3ViIjoiYzRhYzc3Y2NjN2M5NWNiNzExNzYiLCJqdGkiOiIyNWRlOWQwMzA2ZTI0NGExIn0.KocFXR3MLCqqUU80e3BRZiLo7Zz5wtbee7kxo5V0Xw4"
-        };
-        
-        // ✅ FIXED: Correct REST API payload structure
-        const payload = {
-          author_id: teammateId,
-          body: content,
-          channel_id: channelId,
-          should_add_default_signature: false // Try without signature first
-        };
-        
-        console.log(`🎯 AIROPS INSERT: Trying API with channel: ${channelId}`);
-        console.log(`🎯 AIROPS INSERT: Payload:`, {
-          author_id: teammateId,
-          channel_id: channelId,
-          bodyLength: content.length,
-          should_add_default_signature: payload.should_add_default_signature
-        });
-        
-        const response = await fetch(url, {
-          method: 'POST',
-          headers: headers,
-          body: JSON.stringify(payload)
-        });
-        
-        console.log(`🎯 AIROPS INSERT: API response status: ${response.status}`);
-        
-        if (response.ok) {
-          const result = await response.json();
-          console.log('✅ AIROPS INSERT: Draft created successfully via API:', result);
-          setStatus('Draft created via REST API!');
-          return;
-        } else {
-          const errorText = await response.text();
-          console.error(`❌ AIROPS INSERT: API failed for ${channelId}:`, {
-            status: response.status,
-            statusText: response.statusText,
-            error: errorText
-          });
-        }
-      }
-      
-    } catch (error) {
-      console.error('❌ AIROPS INSERT: REST API error:', error);
-    }
-  }
-  
-  // ✅ FALLBACK: Copy to clipboard with better feedback
+  // ✅ FALLBACK: Copy to clipboard
   console.log('📋 AIROPS INSERT: All methods failed, copying to clipboard');
   copyToClipboard(content);
-  setStatus('Copied - Front API unavailable');
+  setStatus('📋 Copied to clipboard');
 };
+
+// ✅ Add this debug function to your App component
+
+const debugConversationContext = () => {
+  console.log('🔍 CONVERSATION CONTEXT DEBUG');
+  console.log('============================');
+  
+  if (!context) {
+    console.log('❌ No context available');
+    return;
+  }
+  
+  console.log('1. BASIC INFO:');
+  console.log('- Context type:', context.type);
+  console.log('- Context ID:', context.id);
+  
+  if (context.conversation) {
+    console.log('\n2. CONVERSATION INFO:');
+    console.log('- Conversation ID:', context.conversation.id);
+    console.log('- Conversation type:', context.conversation.type);
+    console.log('- Conversation subject:', context.conversation.subject);
+    console.log('- Conversation status:', context.conversation.status);
+    console.log('- Has draft ID:', context.conversation.draftId);
+    
+    console.log('\n3. CONVERSATION CHANNEL:');
+    console.log('- Channel:', context.conversation.channel);
+    if (context.conversation.channel) {
+      console.log('  - Channel ID:', context.conversation.channel.id);
+      console.log('  - Channel type:', context.conversation.channel.type);
+      console.log('  - Channel name:', context.conversation.channel.name);
+      console.log('  - Channel address:', context.conversation.channel.address);
+    }
+    
+    console.log('\n4. CONVERSATION RECIPIENT:');
+    console.log('- Recipient:', context.conversation.recipient);
+    if (context.conversation.recipient) {
+      console.log('  - Recipient handle:', context.conversation.recipient.handle);
+      console.log('  - Recipient name:', context.conversation.recipient.name);
+      console.log('  - Recipient type:', context.conversation.recipient.type);
+    }
+    
+    console.log('\n5. CONVERSATION INBOXES:');
+    console.log('- Inboxes:', context.conversation.inboxes?.map(inbox => ({
+      id: inbox.id,
+      name: inbox.name
+    })));
+  }
+  
+  if (context.draft) {
+    console.log('\n6. CURRENT DRAFT:');
+    console.log('- Draft ID:', context.draft.id);
+    console.log('- Draft editable:', context.draft.isEditable);
+    console.log('- Draft channel:', context.draft.channel);
+    console.log('- Draft body length:', context.draft.content?.body?.length || 0);
+    console.log('- Draft recipients:', {
+      to: context.draft.to?.length || 0,
+      cc: context.draft.cc?.length || 0,
+      bcc: context.draft.bcc?.length || 0
+    });
+  }
+  
+  console.log('\n7. TEAMMATE INFO:');
+  console.log('- Teammate ID:', context.teammate?.id);
+  console.log('- Teammate name:', context.teammate?.name);
+  console.log('- Teammate email:', context.teammate?.email);
+  
+  setStatus('Conversation debug complete - check console');
+};
+
+// ✅ Add this button to your debug section:
+<button
+  onClick={debugConversationContext}
+  style={{
+    background: 'none',
+    border: 'none',
+    cursor: 'pointer',
+    padding: theme.spacing.xs,
+    borderRadius: theme.borderRadius.sm,
+    color: theme.colors.tertiary,
+    fontSize: theme.fontSize.lg,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center'
+  }}
+  onMouseEnter={(e) => e.target.style.color = theme.colors.info}
+  onMouseLeave={(e) => e.target.style.color = theme.colors.tertiary}
+  title="Debug conversation context (check console)"
+>
+  💬
+</button>
 
 // ✅ ALSO: Add this debug function to test draft operations
 const debugDraftAPI = async () => {
