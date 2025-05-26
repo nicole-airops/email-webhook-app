@@ -25,6 +25,41 @@ import './App.css';
 
 function App() {
   const context = useFrontContext();
+    const getTaskDisplayName = (task) => {
+    {getTaskDisplayName(task)}
+  };
+
+const getHistoryDisplayName = (entry) => {
+  // Priority order: taskName from webhook > displayName > outputFormat based on mode > fallback
+  if (entry.taskName) {
+    return entry.taskName;
+  }
+  
+  if (entry.displayName) {
+    return entry.displayName;
+  }
+  
+  if (entry.isTaskCompletion) {
+    return entry.outputFormat || 'Task Completed';
+  }
+  
+  if (entry.mode === 'email') {
+    return 'Email Request';
+  }
+  
+  if (entry.mode === 'task' || entry.mode === 'task_completion') {
+    if (entry.selectedFormat) {
+      const formatOption = formatOptions.find(f => f.value === entry.selectedFormat);
+      if (formatOption) {
+        return formatOption.label;
+      }
+    }
+    return entry.outputFormat || 'Task Request';
+  }
+  
+  return 'Request';
+};
+
   const [mode, setMode] = useState('email');
   const [comment, setComment] = useState('');
   const [outputFormat, setOutputFormat] = useState('');
@@ -1791,13 +1826,20 @@ const debugDraftAPI = async () => {
     >
       <style jsx>{`
         @keyframes spin {
-          0% { transform: rotate(0deg); }
-          100% { transform: rotate(360deg); }
-        }
-        @keyframes fadeIn {
-          from { opacity: 0; transform: translateY(-4px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes fadeIn {
+  0% { opacity: 0; transform: translateY(4px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes shine {
+  0% { left: -100%; }
+  50% { left: 100%; }
+  100% { left: 100%; }
+}
       `}</style>
 
       {/* Header */}
@@ -2242,6 +2284,7 @@ const debugDraftAPI = async () => {
                                task.outputFormat || 
                                'General Task'
                               }
+                              
                               {task.hasFile && (
                                 <AttachmentIcon 
                                   size={theme.iconSize.sm} 
@@ -2398,29 +2441,65 @@ const debugDraftAPI = async () => {
                                 <button
                                   onClick={() => insertIntoDraft(task.result)}
                                   style={{
-                                    padding: `${theme.spacing.sm} ${theme.spacing.lg}`,
-                                    fontSize: theme.fontSize.sm,
+                                    padding: `${theme.spacing.lg} ${theme.spacing.xl}`, // Bigger padding
+                                    fontSize: theme.fontSize.base, // Larger font
+                                    fontWeight: '600', // Bold text  
                                     minHeight: 'auto',
                                     display: 'flex',
                                     alignItems: 'center',
-                                    background: theme.colors.background,
-                                    border: `1px solid ${theme.colors.border}`,
-                                    borderRadius: theme.borderRadius.sm,
+                                    justifyContent: 'center',
+                                    background: `linear-gradient(135deg, ${theme.colors.accent}, ${theme.colors.info})`, // Gradient background
+                                    color: 'white', // White text
+                                    border: 'none',
+                                    borderRadius: theme.borderRadius.lg, // More rounded
                                     cursor: 'pointer',
-                                    color: theme.colors.secondary,
-                                    transition: 'all 0.2s ease'
+                                    transition: 'all 0.2s ease',
+                                    boxShadow: theme.shadows.md, // Drop shadow
+                                    position: 'relative',
+                                    overflow: 'hidden'
                                   }}
                                   onMouseEnter={(e) => {
-                                    e.target.style.borderColor = theme.colors.borderHover;
-                                    e.target.style.backgroundColor = theme.colors.surface;
+                                    e.target.style.transform = 'translateY(-2px) scale(1.02)'; // Lift and scale
+                                    e.target.style.boxShadow = theme.shadows.lg; // Bigger shadow
+                                    e.target.style.background = `linear-gradient(135deg, ${theme.colors.info}, ${theme.colors.accent})`; // Reverse gradient
                                   }}
                                   onMouseLeave={(e) => {
-                                    e.target.style.borderColor = theme.colors.border;
-                                    e.target.style.backgroundColor = theme.colors.background;
+                                    e.target.style.transform = 'translateY(0) scale(1)'; // Reset
+                                    e.target.style.boxShadow = theme.shadows.md;
+                                    e.target.style.background = `linear-gradient(135deg, ${theme.colors.accent}, ${theme.colors.info})`;
+                                  }}
+                                  onMouseDown={(e) => {
+                                    e.target.style.transform = 'translateY(0) scale(0.98)'; // Press effect
+                                  }}
+                                  onMouseUp={(e) => {
+                                    e.target.style.transform = 'translateY(-2px) scale(1.02)'; // Back to hover
                                   }}
                                 >
-                                  <InsertIcon size={theme.iconSize.sm} color={theme.colors.secondary} style={{ marginRight: theme.spacing.xs }} />
-                                  Insert
+                                  <InsertIcon 
+                                    size={theme.iconSize.md} 
+                                    color="white" 
+                                    style={{ marginRight: theme.spacing.sm }} 
+                                  />
+                                  <span style={{ 
+                                    textShadow: '0 1px 2px rgba(0,0,0,0.2)',
+                                    letterSpacing: '0.5px'
+                                  }}>
+                                    Insert into Draft
+                                  </span>
+                                  
+                                  {/* ✅ ADD: Subtle animated shine effect */}
+                                  <div
+                                    style={{
+                                      position: 'absolute',
+                                      top: 0,
+                                      left: '-100%',
+                                      width: '100%',
+                                      height: '100%',
+                                      background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent)',
+                                      animation: 'shine 3s infinite',
+                                      pointerEvents: 'none'
+                                    }}
+                                  />
                                 </button>
                               </div>
                             </div>
@@ -2467,272 +2546,300 @@ const debugDraftAPI = async () => {
                 }
               >
                 <div style={{ marginLeft: '-2px', marginRight: '-2px' }}>
-                  {commentHistory.slice(0, 8).map((entry, index) => {
-                    const getBorderColor = () => {
-                      if (entry.isTaskCompletion) return theme.colors.success;
-                      if (entry.mode === 'email') return theme.colors.info;
-                      return theme.colors.border;
-                    };
+<div style={{ marginLeft: '-2px', marginRight: '-2px' }}>
+  {commentHistory.slice(0, 8).map((entry, index) => {
+    const getBorderColor = () => {
+      if (entry.isTaskCompletion) return theme.colors.success;
+      if (entry.mode === 'email') return theme.colors.info;
+      return theme.colors.border;
+    };
 
-                    const getStatusIcon = () => {
-                      if (entry.isTaskCompletion) {
-                        return <CheckmarkIcon size={theme.iconSize.md} color={theme.colors.success} style={{ marginRight: theme.spacing.sm }} />;
-                      }
-                      if (entry.mode === 'email') {
-                        return <EmailIcon size={theme.iconSize.md} color={theme.colors.info} style={{ marginRight: theme.spacing.sm }} />;
-                      }
-                      return <TaskIcon size={theme.iconSize.md} color={theme.colors.secondary} style={{ marginRight: theme.spacing.sm }} />;
-                    };
+    const getStatusIcon = () => {
+      if (entry.isTaskCompletion) {
+        return <CheckmarkIcon size={theme.iconSize.md} color={theme.colors.success} style={{ marginRight: theme.spacing.sm }} />;
+      }
+      if (entry.mode === 'email') {
+        return <EmailIcon size={theme.iconSize.md} color={theme.colors.info} style={{ marginRight: theme.spacing.sm }} />;
+      }
+      return <TaskIcon size={theme.iconSize.md} color={theme.colors.secondary} style={{ marginRight: theme.spacing.sm }} />;
+    };
 
-                    const getStatusText = () => {
-                      if (entry.isTaskCompletion) return 'Task Completed';
-                      if (entry.mode === 'email') return 'Email Request';
-                      return 'Task Request';
-                    };
+    const getStatusText = () => {
+      if (entry.isTaskCompletion) return 'Task Completed';
+      if (entry.mode === 'email') return 'Email Request';
+      return 'Task Request';
+    };
 
-                    return (
-                      <div
-                        key={index}
-                        style={{
-                          background: theme.colors.background,
-                          border: `1px solid ${getBorderColor()}`,
-                          borderRadius: theme.borderRadius.md,
-                          padding: theme.spacing.sm,
-                          marginBottom: theme.spacing.xs,
-                          fontSize: theme.fontSize.xs
-                        }}
-                      >
-                        <div 
-                          onClick={() => toggleHistoryExpansion(index)}
-                          style={{ 
-                            display: 'flex', 
-                            alignItems: 'center', 
-                            justifyContent: 'space-between',
-                            marginBottom: theme.spacing.xs,
-                            cursor: 'pointer',
-                            padding: theme.spacing.xs,
-                            borderRadius: theme.borderRadius.sm,
-                            transition: 'background-color 0.2s ease'
-                          }}
-                          onMouseEnter={(e) => e.target.style.backgroundColor = theme.colors.surface}
-                          onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
-                          title="Click to expand/collapse"
-                        >
-                          <div style={{ display: 'flex', alignItems: 'center', flex: 1 }}>
-                            <div style={{ 
-                              marginRight: theme.spacing.sm,
-                              transform: expandedHistory.has(index) ? 'rotate(90deg)' : 'rotate(0deg)',
-                              transition: 'transform 0.2s ease',
-                              fontSize: theme.fontSize.xs,
-                              color: theme.colors.tertiary
-                            }}>
-                              ▶
-                            </div>
-                            
-                            {getStatusIcon()}
-                            
-                            <div style={{ flex: 1 }}>
-                              <div style={{ 
-                                color: theme.colors.primary,
-                                fontWeight: '600',
-                                fontSize: theme.fontSize.sm
-                              }}>
-                                {getStatusText()}
-                                {entry.hasFile && (
-                                  <AttachmentIcon 
-                                    size={theme.iconSize.sm} 
-                                    color={theme.colors.tertiary} 
-                                    style={{ marginLeft: theme.spacing.sm }} 
-                                  />
-                                )}
-                              </div>
-                              <div style={{ 
-                                color: theme.colors.tertiary, 
-                                fontSize: theme.fontSize.xs,
-                                marginTop: '2px'
-                              }}>
-                                {formatDate(entry.timestamp)} • {entry.user}
-                              </div>
-                            </div>
-                          </div>
-                          
-                          <div 
-                            style={{ display: 'flex', alignItems: 'center', gap: theme.spacing.xs }}
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <button
-                              onClick={() => viewHistoryEntryInNewWindow(entry)}
-                              style={{
-                                background: 'none',
-                                border: 'none',
-                                cursor: 'pointer',
-                                padding: theme.spacing.xs,
-                                borderRadius: theme.borderRadius.sm,
-                                color: theme.colors.tertiary,
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center'
-                              }}
-                              onMouseEnter={(e) => e.target.style.color = theme.colors.info}
-                              onMouseLeave={(e) => e.target.style.color = theme.colors.tertiary}
-                              title="View entry"
-                            >
-                              <ViewIcon size={theme.iconSize.md} color="currentColor" />
-                            </button>
-                            
-                            <button
-                              onClick={() => copyToClipboard(entry.result || entry.text)}
-                              style={{
-                                background: 'none',
-                                border: 'none',
-                                cursor: 'pointer',
-                                padding: theme.spacing.xs,
-                                borderRadius: theme.borderRadius.sm,
-                                color: theme.colors.tertiary,
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center'
-                              }}
-                              onMouseEnter={(e) => e.target.style.color = theme.colors.secondary}
-                              onMouseLeave={(e) => e.target.style.color = theme.colors.tertiary}
-                              title="Copy content"
-                            >
-                              <CopyIcon size={theme.iconSize.md} />
-                            </button>
-                            
-                            <button
-                              onClick={() => insertIntoDraft(entry.result || entry.text)}
-                              style={{
-                                background: 'none',
-                                border: 'none',
-                                cursor: 'pointer',
-                                padding: theme.spacing.xs,
-                                borderRadius: theme.borderRadius.sm,
-                                color: theme.colors.tertiary,
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center'
-                              }}
-                              onMouseEnter={(e) => e.target.style.color = theme.colors.secondary}
-                              onMouseLeave={(e) => e.target.style.color = theme.colors.tertiary}
-                              title="Insert into draft"
-                            >
-                              <InsertIcon size={theme.iconSize.md} color={theme.colors.tertiary} />
-                            </button>
-                            
-                            <button
-                              onClick={() => {
-                                if (confirm('Delete this history entry?')) {
-                                  deleteHistoryEntry(index);
-                                }
-                              }}
-                              style={{
-                                background: 'none',
-                                border: 'none',
-                                cursor: 'pointer',
-                                padding: theme.spacing.xs,
-                                borderRadius: theme.borderRadius.sm,
-                                color: theme.colors.tertiary,
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center'
-                              }}
-                              onMouseEnter={(e) => e.target.style.color = theme.colors.error}
-                              onMouseLeave={(e) => e.target.style.color = theme.colors.tertiary}
-                              title="Delete this entry"
-                            >
-                              <Icon name="Trash" size={theme.iconSize.md} />
-                            </button>
-                          </div>
-                        </div>
+    return (
+      <div
+        key={index}
+        style={{
+          background: theme.colors.background,
+          border: `1px solid ${getBorderColor()}`,
+          borderRadius: theme.borderRadius.md,
+          padding: theme.spacing.sm,
+          marginBottom: theme.spacing.xs,
+          fontSize: theme.fontSize.xs
+        }}
+      >
+        {/* Header */}
+        <div 
+          onClick={() => toggleHistoryExpansion(index)}
+          style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'space-between',
+            marginBottom: theme.spacing.xs,
+            cursor: 'pointer',
+            padding: theme.spacing.xs,
+            borderRadius: theme.borderRadius.sm,
+            transition: 'background-color 0.2s ease'
+          }}
+          onMouseEnter={(e) => e.target.style.backgroundColor = theme.colors.surface}
+          onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
+          title="Click to expand/collapse"
+        >
+          <div style={{ display: 'flex', alignItems: 'center', flex: 1 }}>
+            <div style={{ 
+              marginRight: theme.spacing.sm,
+              transform: expandedHistory.has(index) ? 'rotate(90deg)' : 'rotate(0deg)',
+              transition: 'transform 0.2s ease',
+              fontSize: theme.fontSize.xs,
+              color: theme.colors.tertiary
+            }}>
+              ▶
+            </div>
+            
+            {getStatusIcon()}
+            
+            <div style={{ flex: 1 }}>
+              <div style={{ 
+                color: theme.colors.primary,
+                fontWeight: '600',
+                fontSize: theme.fontSize.sm
+              }}>
+                {getHistoryDisplayName(entry)}
+                {entry.hasFile && (
+                  <AttachmentIcon 
+                    size={theme.iconSize.sm} 
+                    color={theme.colors.tertiary} 
+                    style={{ marginLeft: theme.spacing.sm }} 
+                  />
+                )}
+              </div>
+              <div style={{ 
+                color: theme.colors.tertiary, 
+                fontSize: theme.fontSize.xs,
+                marginTop: '2px'
+              }}>
+                {formatDate(entry.timestamp)} • {entry.user}
+              </div>
+            </div>
+          </div>
+          
+          {/* Action Buttons */}
+          <div 
+            style={{ display: 'flex', alignItems: 'center', gap: theme.spacing.xs }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={() => viewHistoryEntryInNewWindow(entry)}
+              style={{
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                padding: theme.spacing.xs,
+                borderRadius: theme.borderRadius.sm,
+                color: theme.colors.tertiary,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
+              onMouseEnter={(e) => e.target.style.color = theme.colors.info}
+              onMouseLeave={(e) => e.target.style.color = theme.colors.tertiary}
+              title="View entry"
+            >
+              <ViewIcon size={theme.iconSize.md} color="currentColor" />
+            </button>
+            
+            <button
+              onClick={() => copyToClipboard(entry.result || entry.text)}
+              style={{
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                padding: theme.spacing.xs,
+                borderRadius: theme.borderRadius.sm,
+                color: theme.colors.tertiary,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
+              onMouseEnter={(e) => e.target.style.color = theme.colors.secondary}
+              onMouseLeave={(e) => e.target.style.color = theme.colors.tertiary}
+              title="Copy content"
+            >
+              <CopyIcon size={theme.iconSize.md} />
+            </button>
+            
+            {/* ✅ PROMINENT INSERT BUTTON */}
+            <button
+              onClick={() => insertIntoDraft(entry.result || entry.text)}
+              style={{
+                background: theme.colors.accent,
+                border: `1px solid ${theme.colors.accent}`,
+                cursor: 'pointer',
+                padding: `${theme.spacing.sm} ${theme.spacing.md}`,
+                borderRadius: theme.borderRadius.md,
+                color: 'white',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: theme.fontSize.xs,
+                fontWeight: '600',
+                transition: 'all 0.2s ease',
+                boxShadow: theme.shadows.sm,
+                minWidth: '60px'
+              }}
+              onMouseEnter={(e) => {
+                e.target.style.background = '#5855eb';
+                e.target.style.transform = 'translateY(-1px)';
+                e.target.style.boxShadow = theme.shadows.md;
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.background = theme.colors.accent;
+                e.target.style.transform = 'translateY(0)';
+                e.target.style.boxShadow = theme.shadows.sm;
+              }}
+              title="Insert into draft"
+            >
+              <InsertIcon size={theme.iconSize.sm} color="white" style={{ marginRight: theme.spacing.xs }} />
+              Insert
+            </button>
+            
+            <button
+              onClick={() => deleteHistoryEntry(index)} // ✅ Removed confirm() for sandbox
+              style={{
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                padding: theme.spacing.xs,
+                borderRadius: theme.borderRadius.sm,
+                color: theme.colors.tertiary,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
+              onMouseEnter={(e) => e.target.style.color = theme.colors.error}
+              onMouseLeave={(e) => e.target.style.color = theme.colors.tertiary}
+              title="Delete this entry"
+            >
+              <Icon name="Trash" size={theme.iconSize.md} />
+            </button>
+          </div>
+        </div>
 
-                        {expandedHistory.has(index) && (
-                          <div style={{ 
-                            paddingLeft: theme.spacing.lg,
-                            animation: 'fadeIn 0.2s ease-out'
-                          }}>
-                            <div style={{
-                              background: theme.colors.surface,
-                              border: `1px solid ${theme.colors.border}`,
-                              borderRadius: theme.borderRadius.md,
-                              padding: theme.spacing.lg,
-                              fontSize: theme.fontSize.base,
-                              lineHeight: '1.5',
-                              color: theme.colors.secondary
-                            }}>
-                              {entry.result ? (
-                                <div dangerouslySetInnerHTML={{ __html: entry.result }} />
-                              ) : (
-                                entry.text
-                              )}
-                            </div>
-                            
-                            <div style={{ 
-                              display: 'flex', 
-                              gap: theme.spacing.sm,
-                              marginTop: theme.spacing.sm,
-                              flexWrap: 'wrap'
-                            }}>
-                              <button
-                                onClick={() => copyToClipboard(entry.result || entry.text)}
-                                style={{
-                                  padding: `${theme.spacing.sm} ${theme.spacing.lg}`,
-                                  fontSize: theme.fontSize.sm,
-                                  minHeight: 'auto',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  background: theme.colors.background,
-                                  border: `1px solid ${theme.colors.border}`,
-                                  borderRadius: theme.borderRadius.sm,
-                                  cursor: 'pointer',
-                                  color: theme.colors.secondary,
-                                  transition: 'all 0.2s ease'
-                                }}
-                                onMouseEnter={(e) => {
-                                  e.target.style.borderColor = theme.colors.borderHover;
-                                  e.target.style.backgroundColor = theme.colors.surface;
-                                }}
-                                onMouseLeave={(e) => {
-                                  e.target.style.borderColor = theme.colors.border;
-                                  e.target.style.backgroundColor = theme.colors.background;
-                                }}
-                              >
-                                <CopyIcon size={theme.iconSize.sm} style={{ marginRight: theme.spacing.xs }} />
-                                Copy
-                              </button>
-                              <button
-                                onClick={() => insertIntoDraft(entry.result || entry.text)}
-                                style={{
-                                  padding: `${theme.spacing.sm} ${theme.spacing.lg}`,
-                                  fontSize: theme.fontSize.sm,
-                                  minHeight: 'auto',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  background: theme.colors.background,
-                                  border: `1px solid ${theme.colors.border}`,
-                                  borderRadius: theme.borderRadius.sm,
-                                  cursor: 'pointer',
-                                  color: theme.colors.secondary,
-                                  transition: 'all 0.2s ease'
-                                }}
-                                onMouseEnter={(e) => {
-                                  e.target.style.borderColor = theme.colors.borderHover;
-                                  e.target.style.backgroundColor = theme.colors.surface;
-                                }}
-                                onMouseLeave={(e) => {
-                                  e.target.style.borderColor = theme.colors.border;
-                                  e.target.style.backgroundColor = theme.colors.background;
-                                }}
-                              >
-                                <InsertIcon size={theme.iconSize.sm} color={theme.colors.secondary} style={{ marginRight: theme.spacing.xs }} />
-                                Insert
-                              </button>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
+        {/* Expanded Content */}
+        {expandedHistory.has(index) && (
+          <div style={{ 
+            paddingLeft: theme.spacing.lg,
+            animation: 'fadeIn 0.2s ease-out'
+          }}>
+            <div style={{
+              background: theme.colors.surface,
+              border: `1px solid ${theme.colors.border}`,
+              borderRadius: theme.borderRadius.md,
+              padding: theme.spacing.lg,
+              fontSize: theme.fontSize.base,
+              lineHeight: '1.5',
+              color: theme.colors.secondary
+            }}>
+              {entry.result ? (
+                <div dangerouslySetInnerHTML={{ __html: entry.result }} />
+              ) : (
+                entry.text
+              )}
+            </div>
+            
+            {/* ✅ ENHANCED: Prominent expanded insert button */}
+            <div style={{ 
+              display: 'flex', 
+              gap: theme.spacing.sm,
+              marginTop: theme.spacing.sm,
+              flexWrap: 'wrap'
+            }}>
+              <button
+                onClick={() => copyToClipboard(entry.result || entry.text)}
+                style={{
+                  padding: `${theme.spacing.sm} ${theme.spacing.lg}`,
+                  fontSize: theme.fontSize.sm,
+                  minHeight: 'auto',
+                  display: 'flex',
+                  alignItems: 'center',
+                  background: theme.colors.background,
+                  border: `1px solid ${theme.colors.border}`,
+                  borderRadius: theme.borderRadius.sm,
+                  cursor: 'pointer',
+                  color: theme.colors.secondary,
+                  transition: 'all 0.2s ease'
+                }}
+                onMouseEnter={(e) => {
+                  e.target.style.borderColor = theme.colors.borderHover;
+                  e.target.style.backgroundColor = theme.colors.surface;
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.borderColor = theme.colors.border;
+                  e.target.style.backgroundColor = theme.colors.background;
+                }}
+              >
+                <CopyIcon size={theme.iconSize.sm} style={{ marginRight: theme.spacing.xs }} />
+                Copy
+              </button>
+              
+              {/* ✅ SUPER PROMINENT EXPANDED INSERT BUTTON */}
+              <button
+                onClick={() => insertIntoDraft(entry.result || entry.text)}
+                style={{
+                  padding: `${theme.spacing.md} ${theme.spacing.xl}`,
+                  fontSize: theme.fontSize.base,
+                  fontWeight: '600',
+                  minHeight: 'auto',
+                  display: 'flex',
+                  alignItems: 'center',
+                  background: theme.colors.accent,
+                  border: `2px solid ${theme.colors.accent}`,
+                  borderRadius: theme.borderRadius.md,
+                  cursor: 'pointer',
+                  color: 'white',
+                  transition: 'all 0.2s ease',
+                  boxShadow: theme.shadows.md,
+                  flex: 1,
+                  minWidth: '120px',
+                  maxWidth: '180px'
+                }}
+                onMouseEnter={(e) => {
+                  e.target.style.background = '#5855eb';
+                  e.target.style.borderColor = '#5855eb';
+                  e.target.style.transform = 'translateY(-2px)';
+                  e.target.style.boxShadow = theme.shadows.lg;
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.background = theme.colors.accent;
+                  e.target.style.borderColor = theme.colors.accent;
+                  e.target.style.transform = 'translateY(0)';
+                  e.target.style.boxShadow = theme.shadows.md;
+                }}
+              >
+                <InsertIcon size={theme.iconSize.md} color="white" style={{ marginRight: theme.spacing.sm }} />
+                Insert into Draft
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  })}
+</div>
                 </div>
               </AccordionSection>
             )}
