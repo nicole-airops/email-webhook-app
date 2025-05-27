@@ -462,14 +462,6 @@ function App() {
             {/* Request Preview */}
             <div style={{ 
               color: theme.colors.tertiary, 
-              fontSize: theme.fontSize.xs,
-              marginBottom: '2px'
-            }}>
-              "{(request.text || request.comment || '').substring(0, 60)}..."
-            </div>
-            
-            <div style={{ 
-              color: theme.colors.tertiary, 
               fontSize: theme.fontSize.xs
             }}>
               {formatDate(request.timestamp)} • {request.user}
