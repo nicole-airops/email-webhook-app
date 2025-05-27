@@ -1173,28 +1173,43 @@ function App() {
   }, [context]);
 
   // ✅ Manual refresh
-  const manualRefresh = async () => {
-    if (!context?.conversation?.id) {
-      console.log('❌ AIROPS REFRESH: No conversation ID');
-      setStatus('No conversation context');
-      return;
-    }
+const manualRefresh = async () => {
+  if (!context?.conversation?.id) {
+    console.log('❌ AIROPS REFRESH: No conversation ID');
+    setStatus('No conversation context');
+    return;
+  }
 
-    console.log('🔄 AIROPS REFRESH: Manual refresh triggered for conversation:', context.conversation.id);
-    setStatus('Refreshing...');
+  console.log('🔄 AIROPS REFRESH: Manual refresh triggered for conversation:', context.conversation.id);
+  setStatus('Refreshing...');
+  
+  try {
+    // Load history and tasks from storage
+    await Promise.all([
+      loadHistoryFromNetlify(context.conversation.id),
+      loadTaskResultsFromNetlify(context.conversation.id)
+    ]);
     
-    try {
-      await Promise.all([
-        loadHistoryFromNetlify(context.conversation.id),
-        loadTaskResultsFromNetlify(context.conversation.id)
-      ]);
-      setStatus('Refreshed!');
-      console.log('✅ AIROPS REFRESH: Manual refresh completed');
-    } catch (error) {
-      console.error('❌ AIROPS REFRESH: Failed:', error);
-      setStatus('Refresh failed');
+    // ✅ NEW: Also check status of any currently polling tasks
+    if (pollingTasks.size > 0) {
+      console.log(`🔄 REFRESH: Also checking ${pollingTasks.size} polling tasks...`);
+      setStatus('Refreshing + checking tasks...');
+      
+      const tasksToCheck = Array.from(pollingTasks);
+      for (const taskId of tasksToCheck) {
+        await checkTaskStatus(taskId);
+        // Small delay to avoid overwhelming the API
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
     }
-  };
+    
+    setStatus('Refreshed!');
+    console.log('✅ AIROPS REFRESH: Manual refresh completed');
+  } catch (error) {
+    console.error('❌ AIROPS REFRESH: Failed:', error);
+    setStatus('Refresh failed');
+  }
+};
 
   // ✅ Add this debug function to your App component
   const debugHistoryAPI = async () => {
@@ -1514,56 +1529,70 @@ function App() {
     }
   };
 
-  const checkTaskStatus = async (taskId) => {
-    try {
-      const response = await fetch(`/.netlify/functions/task-status?taskId=${taskId}`);
+const checkTaskStatus = async (taskId) => {
+  try {
+    const response = await fetch(`/.netlify/functions/task-status?taskId=${taskId}`);
+    
+    if (response.ok) {
+      const result = await response.json();
       
-      if (response.ok) {
-        const result = await response.json();
+      console.log(`🔍 TASK STATUS CHECK: Task ${taskId}`, {
+        status: result.status,
+        hasResult: !!result.data,
+        taskName: result.metadata?.taskName || result.metadata?.task_name,
+        metadata: result.metadata
+      });
+      
+      if (result.status === 'completed' || result.status === 'failed') {
+        const updatedTasks = taskResults.map(task => {
+          if (task.id === taskId) {
+            const updatedTask = { 
+              ...task, 
+              status: result.status, 
+              result: result.data, 
+              completedAt: result.completedAt,
+              error: result.error,
+            };
+            
+            // ✅ ENHANCED: Update task name from webhook metadata
+            if (result.metadata?.taskName || result.metadata?.task_name) {
+              const newTaskName = result.metadata.taskName || result.metadata.task_name;
+              updatedTask.taskName = newTaskName;
+              updatedTask.displayName = newTaskName;
+              console.log(`🏷️ TASK NAME UPDATED: ${taskId} -> "${newTaskName}"`);
+            }
+            
+            return updatedTask;
+          }
+          return task;
+        });
         
-        if (result.status === 'completed' || result.status === 'failed') {
-          const updatedTasks = taskResults.map(task => 
-            task.id === taskId 
-              ? { 
-                  ...task, 
-                  status: result.status, 
-                  result: result.data, 
-                  completedAt: result.completedAt,
-                  error: result.error,
-                  // ✅ NEW: Update task name from webhook if available
-                  ...(result.metadata?.taskName && {
-                    taskName: result.metadata.taskName,
-                    displayName: result.metadata.taskName
-                  })
-                }
-              : task
-          );
-          
-          setTaskResults(updatedTasks);
-          
-          if (result.status === 'completed') {
-            setExpandedRequests(prev => new Set([...prev, taskId]));
-          }
-          
-          if (context?.conversation?.id) {
-            await saveTaskResultsToNetlify(context.conversation.id, updatedTasks);
-          }
-          
-          setPollingTasks(prev => {
-            const newSet = new Set(prev);
-            newSet.delete(taskId);
-            return newSet;
-          });
-          
-          setStatus(`Task ${result.status}!`);
-          return true;
+        console.log(`✅ TASK UPDATED: ${taskId} status=${result.status}`);
+        setTaskResults(updatedTasks);
+        
+        if (result.status === 'completed') {
+          setExpandedRequests(prev => new Set([...prev, taskId]));
         }
+        
+        if (context?.conversation?.id) {
+          await saveTaskResultsToNetlify(context.conversation.id, updatedTasks);
+        }
+        
+        setPollingTasks(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(taskId);
+          return newSet;
+        });
+        
+        setStatus(`Task ${result.status}!`);
+        return true;
       }
-    } catch (error) {
-      console.error(`❌ AIROPS POLLING: Error checking task ${taskId}:`, error);
     }
-    return false;
-  };
+  } catch (error) {
+    console.error(`❌ AIROPS POLLING: Error checking task ${taskId}:`, error);
+  }
+  return false;
+};
 
   // ✅ Polling system
   useEffect(() => {
@@ -1977,66 +2006,148 @@ function App() {
     setStatus('📋 Copied to clipboard');
   };
 
-  const copyToClipboard = (content) => {
-    // Convert HTML to clean text
-    const tempDiv = document.createElement('div');
-    tempDiv.innerHTML = content;
+const copyToClipboard = (content) => {
+  // Convert HTML to clean text with better markdown conversion
+  const tempDiv = document.createElement('div');
+  tempDiv.innerHTML = content;
+  
+  // ✅ ENHANCED: Better HTML to Markdown conversion
+  tempDiv.querySelectorAll('br').forEach(br => br.replaceWith('\n'));
+  tempDiv.querySelectorAll('p').forEach(p => p.replaceWith(p.textContent + '\n\n'));
+  tempDiv.querySelectorAll('h1').forEach(h => h.replaceWith('# ' + h.textContent + '\n\n'));
+  tempDiv.querySelectorAll('h2').forEach(h => h.replaceWith('## ' + h.textContent + '\n\n'));
+  tempDiv.querySelectorAll('h3').forEach(h => h.replaceWith('### ' + h.textContent + '\n\n'));
+  tempDiv.querySelectorAll('h4').forEach(h => h.replaceWith('#### ' + h.textContent + '\n\n'));
+  tempDiv.querySelectorAll('h5').forEach(h => h.replaceWith('##### ' + h.textContent + '\n\n'));
+  tempDiv.querySelectorAll('h6').forEach(h => h.replaceWith('###### ' + h.textContent + '\n\n'));
+  
+  // ✅ Enhanced list handling
+  tempDiv.querySelectorAll('li').forEach(li => li.replaceWith('• ' + li.textContent + '\n'));
+  tempDiv.querySelectorAll('ul, ol').forEach(list => list.replaceWith(list.textContent + '\n\n'));
+  
+  // ✅ Enhanced table handling with proper markdown
+  tempDiv.querySelectorAll('table').forEach(table => {
+    let tableText = '';
+    const rows = table.querySelectorAll('tr');
+    rows.forEach((row, index) => {
+      const cells = Array.from(row.querySelectorAll('td, th')).map(cell => cell.textContent.trim());
+      tableText += '| ' + cells.join(' | ') + ' |\n';
+      
+      // Add header separator for first row if it contains th elements
+      if (index === 0 && row.querySelector('th')) {
+        tableText += '| ' + cells.map(() => '---').join(' | ') + ' |\n';
+      }
+    });
+    table.replaceWith(tableText + '\n');
+  });
+  
+  // ✅ Handle bold and italic
+  tempDiv.querySelectorAll('strong, b').forEach(b => b.replaceWith('**' + b.textContent + '**'));
+  tempDiv.querySelectorAll('em, i').forEach(i => i.replaceWith('*' + i.textContent + '*'));
+  
+  const cleanContent = tempDiv.textContent || tempDiv.innerText || content.replace(/<[^>]*>/g, '');
+  
+  // ✅ ENHANCED: Multiple clipboard strategies for restricted environments
+  const copyStrategies = [
+    // Strategy 1: Modern Clipboard API (if available and allowed)
+    () => {
+      if (navigator.clipboard && window.isSecureContext) {
+        return navigator.clipboard.writeText(cleanContent);
+      }
+      return Promise.reject('Clipboard API not available');
+    },
     
-    // Enhanced HTML to text conversion
-    tempDiv.querySelectorAll('br').forEach(br => br.replaceWith('\n'));
-    tempDiv.querySelectorAll('p').forEach(p => p.replaceWith(p.textContent + '\n\n'));
-    tempDiv.querySelectorAll('h1, h2, h3, h4, h5, h6').forEach(h => h.replaceWith('# ' + h.textContent + '\n\n'));
-    tempDiv.querySelectorAll('li').forEach(li => li.replaceWith('• ' + li.textContent + '\n'));
-    tempDiv.querySelectorAll('ul, ol').forEach(list => list.replaceWith(list.textContent + '\n\n'));
-    
-    // Enhanced table handling
-    tempDiv.querySelectorAll('table').forEach(table => {
-      let tableText = '';
-      const rows = table.querySelectorAll('tr');
-      rows.forEach((row, index) => {
-        const cells = Array.from(row.querySelectorAll('td, th')).map(cell => cell.textContent.trim());
-        tableText += cells.join(' | ') + '\n';
-        
-        if (index === 0 && row.querySelector('th')) {
-          tableText += cells.map(() => '---').join(' | ') + '\n';
+    // Strategy 2: Fallback using document.execCommand
+    () => {
+      return new Promise((resolve, reject) => {
+        try {
+          const textArea = document.createElement('textarea');
+          textArea.value = cleanContent;
+          textArea.style.position = 'fixed';
+          textArea.style.left = '-999999px';
+          textArea.style.top = '-999999px';
+          textArea.style.width = '1px';
+          textArea.style.height = '1px';
+          textArea.style.opacity = '0';
+          textArea.style.border = 'none';
+          textArea.style.outline = 'none';
+          textArea.style.boxShadow = 'none';
+          textArea.style.background = 'transparent';
+          
+          document.body.appendChild(textArea);
+          textArea.focus();
+          textArea.select();
+          textArea.setSelectionRange(0, cleanContent.length);
+          
+          const success = document.execCommand('copy');
+          document.body.removeChild(textArea);
+          
+          if (success) {
+            resolve();
+          } else {
+            reject('execCommand failed');
+          }
+        } catch (err) {
+          reject(err);
         }
       });
-      table.replaceWith(tableText + '\n');
-    });
+    },
     
-    const cleanContent = tempDiv.textContent || tempDiv.innerText || content.replace(/<[^>]*>/g, '');
-    
-    // Modern clipboard API with fallback
-    if (navigator.clipboard && window.isSecureContext) {
-      navigator.clipboard.writeText(cleanContent).then(() => {
-        setStatus('Copied!');
-      }).catch(() => {
-        fallbackCopy(cleanContent);
+    // Strategy 3: Manual selection fallback
+    () => {
+      return new Promise((resolve, reject) => {
+        try {
+          const textArea = document.createElement('textarea');
+          textArea.value = cleanContent;
+          textArea.style.position = 'absolute';
+          textArea.style.left = '50%';
+          textArea.style.top = '50%';
+          textArea.style.transform = 'translate(-50%, -50%)';
+          textArea.style.width = '300px';
+          textArea.style.height = '100px';
+          textArea.style.zIndex = '9999';
+          textArea.style.background = 'white';
+          textArea.style.border = '2px solid #333';
+          textArea.style.padding = '10px';
+          
+          document.body.appendChild(textArea);
+          textArea.select();
+          
+          // Remove after 3 seconds
+          setTimeout(() => {
+            if (document.body.contains(textArea)) {
+              document.body.removeChild(textArea);
+            }
+          }, 3000);
+          
+          setStatus('📋 Text selected - Copy with Ctrl+C');
+          resolve();
+        } catch (err) {
+          reject(err);
+        }
       });
-    } else {
-      fallbackCopy(cleanContent);
+    }
+  ];
+  
+  // Try strategies in order
+  const tryNextStrategy = (index = 0) => {
+    if (index >= copyStrategies.length) {
+      setStatus('❌ Copy failed - try manual selection');
+      return;
     }
     
-    function fallbackCopy(text) {
-      try {
-        const textArea = document.createElement('textarea');
-        textArea.value = text;
-        textArea.style.position = 'fixed';
-        textArea.style.left = '-999999px';
-        textArea.style.top = '-999999px';
-        document.body.appendChild(textArea);
-        textArea.focus();
-        textArea.select();
-        
-        const result = document.execCommand('copy');
-        document.body.removeChild(textArea);
-        
-        setStatus(result ? 'Copied!' : 'Copy failed');
-      } catch (err) {
-        setStatus('Copy failed');
-      }
-    }
+    copyStrategies[index]()
+      .then(() => {
+        setStatus('✅ Copied to clipboard!');
+      })
+      .catch((error) => {
+        console.log(`Copy strategy ${index + 1} failed:`, error);
+        tryNextStrategy(index + 1);
+      });
   };
+  
+  tryNextStrategy();
+};
 
   // ✅ FIX 3: Enhanced processRequest with proper task name generation and logging
   const processRequest = async () => {
