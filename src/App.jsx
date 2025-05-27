@@ -315,620 +315,496 @@ function App() {
     });
   };
 
-const getRequestDisplayName = (request) => {
-  // ⭐ PRIORITY 1: Task name from webhook (most accurate)
-  if (request.taskName && request.taskName.trim() && request.taskName !== 'Select format...') {
-    return request.taskName.trim();
-  }
-  
-  // ⭐ PRIORITY 2: Display name from webhook
-  if (request.displayName && request.displayName.trim() && request.displayName !== 'Select format...') {
-    return request.displayName.trim();
-  }
-  
-  // ⭐ PRIORITY 3: Generate from comment text (BETTER LOGIC)
-  if (request.text || request.comment) {
-    const text = (request.text || request.comment).trim();
+  const getRequestDisplayName = (request) => {
+    // ⭐ Enhanced priority logic
+    if (request.taskName && request.taskName.trim()) {
+      return request.taskName.trim();
+    }
     
-    // Look for action words at the start
-    const actionPatterns = [
-      /^(create|write|generate|make|build|draft|compose)\s+(.+)/i,
-      /^(analyze|review|check|examine|evaluate)\s+(.+)/i,
-      /^(summarize|summary of|sum up)\s+(.+)/i,
-      /^(list|show|display)\s+(.+)/i,
-      /^(update|edit|modify|change)\s+(.+)/i,
-      /^(format|convert|transform)\s+(.+)/i
-    ];
+    if (request.displayName && request.displayName.trim()) {
+      return request.displayName.trim();
+    }
     
-    for (const pattern of actionPatterns) {
-      const match = text.match(pattern);
-      if (match) {
-        const action = match[1].toLowerCase();
-        const object = match[2].split(/[.,!?]/)[0].trim();
-        const shortObject = object.length > 30 ? object.substring(0, 30) + '...' : object;
-        
-        // Capitalize first letter of action
-        const capitalizedAction = action.charAt(0).toUpperCase() + action.slice(1);
-        return `${capitalizedAction} ${shortObject}`;
+    // Generate from format selection
+    if (request.selectedFormat) {
+      const formatOption = formatOptions.find(f => f.value === request.selectedFormat);
+      if (formatOption && formatOption.label !== 'Select format...') {
+        return `${formatOption.label} Request`;
       }
     }
     
-    // Fallback: First few words
-    const words = text.split(' ').slice(0, 5).join(' ');
-    return words.length > 40 ? words.substring(0, 40) + '...' : words;
-  }
-  
-  // ⭐ PRIORITY 4: Only use format if nothing else available
-  if (request.selectedFormat) {
-    const formatOption = formatOptions.find(f => f.value === request.selectedFormat);
-    if (formatOption && formatOption.label !== 'Select format...') {
-      return `${formatOption.label} Request`;
+    // Generate from output format
+    if (request.outputFormat && request.outputFormat.trim() && request.outputFormat !== 'Select format...') {
+      return request.outputFormat.trim();
     }
-  }
-  
-  // ⭐ PRIORITY 5: Use output format only as last resort
-  if (request.outputFormat && request.outputFormat.trim() && request.outputFormat !== 'Select format...') {
-    return `${request.outputFormat.trim()} Request`;
-  }
-  
-  // Final fallbacks
-  if (request.mode === 'email' || request.type === 'email') {
-    return 'Email Request';
-  }
-  
-  return 'General Request';
-};
+    
+    // ⭐ SMARTER: Generate from comment text
+    if (request.text || request.comment) {
+      const text = (request.text || request.comment).trim();
+      
+      // Look for action words at the start
+      const actionPatterns = [
+        /^(create|write|generate|make|build|draft|compose)\s+(.+)/i,
+        /^(analyze|review|check|examine|evaluate)\s+(.+)/i,
+        /^(summarize|summary of|sum up)\s+(.+)/i,
+        /^(list|show|display)\s+(.+)/i
+      ];
+      
+      for (const pattern of actionPatterns) {
+        const match = text.match(pattern);
+        if (match) {
+          const action = match[1].toLowerCase();
+          const object = match[2].split(/[.,!?]/)[0].trim(); // Stop at punctuation
+          const shortObject = object.length > 25 ? object.substring(0, 25) + '...' : object;
+          
+          // Capitalize first letter of action
+          const capitalizedAction = action.charAt(0).toUpperCase() + action.slice(1);
+          return `${capitalizedAction} ${shortObject}`;
+        }
+      }
+      
+      // Fallback: First few words
+      const words = text.split(' ').slice(0, 4).join(' ');
+      return words.length > 30 ? words.substring(0, 30) + '...' : words;
+    }
+    
+    // Final fallbacks
+    if (request.mode === 'email' || request.type === 'email') {
+      return 'Email Request';
+    }
+    
+    return 'General Request';
+  };
 
   // ✅ FIXED: UnifiedRequestCard component
-// ✅ COMPLETE: Replace your entire UnifiedRequestCard component with this version
-
-const UnifiedRequestCard = ({ request, onDelete, onCopy, onInsert, onView }) => {
-  const isExpanded = expandedRequests.has(request.id);
-  
-  const toggleExpansion = () => {
-    setExpandedRequests(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(request.id)) {
-        newSet.delete(request.id);
-      } else {
-        newSet.add(request.id);
-      }
-      return newSet;
-    });
-  };
-  
-  const state = getRequestState(request);
-  
-  return (
-    <div style={{
-      background: theme.colors.background,
-      border: `1px solid ${state.color}`,
-      borderRadius: theme.borderRadius.md,
-      padding: theme.spacing.md, // ✅ More padding
-      marginBottom: theme.spacing.sm,
-    }}>
-      {/* Request Header */}
-      <div 
-        onClick={toggleExpansion}
-        style={{ 
-          display: 'flex', 
-          alignItems: 'flex-start', // ✅ Better alignment
-          cursor: 'pointer',
-          marginBottom: isExpanded ? theme.spacing.sm : '0'
-        }}
-      >
-        <div style={{ 
-          marginRight: theme.spacing.sm,
-          marginTop: '2px', // ✅ Align with first line of text
-          transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)',
-          transition: 'transform 0.2s ease',
-          fontSize: theme.fontSize.xs,
-          color: theme.colors.tertiary,
-          flexShrink: 0
-        }}>
-          ▶
-        </div>
-        
-        {/* Status Icon */}
-        <div style={{ marginRight: theme.spacing.sm, marginTop: '1px', flexShrink: 0 }}>
+  const UnifiedRequestCard = ({ request, onDelete, onCopy, onInsert, onView }) => {
+    const isExpanded = expandedRequests.has(request.id);
+    
+    const toggleExpansion = () => {
+      setExpandedRequests(prev => {
+        const newSet = new Set(prev);
+        if (newSet.has(request.id)) {
+          newSet.delete(request.id);
+        } else {
+          newSet.add(request.id);
+        }
+        return newSet;
+      });
+    };
+    
+    const state = getRequestState(request);
+    
+    return (
+      <div style={{
+        background: theme.colors.background,
+        border: `1px solid ${state.color}`,
+        borderRadius: theme.borderRadius.md,
+        padding: theme.spacing.sm,
+        marginBottom: theme.spacing.xs
+      }}>
+        {/* Request Header */}
+        <div 
+          onClick={toggleExpansion}
+          style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            cursor: 'pointer',
+            marginBottom: theme.spacing.xs
+          }}
+        >
+          <div style={{ 
+            marginRight: theme.spacing.sm,
+            transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)',
+            transition: 'transform 0.2s ease',
+            fontSize: theme.fontSize.xs,
+            color: theme.colors.tertiary
+          }}>
+            ▶
+          </div>
+          
+          {/* Status Icon */}
           {state.showSpinner ? (
             <div style={{ 
               width: `${theme.iconSize.md}px`, 
               height: `${theme.iconSize.md}px`, 
+              marginRight: theme.spacing.sm,
               border: `2px solid ${state.color}`,
               borderTop: '2px solid transparent',
               borderRadius: '50%',
               animation: 'spin 1s linear infinite'
             }} />
           ) : state.status === 'completed' ? (
-            <CheckmarkIcon size={theme.iconSize.md} color={state.color} />
+            <CheckmarkIcon size={theme.iconSize.md} color={state.color} style={{ marginRight: theme.spacing.sm }} />
           ) : state.status === 'sent' ? (
-            <EmailIcon size={theme.iconSize.md} color={state.color} />
+            <EmailIcon size={theme.iconSize.md} color={state.color} style={{ marginRight: theme.spacing.sm }} />
           ) : (
-            <WarningIcon size={theme.iconSize.md} color={state.color} />
+            <WarningIcon size={theme.iconSize.md} color={state.color} style={{ marginRight: theme.spacing.sm }} />
           )}
-        </div>
-        
-        {/* Request Summary */}
-        <div style={{ flex: 1, minWidth: 0 }}> {/* ✅ Prevent overflow */}
-          <div style={{ 
-            color: theme.colors.primary,
-            fontWeight: '600',
-            fontSize: theme.fontSize.sm,
-            marginBottom: theme.spacing.xs,
-            lineHeight: '1.3',
-            wordBreak: 'break-word' // ✅ Handle long names
-          }}>
-            {getRequestDisplayName(request)}
-            {request.hasFile && (
-              <AttachmentIcon 
-                size={theme.iconSize.sm} 
-                color={theme.colors.tertiary} 
-                style={{ marginLeft: theme.spacing.sm, verticalAlign: 'middle' }}
-              />
-            )}
+          
+          {/* Request Summary */}
+          <div style={{ flex: 1 }}>
+            <div style={{ 
+              color: theme.colors.primary,
+              fontWeight: '600',
+              fontSize: theme.fontSize.sm,
+              marginBottom: '2px'
+            }}>
+              {getRequestDisplayName(request)}
+              {request.hasFile && (
+                <AttachmentIcon 
+                  size={theme.iconSize.sm} 
+                  color={theme.colors.tertiary} 
+                  style={{ marginLeft: theme.spacing.sm }} 
+                />
+              )}
+            </div>
+            
+            {/* Request Preview */}
+            <div style={{ 
+              color: theme.colors.tertiary, 
+              fontSize: theme.fontSize.xs
+            }}>
+              {formatDate(request.timestamp)} • {request.user}
+            </div>
           </div>
           
-          <div style={{ 
-            color: theme.colors.tertiary, 
-            fontSize: theme.fontSize.xs,
-            lineHeight: '1.2'
-          }}>
-            {formatDate(request.timestamp)} • {request.user}
-          </div>
-        </div>
-        
-        {/* ✅ IMPROVED: Action buttons with better spacing */}
-        <div 
-          style={{ 
-            display: 'flex', 
-            alignItems: 'flex-start',
-            gap: theme.spacing.sm, // ✅ More space between buttons
-            marginLeft: theme.spacing.sm,
-            flexShrink: 0
-          }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          {/* Copy button */}
-          <button
-            onClick={() => onCopy(request.result || request.text || request.comment)}
-            style={{
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              padding: theme.spacing.sm,
-              borderRadius: theme.borderRadius.md,
-              color: theme.colors.tertiary,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              minWidth: '28px', // ✅ Slightly bigger
-              minHeight: '28px',
-              transition: 'all 0.2s ease'
-            }}
-            onMouseEnter={(e) => {
-              e.target.style.color = theme.colors.secondary;
-              e.target.style.backgroundColor = theme.colors.surface;
-            }}
-            onMouseLeave={(e) => {
-              e.target.style.color = theme.colors.tertiary;
-              e.target.style.backgroundColor = 'transparent';
-            }}
-            title="Copy content"
+          {/* Action buttons in header */}
+          <div 
+            style={{ display: 'flex', alignItems: 'center', gap: theme.spacing.xs }}
+            onClick={(e) => e.stopPropagation()}
           >
-            <CopyIcon size={theme.iconSize.sm} />
-          </button>
-
-          {/* Insert button - only show for completed */}
-          {(request.result && state.status === 'completed') && (
+            {/* Quick Insert Button for completed requests */}
+            {(request.result && state.status === 'completed') && (
+              <button
+                onClick={() => onInsert(request.result)}
+                style={{
+                  background: theme.colors.accent,
+                  border: `1px solid ${theme.colors.accent}`,
+                  cursor: 'pointer',
+                  padding: `${theme.spacing.sm} ${theme.spacing.md}`,
+                  borderRadius: theme.borderRadius.md,
+                  color: 'white',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: theme.fontSize.xs,
+                  fontWeight: '600',
+                  transition: 'all 0.2s ease',
+                  boxShadow: theme.shadows.sm,
+                  minWidth: '60px'
+                }}
+                onMouseEnter={(e) => {
+                  e.target.style.background = '#5855eb';
+                  e.target.style.transform = 'translateY(-1px)';
+                  e.target.style.boxShadow = theme.shadows.md;
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.background = theme.colors.accent;
+                  e.target.style.transform = 'translateY(0)';
+                  e.target.style.boxShadow = theme.shadows.sm;
+                }}
+                title="Insert into draft"
+              >
+                <InsertIcon size={theme.iconSize.sm} color="white" style={{ marginRight: theme.spacing.xs }} />
+                Insert
+              </button>
+            )}
+            
+            {/* View button for completed requests */}
+            {(request.result && state.status === 'completed') && (
+              <button
+                onClick={() => onView(request)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: theme.spacing.xs,
+                  borderRadius: theme.borderRadius.sm,
+                  color: theme.colors.tertiary,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+                onMouseEnter={(e) => e.target.style.color = theme.colors.info}
+                onMouseLeave={(e) => e.target.style.color = theme.colors.tertiary}
+                title="View result"
+              >
+                <ViewIcon size={theme.iconSize.md} color="currentColor" />
+              </button>
+            )}
+            
+            {/* Delete button */}
             <button
-              onClick={() => onInsert(request.result)}
-              style={{
-                background: theme.colors.accent,
-                border: `1px solid ${theme.colors.accent}`,
-                cursor: 'pointer',
-                padding: `${theme.spacing.sm} ${theme.spacing.md}`, // ✅ Better padding
-                borderRadius: theme.borderRadius.md,
-                color: 'white',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: theme.fontSize.xs,
-                fontWeight: '600',
-                transition: 'all 0.2s ease',
-                boxShadow: theme.shadows.sm,
-                minHeight: '28px',
-                whiteSpace: 'nowrap' // ✅ Prevent text wrapping
-              }}
-              onMouseEnter={(e) => {
-                e.target.style.background = '#5855eb';
-                e.target.style.transform = 'translateY(-1px)';
-                e.target.style.boxShadow = theme.shadows.md;
-              }}
-              onMouseLeave={(e) => {
-                e.target.style.background = theme.colors.accent;
-                e.target.style.transform = 'translateY(0)';
-                e.target.style.boxShadow = theme.shadows.sm;
-              }}
-              title="Insert into draft"
-            >
-              <InsertIcon size={theme.iconSize.sm} color="white" style={{ marginRight: theme.spacing.xs }} />
-              Insert
-            </button>
-          )}
-          
-          {/* View button - only show for completed */}
-          {(request.result && state.status === 'completed') && (
-            <button
-              onClick={() => onView(request)}
+              onClick={() => onDelete(request)}
               style={{
                 background: 'none',
                 border: 'none',
                 cursor: 'pointer',
-                padding: theme.spacing.sm,
-                borderRadius: theme.borderRadius.md,
+                padding: theme.spacing.xs,
+                borderRadius: theme.borderRadius.sm,
                 color: theme.colors.tertiary,
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'center',
-                minWidth: '28px',
-                minHeight: '28px',
-                transition: 'all 0.2s ease'
+                justifyContent: 'center'
               }}
-              onMouseEnter={(e) => {
-                e.target.style.color = theme.colors.info;
-                e.target.style.backgroundColor = theme.colors.surface;
-              }}
-              onMouseLeave={(e) => {
-                e.target.style.color = theme.colors.tertiary;
-                e.target.style.backgroundColor = 'transparent';
-              }}
-              title="View result"
+              onMouseEnter={(e) => e.target.style.color = theme.colors.error}
+              onMouseLeave={(e) => e.target.style.color = theme.colors.tertiary}
+              title="Delete this request"
             >
-              <ViewIcon size={theme.iconSize.sm} />
+              <CrossIcon size={theme.iconSize.sm} />
             </button>
-          )}
-          
-          {/* Delete button */}
-          <button
-            onClick={() => onDelete(request)}
-            style={{
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              padding: theme.spacing.sm,
-              borderRadius: theme.borderRadius.md,
-              color: theme.colors.tertiary,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              minWidth: '28px',
-              minHeight: '28px',
-              transition: 'all 0.2s ease'
-            }}
-            onMouseEnter={(e) => {
-              e.target.style.color = theme.colors.error;
-              e.target.style.backgroundColor = `${theme.colors.error}10`;
-            }}
-            onMouseLeave={(e) => {
-              e.target.style.color = theme.colors.tertiary;
-              e.target.style.backgroundColor = 'transparent';
-            }}
-            title="Delete this request"
-          >
-            <CrossIcon size={theme.iconSize.sm} />
-          </button>
+          </div>
         </div>
-      </div>
 
-      {isExpanded && (
-        <div style={{ 
-          paddingLeft: theme.spacing.xl, // ✅ More indentation
-          animation: 'fadeIn 0.2s ease-out'
-        }}>
-          {/* Original Request */}
-          <div style={{
-            background: theme.colors.surface,
-            border: `1px solid ${theme.colors.border}`,
-            borderRadius: theme.borderRadius.sm,
-            padding: theme.spacing.md, // ✅ More padding
-            marginBottom: theme.spacing.sm
+        {/* Expanded Content */}
+        {isExpanded && (
+          <div style={{ 
+            paddingLeft: theme.spacing.lg,
+            animation: 'fadeIn 0.2s ease-out'
           }}>
-            <div style={{ 
-              fontSize: theme.fontSize.xs, 
-              color: theme.colors.tertiary, 
-              marginBottom: theme.spacing.xs,
-              fontWeight: '600'
+            {/* Original Request */}
+            <div style={{
+              background: theme.colors.surface,
+              border: `1px solid ${theme.colors.border}`,
+              borderRadius: theme.borderRadius.sm,
+              padding: theme.spacing.sm,
+              marginBottom: theme.spacing.sm
             }}>
-              Original Request:
-            </div>
-            <div style={{ 
-              color: theme.colors.secondary, 
-              fontSize: theme.fontSize.sm,
-              lineHeight: '1.4'
-            }}>
-              {request.text || request.comment}
-            </div>
-            {request.outputFormat && (
               <div style={{ 
-                marginTop: theme.spacing.sm,
-                fontSize: theme.fontSize.xs,
-                color: theme.colors.tertiary 
+                fontSize: theme.fontSize.xs, 
+                color: theme.colors.tertiary, 
+                marginBottom: theme.spacing.xs,
+                fontWeight: '600'
               }}>
-                Format: {request.outputFormat}
+                Original Request:
+              </div>
+              <div style={{ color: theme.colors.secondary, fontSize: theme.fontSize.sm }}>
+                {request.text || request.comment}
+              </div>
+              {request.outputFormat && (
+                <div style={{ 
+                  marginTop: theme.spacing.xs,
+                  fontSize: theme.fontSize.xs,
+                  color: theme.colors.tertiary 
+                }}>
+                  Format: {request.outputFormat}
+                </div>
+              )}
+            </div>
+
+            {/* Result (if available) */}
+            {(request.result && state.status === 'completed') && (
+              <div>
+                <div style={{
+                  background: theme.colors.surface,
+                  border: `1px solid ${state.color}`,
+                  borderRadius: theme.borderRadius.sm,
+                  padding: theme.spacing.sm,
+                  marginBottom: theme.spacing.sm,
+                  maxHeight: '200px',
+                  overflowY: 'auto'
+                }}>
+                  <div style={{ 
+                    fontSize: theme.fontSize.xs, 
+                    color: state.color, 
+                    marginBottom: theme.spacing.xs,
+                    fontWeight: '600'
+                  }}>
+                    Result:
+                  </div>
+                  <div 
+                    dangerouslySetInnerHTML={{ __html: request.result }}
+                    style={{ 
+                      color: theme.colors.primary,
+                      fontSize: theme.fontSize.result,
+                      lineHeight: '1.5'
+                    }}
+                  />
+                </div>
+                
+                {/* Expanded action buttons */}
+                <div style={{ 
+                  display: 'flex', 
+                  gap: theme.spacing.sm,
+                  flexWrap: 'wrap'
+                }}>
+                  <button
+                    onClick={() => onCopy(request.result)}
+                    style={{
+                      padding: `${theme.spacing.sm} ${theme.spacing.lg}`,
+                      fontSize: theme.fontSize.sm,
+                      minHeight: 'auto',
+                      display: 'flex',
+                      alignItems: 'center',
+                      background: theme.colors.background,
+                      border: `1px solid ${theme.colors.border}`,
+                      borderRadius: theme.borderRadius.sm,
+                      cursor: 'pointer',
+                      color: theme.colors.secondary,
+                      transition: 'all 0.2s ease'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.target.style.borderColor = theme.colors.borderHover;
+                      e.target.style.backgroundColor = theme.colors.surface;
+                    }}
+                    onMouseLeave={(e) => {
+                      e.target.style.borderColor = theme.colors.border;
+                      e.target.style.backgroundColor = theme.colors.background;
+                    }}
+                  >
+                    <CopyIcon size={theme.iconSize.sm} style={{ marginRight: theme.spacing.xs }} />
+                    Copy
+                  </button>
+                  
+                  {/* Prominent expanded insert button */}
+                  <button
+                    onClick={() => onInsert(request.result)}
+                    style={{
+                      padding: `${theme.spacing.lg} ${theme.spacing.xl}`,
+                      fontSize: theme.fontSize.base,
+                      fontWeight: '600',
+                      minHeight: 'auto',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      background: `linear-gradient(135deg, ${theme.colors.accent}, ${theme.colors.info})`,
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: theme.borderRadius.lg,
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease',
+                      boxShadow: theme.shadows.md,
+                      position: 'relative',
+                      overflow: 'hidden'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.target.style.transform = 'translateY(-2px) scale(1.02)';
+                      e.target.style.boxShadow = theme.shadows.lg;
+                      e.target.style.background = `linear-gradient(135deg, ${theme.colors.info}, ${theme.colors.accent})`;
+                    }}
+                    onMouseLeave={(e) => {
+                      e.target.style.transform = 'translateY(0) scale(1)';
+                      e.target.style.boxShadow = theme.shadows.md;
+                      e.target.style.background = `linear-gradient(135deg, ${theme.colors.accent}, ${theme.colors.info})`;
+                    }}
+                  >
+                    <InsertIcon 
+                      size={theme.iconSize.md} 
+                      color="white" 
+                      style={{ marginRight: theme.spacing.sm }} 
+                    />
+                    <span style={{ 
+                      textShadow: '0 1px 2px rgba(0,0,0,0.2)',
+                      letterSpacing: '0.5px'
+                    }}>
+                      Insert into Draft
+                    </span>
+                    
+                    {/* Shine effect */}
+                    <div
+                      style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: '-100%',
+                        width: '100%',
+                        height: '100%',
+                        background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent)',
+                        animation: 'shine 3s infinite',
+                        pointerEvents: 'none'
+                      }}
+                    />
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Processing Message */}
+            {state.status === 'processing' && (
+              <div style={{
+                background: `${theme.colors.accent}15`,
+                border: `1px solid ${theme.colors.accent}`,
+                borderRadius: theme.borderRadius.sm,
+                padding: theme.spacing.sm,
+                color: theme.colors.accent,
+                fontSize: theme.fontSize.sm,
+                fontWeight: '500'
+              }}>
+                ⏳ Processing your request...
+              </div>
+            )}
+
+            {/* Error Message */}
+            {state.status === 'failed' && (
+              <div style={{
+                background: `${theme.colors.error}15`,
+                border: `1px solid ${theme.colors.error}`,
+                borderRadius: theme.borderRadius.sm,
+                padding: theme.spacing.sm,
+                color: theme.colors.error,
+                fontSize: theme.fontSize.sm,
+                fontWeight: '500'
+              }}>
+                ❌ Request failed: {request.error || 'Unknown error'}
               </div>
             )}
           </div>
-
-          {/* ✅ SMALL TEXT: Result (if available) */}
-          {(request.result && state.status === 'completed') && (
-            <div>
-              <div style={{
-                background: theme.colors.surface,
-                border: `1px solid ${state.color}`,
-                borderRadius: theme.borderRadius.sm,
-                padding: theme.spacing.sm,
-                marginBottom: theme.spacing.sm,
-                maxHeight: '200px',
-                overflowY: 'auto'
-              }}>
-                <div style={{ 
-                  fontSize: theme.fontSize.xs,
-                  color: state.color, 
-                  marginBottom: theme.spacing.xs,
-                  fontWeight: '600'
-                }}>
-                  Result:
-                </div>
-                <div 
-                  dangerouslySetInnerHTML={{ __html: request.result }}
-                  style={{ 
-                    color: theme.colors.primary,
-                    fontSize: theme.fontSize.xs, // ✅ SMALL: Smaller result text
-                    lineHeight: '1.4' // ✅ SMALL: Tighter line spacing
-                  }}
-                />
-              </div>
-              
-              {/* Expanded action buttons */}
-              <div style={{ 
-                display: 'flex', 
-                gap: theme.spacing.sm,
-                flexWrap: 'wrap'
-              }}>
-                <button
-                  onClick={() => onCopy(request.result)}
-                  style={{
-                    padding: `${theme.spacing.sm} ${theme.spacing.lg}`,
-                    fontSize: theme.fontSize.sm,
-                    minHeight: 'auto',
-                    display: 'flex',
-                    alignItems: 'center',
-                    background: theme.colors.background,
-                    border: `1px solid ${theme.colors.border}`,
-                    borderRadius: theme.borderRadius.sm,
-                    cursor: 'pointer',
-                    color: theme.colors.secondary,
-                    transition: 'all 0.2s ease'
-                  }}
-                  onMouseEnter={(e) => {
-                    e.target.style.borderColor = theme.colors.borderHover;
-                    e.target.style.backgroundColor = theme.colors.surface;
-                  }}
-                  onMouseLeave={(e) => {
-                    e.target.style.borderColor = theme.colors.border;
-                    e.target.style.backgroundColor = theme.colors.background;
-                  }}
-                >
-                  <CopyIcon size={theme.iconSize.sm} style={{ marginRight: theme.spacing.xs }} />
-                  Copy
-                </button>
-                
-                {/* Prominent expanded insert button */}
-                <button
-                  onClick={() => onInsert(request.result)}
-                  style={{
-                    padding: `${theme.spacing.lg} ${theme.spacing.xl}`,
-                    fontSize: theme.fontSize.base,
-                    fontWeight: '600',
-                    minHeight: 'auto',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    background: `linear-gradient(135deg, ${theme.colors.accent}, ${theme.colors.info})`,
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: theme.borderRadius.lg,
-                    cursor: 'pointer',
-                    transition: 'all 0.2s ease',
-                    boxShadow: theme.shadows.md,
-                    position: 'relative',
-                    overflow: 'hidden'
-                  }}
-                  onMouseEnter={(e) => {
-                    e.target.style.transform = 'translateY(-2px) scale(1.02)';
-                    e.target.style.boxShadow = theme.shadows.lg;
-                    e.target.style.background = `linear-gradient(135deg, ${theme.colors.info}, ${theme.colors.accent})`;
-                  }}
-                  onMouseLeave={(e) => {
-                    e.target.style.transform = 'translateY(0) scale(1)';
-                    e.target.style.boxShadow = theme.shadows.md;
-                    e.target.style.background = `linear-gradient(135deg, ${theme.colors.accent}, ${theme.colors.info})`;
-                  }}
-                >
-                  <InsertIcon 
-                    size={theme.iconSize.md} 
-                    color="white" 
-                    style={{ marginRight: theme.spacing.sm }} 
-                  />
-                  <span style={{ 
-                    textShadow: '0 1px 2px rgba(0,0,0,0.2)',
-                    letterSpacing: '0.5px'
-                  }}>
-                    Insert into Draft
-                  </span>
-                  
-                  {/* Shine effect */}
-                  <div
-                    style={{
-                      position: 'absolute',
-                      top: 0,
-                      left: '-100%',
-                      width: '100%',
-                      height: '100%',
-                      background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent)',
-                      animation: 'shine 3s infinite',
-                      pointerEvents: 'none'
-                    }}
-                  />
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Processing Message */}
-          {state.status === 'processing' && (
-            <div style={{
-              background: `${theme.colors.accent}15`,
-              border: `1px solid ${theme.colors.accent}`,
-              borderRadius: theme.borderRadius.sm,
-              padding: theme.spacing.sm,
-              color: theme.colors.accent,
-              fontSize: theme.fontSize.sm,
-              fontWeight: '500'
-            }}>
-              ⏳ Processing your request...
-            </div>
-          )}
-
-          {/* Error Message */}
-          {state.status === 'failed' && (
-            <div style={{
-              background: `${theme.colors.error}15`,
-              border: `1px solid ${theme.colors.error}`,
-              borderRadius: theme.borderRadius.sm,
-              padding: theme.spacing.sm,
-              color: theme.colors.error,
-              fontSize: theme.fontSize.sm,
-              fontWeight: '500'
-            }}>
-              ❌ Request failed: {request.error || 'Unknown error'}
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-};
+        )}
+      </div>
+    );
+  };
 
   // ✅ Action handlers
-const clearAllRequests = async () => {
-  const totalRequests = unifiedRequests.length;
-  const totalTasks = taskResults.length;
-  const totalHistory = commentHistory.length;
-  
-  console.log('🗑️ CLEAR ALL: Starting clear operation', {
-    totalRequests,
-    totalTasks, 
-    totalHistory,
-    conversationId: context?.conversation?.id
-  });
-  
-const confirmed = await showConfirmation(`Delete all ${totalRequests} requests?`);
-if (!confirmed) return;
-  
-  if (!context?.conversation?.id) {
-    console.error('🗑️ CLEAR ALL: No conversation ID');
-    setStatus('❌ No conversation context');
-    return;
-  }
-  
-  try {
-    setStatus('Deleting all requests...');
+  const clearAllRequests = async () => {
+    if (!confirm('Delete all requests? This cannot be undone.')) return;
     
-    const promises = [];
-    
-    // Clear tasks storage
-    if (totalTasks > 0) {
-      console.log('🗑️ CLEAR ALL: Clearing tasks from database...');
-      promises.push(
-        fetch('/.netlify/functions/save-conversation-tasks', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            conversationId: context.conversation.id, 
-            tasks: [] 
-          })
-        }).then(response => ({ type: 'tasks', success: response.ok, status: response.status }))
-      );
-    }
-    
-    // Clear history storage  
-    if (totalHistory > 0) {
-      console.log('🗑️ CLEAR ALL: Clearing history from database...');
-      promises.push(
-        fetch('/.netlify/functions/save-conversation-history', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            conversationId: context.conversation.id, 
-            history: [],
-            clearAll: true
-          })
-        }).then(response => ({ type: 'history', success: response.ok, status: response.status }))
-      );
-    }
-    
-    // Wait for all API calls
-    const results = await Promise.all(promises);
-    
-    console.log('🗑️ CLEAR ALL: API results:', results);
-    
-    // Check results
-    const tasksClearSucceeded = !results.find(r => r.type === 'tasks') || results.find(r => r.type === 'tasks')?.success;
-    const historyClearSucceeded = !results.find(r => r.type === 'history') || results.find(r => r.type === 'history')?.success;
-    
-    // ✅ ONLY clear local state if corresponding API calls succeeded
-    if (tasksClearSucceeded && totalTasks > 0) {
-      console.log('✅ CLEAR ALL: Tasks API succeeded, clearing local tasks');
-      setTaskResults([]);
-      setPollingTasks(new Set());
-    } else if (totalTasks > 0) {
-      console.error('❌ CLEAR ALL: Tasks API failed, keeping local tasks');
-    }
-    
-    if (historyClearSucceeded && totalHistory > 0) {
-      console.log('✅ CLEAR ALL: History API succeeded, clearing local history');
-      setCommentHistory([]);
-    } else if (totalHistory > 0) {
-      console.error('❌ CLEAR ALL: History API failed, keeping local history');
-    }
-    
-    // Clear expansion state only if something was actually cleared
-    if ((tasksClearSucceeded && totalTasks > 0) || (historyClearSucceeded && totalHistory > 0)) {
-      setExpandedRequests(new Set());
-    }
-    
-    // Status message based on results
-    if (tasksClearSucceeded && historyClearSucceeded) {
-      console.log('✅ CLEAR ALL: All operations succeeded');
-      setStatus(`✅ All ${totalRequests} requests deleted!`);
-    } else {
-      const failedOperations = [];
-      if (!tasksClearSucceeded && totalTasks > 0) failedOperations.push('tasks');
-      if (!historyClearSucceeded && totalHistory > 0) failedOperations.push('history');
+    try {
+      // Clear both tasks and history
+      await Promise.all([
+        clearAllTasks(),
+        clearHistory()
+      ]);
       
-      console.error('❌ CLEAR ALL: Some operations failed:', failedOperations);
-      setStatus(`❌ Failed to delete ${failedOperations.join(' and ')}`);
+      // Clear expansion state
+      setExpandedRequests(new Set());
+      setStatus('All requests cleared');
+    } catch (error) {
+      console.error('❌ Error clearing requests:', error);
+      setStatus('Clear failed');
     }
-    
-  } catch (error) {
-    console.error('❌ CLEAR ALL: Network error:', error);
-    setStatus('❌ Network error - nothing deleted');
-  }
-};
+  };
 
-  const deleteRequest = deleteRequestFixed;
+  const deleteRequest = async (request) => {
+    try {
+      if (request.type === 'task') {
+        await deleteTask(request.id);
+      } else {
+        // Use originalIndex if available, otherwise find by matching properties
+        const historyIndex = request.originalIndex !== undefined ? 
+          request.originalIndex :
+          commentHistory.findIndex(entry => 
+            entry.timestamp === request.timestamp && 
+            entry.user === request.user &&
+            entry.text === request.text
+          );
+        
+        if (historyIndex !== -1) {
+          await deleteHistoryEntry(historyIndex);
+        }
+      }
+      
+      // Remove from expansion state
+      setExpandedRequests(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(request.id);
+        return newSet;
+      });
+      
+    } catch (error) {
+      console.error('❌ Error deleting request:', error);
+      setStatus('Delete failed');
+    }
+  };
+
   const viewRequestInNewWindow = (request) => {
     const content = request.result || request.text || request.comment;
     const title = getRequestDisplayName(request);
@@ -2131,90 +2007,43 @@ const checkTaskStatus = async (taskId) => {
   };
 
 // ✅ ROBUST: Replace your copyToClipboard function with this version
-// ✅ ROBUST: Fixed copyToClipboard function with working HTML to Markdown conversion
 
 const copyToClipboard = (content) => {
   // ✅ ENHANCED: Better HTML to Markdown conversion
   const htmlToMarkdown = (html) => {
-    // Create a temporary container
     const tempDiv = document.createElement('div');
     tempDiv.innerHTML = html;
     
-    // ✅ FIX: Process the HTML in a more robust way
-    const processNode = (node) => {
-      if (node.nodeType === Node.TEXT_NODE) {
-        return node.textContent;
-      }
-      
-      if (node.nodeType !== Node.ELEMENT_NODE) {
-        return '';
-      }
-      
-      const tagName = node.tagName.toLowerCase();
-      const textContent = node.textContent || '';
-      
-      // Get child content recursively
-      let childContent = '';
-      for (let child of node.childNodes) {
-        childContent += processNode(child);
-      }
-      
-      // Convert based on tag type
-      switch (tagName) {
-        case 'h1':
-          return `# ${textContent}\n\n`;
-        case 'h2':
-          return `## ${textContent}\n\n`;
-        case 'h3':
-          return `### ${textContent}\n\n`;
-        case 'h4':
-          return `#### ${textContent}\n\n`;
-        case 'h5':
-          return `##### ${textContent}\n\n`;
-        case 'h6':
-          return `###### ${textContent}\n\n`;
-        case 'p':
-          return `${childContent}\n\n`;
-        case 'br':
-          return '\n';
-        case 'strong':
-        case 'b':
-          return `**${textContent}**`;
-        case 'em':
-        case 'i':
-          return `*${textContent}*`;
-        case 'li':
-          return `• ${childContent}\n`;
-        case 'ul':
-        case 'ol':
-          return `${childContent}\n`;
-        case 'blockquote':
-          return `> ${childContent}\n\n`;
-        case 'code':
-          return `\`${textContent}\``;
-        case 'pre':
-          return `\`\`\`\n${textContent}\n\`\`\`\n\n`;
-        case 'table':
-          return convertTableToMarkdown(node);
-        case 'tr':
-        case 'td':
-        case 'th':
-          // These are handled by the table converter
-          return childContent;
-        default:
-          return childContent;
-      }
-    };
+    // Convert HTML elements to markdown
+    tempDiv.querySelectorAll('h1').forEach(h => h.replaceWith('# ' + h.textContent + '\n\n'));
+    tempDiv.querySelectorAll('h2').forEach(h => h.replaceWith('## ' + h.textContent + '\n\n'));
+    tempDiv.querySelectorAll('h3').forEach(h => h.replaceWith('### ' + h.textContent + '\n\n'));
+    tempDiv.querySelectorAll('h4').forEach(h => h.replaceWith('#### ' + h.textContent + '\n\n'));
+    tempDiv.querySelectorAll('h5').forEach(h => h.replaceWith('##### ' + h.textContent + '\n\n'));
+    tempDiv.querySelectorAll('h6').forEach(h => h.replaceWith('###### ' + h.textContent + '\n\n'));
+    
+    // Convert paragraphs
+    tempDiv.querySelectorAll('p').forEach(p => p.replaceWith(p.textContent + '\n\n'));
+    
+    // Convert line breaks
+    tempDiv.querySelectorAll('br').forEach(br => br.replaceWith('\n'));
+    
+    // Convert bold and italic
+    tempDiv.querySelectorAll('strong, b').forEach(b => b.replaceWith('**' + b.textContent + '**'));
+    tempDiv.querySelectorAll('em, i').forEach(i => i.replaceWith('*' + i.textContent + '*'));
+    
+    // Convert lists
+    tempDiv.querySelectorAll('li').forEach(li => li.replaceWith('• ' + li.textContent + '\n'));
+    tempDiv.querySelectorAll('ul, ol').forEach(list => list.replaceWith(list.textContent + '\n\n'));
     
     // ✅ ENHANCED: Better table conversion
-    const convertTableToMarkdown = (table) => {
-      const rows = Array.from(table.querySelectorAll('tr'));
-      if (rows.length === 0) return '';
-      
+    tempDiv.querySelectorAll('table').forEach(table => {
       let markdownTable = '';
+      const rows = table.querySelectorAll('tr');
       
       rows.forEach((row, rowIndex) => {
         const cells = Array.from(row.querySelectorAll('td, th')).map(cell => {
+          // Clean cell content
           return cell.textContent.trim().replace(/\s+/g, ' ');
         });
         
@@ -2228,160 +2057,113 @@ const copyToClipboard = (content) => {
         }
       });
       
-      return markdownTable + '\n';
-    };
+      table.replaceWith(markdownTable + '\n');
+    });
     
-    // Process the entire document
-    let result = '';
-    for (let child of tempDiv.childNodes) {
-      result += processNode(child);
-    }
-    
-    // Clean up extra whitespace
-    return result
-      .replace(/\n{3,}/g, '\n\n') // Replace multiple newlines with double newlines
-      .replace(/^\s+|\s+$/g, '') // Trim start/end whitespace
-      .replace(/[ \t]+/g, ' '); // Replace multiple spaces/tabs with single space
+    // Clean up extra whitespace and return
+    return tempDiv.textContent || tempDiv.innerText || html.replace(/<[^>]*>/g, '');
   };
   
   const cleanContent = htmlToMarkdown(content);
   
-  // ✅ ENHANCED: Multiple copy strategies for better compatibility
+  // ✅ SIMPLIFIED: Focus on the most reliable method for Front
   const copyToClipboardReliable = (text) => {
-    console.log('🔍 COPY DEBUG: Attempting to copy:', text.substring(0, 100) + '...');
-    
-    // Method 1: Modern Clipboard API (most reliable when available)
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      console.log('📋 COPY: Trying Clipboard API...');
-      navigator.clipboard.writeText(text)
-        .then(() => {
-          console.log('✅ COPY: Clipboard API succeeded');
-          setStatus('✅ Copied to clipboard!');
-        })
-        .catch(() => {
-          console.log('❌ COPY: Clipboard API failed, trying fallback...');
-          copyWithFallback(text);
-        });
-      return;
-    }
-    
-    // Fallback method
-    copyWithFallback(text);
-  };
-  
-  const copyWithFallback = (text) => {
-    console.log('📋 COPY: Using fallback method...');
-    
-    // Method 2: execCommand with proper textarea setup
+    // Method 1: Try the most compatible approach first
     try {
       const textArea = document.createElement('textarea');
       textArea.value = text;
       
-      // ✅ IMPORTANT: Make the textarea visible and focusable
+      // Make it invisible but selectable
       textArea.style.position = 'fixed';
-      textArea.style.top = '50%';
-      textArea.style.left = '50%';
-      textArea.style.transform = 'translate(-50%, -50%)';
-      textArea.style.width = '300px';
-      textArea.style.height = '200px';
-      textArea.style.zIndex = '99999';
-      textArea.style.background = 'white';
-      textArea.style.border = '2px solid #333';
-      textArea.style.borderRadius = '8px';
-      textArea.style.padding = '12px';
-      textArea.style.fontSize = '12px';
-      textArea.style.fontFamily = 'monospace';
-      textArea.style.color = '#333';
-      textArea.style.resize = 'none';
+      textArea.style.top = '0';
+      textArea.style.left = '0';
+      textArea.style.width = '2em';
+      textArea.style.height = '2em';
+      textArea.style.padding = '0';
+      textArea.style.border = 'none';
+      textArea.style.outline = 'none';
+      textArea.style.boxShadow = 'none';
+      textArea.style.background = 'transparent';
+      textArea.style.fontSize = '16px'; // Prevent zoom on iOS
       
       document.body.appendChild(textArea);
       
-      // Focus and select all text
+      // Focus and select
       textArea.focus();
       textArea.select();
       textArea.setSelectionRange(0, text.length);
       
-      // Add overlay with instructions
-      const overlay = document.createElement('div');
-      overlay.style.position = 'fixed';
-      overlay.style.top = '0';
-      overlay.style.left = '0';
-      overlay.style.width = '100%';
-      overlay.style.height = '100%';
-      overlay.style.background = 'rgba(0,0,0,0.5)';
-      overlay.style.zIndex = '99998';
-      overlay.style.display = 'flex';
-      overlay.style.alignItems = 'center';
-      overlay.style.justifyContent = 'center';
+      // Try to copy
+      const successful = document.execCommand('copy');
+      document.body.removeChild(textArea);
       
-      const instructions = document.createElement('div');
-      instructions.innerHTML = `
-        <div style="
-          background: #333; 
-          color: white; 
-          padding: 16px 24px; 
-          border-radius: 8px; 
-          font-size: 14px; 
-          text-align: center;
-          margin-bottom: 20px;
-          box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-        ">
-          <strong>📋 Press Ctrl+C (or Cmd+C) to copy</strong><br>
-          <span style="font-size: 12px; opacity: 0.8; margin-top: 8px; display: block;">
-            Click outside to close
-          </span>
-        </div>
-      `;
-      overlay.appendChild(instructions);
-      
-      document.body.appendChild(overlay);
-      
-      // Try execCommand
-      let copySuccess = false;
-      try {
-        copySuccess = document.execCommand('copy');
-        console.log('📋 COPY: execCommand result:', copySuccess);
-      } catch (err) {
-        console.log('❌ COPY: execCommand failed:', err);
+      if (successful) {
+        setStatus('✅ Copied to clipboard!');
+        return true;
       }
+    } catch (err) {
+      console.log('Copy method 1 failed:', err);
+    }
+    
+    // Method 2: Fallback with visible selection
+    try {
+      const textArea = document.createElement('textarea');
+      textArea.value = text;
+      textArea.style.position = 'absolute';
+      textArea.style.top = '50%';
+      textArea.style.left = '50%';
+      textArea.style.transform = 'translate(-50%, -50%)';
+      textArea.style.width = '80%';
+      textArea.style.height = '200px';
+      textArea.style.zIndex = '10000';
+      textArea.style.background = 'white';
+      textArea.style.border = '2px solid #333';
+      textArea.style.borderRadius = '4px';
+      textArea.style.padding = '10px';
+      textArea.style.fontSize = '12px';
+      textArea.style.fontFamily = 'monospace';
       
-      // Clean up function
-      const cleanup = () => {
+      document.body.appendChild(textArea);
+      textArea.select();
+      
+      // Add instructions
+      const instructions = document.createElement('div');
+      instructions.innerHTML = '<strong>Press Ctrl+C (or Cmd+C) to copy</strong>';
+      instructions.style.position = 'absolute';
+      instructions.style.top = '40%';
+      instructions.style.left = '50%';
+      instructions.style.transform = 'translate(-50%, -50%)';
+      instructions.style.background = '#333';
+      instructions.style.color = 'white';
+      instructions.style.padding = '10px';
+      instructions.style.borderRadius = '4px';
+      instructions.style.zIndex = '10001';
+      instructions.style.fontSize = '14px';
+      
+      document.body.appendChild(instructions);
+      
+      // Auto-cleanup after 5 seconds
+      setTimeout(() => {
         if (document.body.contains(textArea)) {
           document.body.removeChild(textArea);
         }
-        if (document.body.contains(overlay)) {
-          document.body.removeChild(overlay);
+        if (document.body.contains(instructions)) {
+          document.body.removeChild(instructions);
         }
-      };
+      }, 5000);
       
-      // Auto cleanup on click outside or after delay
-      overlay.addEventListener('click', cleanup);
-      setTimeout(cleanup, 10000); // Auto cleanup after 10 seconds
-      
-      if (copySuccess) {
-        setStatus('✅ Copied to clipboard!');
-        cleanup();
-      } else {
-        setStatus('📋 Text selected - Press Ctrl+C to copy');
-      }
+      setStatus('📋 Text selected - Press Ctrl+C to copy');
+      return true;
       
     } catch (err) {
-      console.error('❌ COPY: All methods failed:', err);
-      
-      // Last resort: Log to console and show instructions
-      console.log('📋 COPY THIS TEXT:\n' + text);
-      setStatus('❌ Copy failed - check browser console');
-      
-      // Show a modal with the text for manual copying
-      alert('Copy failed. The text has been logged to the browser console. Press F12 to open developer tools and copy from there.');
+      console.log('Copy method 2 failed:', err);
     }
+    
+    // Method 3: Last resort - log to console
+    console.log('📋 COPY THIS TEXT:\n' + text);
+    setStatus('❌ Copy failed - check console for text');
+    return false;
   };
-  
-  console.log('🔍 COPY: Starting copy process...');
-  console.log('🔍 COPY: Original content length:', content.length);
-  console.log('🔍 COPY: Cleaned content length:', cleanContent.length);
-  console.log('🔍 COPY: Content preview:', cleanContent.substring(0, 200));
   
   copyToClipboardReliable(cleanContent);
 };
