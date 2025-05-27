@@ -23,10 +23,105 @@ import {
 } from './CustomIcons';
 import './App.css';
 
+// ✅ FIX 1: Move getRequestState OUTSIDE the component to fix the error
+const getRequestState = (request) => {
+  if (request.isTaskCompletion && request.result) {
+    return { 
+      status: 'completed', 
+      color: '#22c55e',
+      label: 'Completed',
+      showSpinner: false
+    };
+  }
+  if (request.status === 'pending') {
+    return { 
+      status: 'processing', 
+      color: '#6366f1',
+      label: 'Processing',
+      showSpinner: true
+    };
+  }
+  if (request.status === 'failed') {
+    return { 
+      status: 'failed', 
+      color: '#ef4444',
+      label: 'Failed',
+      showSpinner: false
+    };
+  }
+  if (request.mode === 'email' || request.type === 'email') {
+    return { 
+      status: 'sent', 
+      color: '#3b82f6',
+      label: 'Sent',
+      showSpinner: false
+    };
+  }
+  return { 
+    status: 'completed', 
+    color: '#22c55e',
+    label: 'Completed',
+    showSpinner: false
+  };
+};
+
+// ✅ Enhanced task name generation helper
+const generateTaskName = (comment, selectedFormat, outputFormat, formatOptions, mode) => {
+  let taskName = '';
+  
+  if (mode === 'email') {
+    return 'Email Request';
+  }
+  
+  // Priority 1: Selected format
+  if (selectedFormat && selectedFormat !== '') {
+    const formatOption = formatOptions.find(f => f.value === selectedFormat);
+    taskName = formatOption ? formatOption.label : 'Custom Format';
+    return taskName;
+  }
+  
+  // Priority 2: Output format text
+  if (outputFormat && outputFormat.trim()) {
+    return outputFormat.trim();
+  }
+  
+  // Priority 3: Smart extraction from comment
+  if (comment && comment.trim()) {
+    const text = comment.trim();
+    
+    // Look for action words at the start
+    const actionPatterns = [
+      /^(create|write|generate|make|build|draft|compose)\s+(.+)/i,
+      /^(analyze|review|check|examine|evaluate)\s+(.+)/i,
+      /^(summarize|summary of|sum up)\s+(.+)/i,
+      /^(list|show|display)\s+(.+)/i,
+      /^(update|edit|modify|change)\s+(.+)/i,
+      /^(format|convert|transform)\s+(.+)/i
+    ];
+    
+    for (const pattern of actionPatterns) {
+      const match = text.match(pattern);
+      if (match) {
+        const action = match[1].toLowerCase();
+        const object = match[2].split(/[.,!?]/)[0].trim(); // Stop at punctuation
+        const shortObject = object.length > 25 ? object.substring(0, 25) + '...' : object;
+        
+        // Capitalize first letter of action
+        const capitalizedAction = action.charAt(0).toUpperCase() + action.slice(1);
+        return `${capitalizedAction} ${shortObject}`;
+      }
+    }
+    
+    // Fallback: First few words
+    const words = text.split(' ').slice(0, 4).join(' ');
+    return words.length > 30 ? words.substring(0, 30) + '...' : words;
+  }
+  
+  return 'General Task';
+};
+
 function App() {
   const context = useFrontContext();
-
-  // ✅ FIXED: Removed broken getTaskDisplayName function
 
   const getHistoryDisplayName = (entry) => {
     // Priority order: taskName from webhook > displayName > outputFormat based on mode > fallback
@@ -69,7 +164,7 @@ function App() {
   const [commentHistory, setCommentHistory] = useState([]);
   const [taskResults, setTaskResults] = useState([]);
   const [pollingTasks, setPollingTasks] = useState(new Set());
-  const [expandedRequests, setExpandedRequests] = useState(new Set()); // ✅ FIXED: Single expansion state
+  const [expandedRequests, setExpandedRequests] = useState(new Set()); 
   
   // Compact auto-resize state
   const [cardSize, setCardSize] = useState({ width: 244, height: 360 });
@@ -145,6 +240,142 @@ function App() {
     }
   };
 
+  // ✅ Helper functions
+  const combineRequestsAndTasks = (taskResults, commentHistory) => {
+    // Convert tasks to unified format
+    const unifiedTasks = taskResults.map(task => ({
+      id: task.id,
+      type: 'task',
+      text: task.comment,
+      comment: task.comment,
+      outputFormat: task.outputFormat,
+      selectedFormat: task.selectedFormat,
+      taskName: task.taskName,
+      displayName: task.displayName,
+      hasFile: task.hasFile,
+      fileName: task.fileName,
+      status: task.status,
+      result: task.result,
+      error: task.error,
+      timestamp: task.createdAt,
+      completedAt: task.completedAt,
+      user: task.user,
+      isTaskCompletion: task.status === 'completed' && task.result,
+      mode: 'task'
+    }));
+
+    // Convert history to unified format
+    const unifiedHistory = commentHistory.map((entry, index) => ({
+      id: `history_${entry.timestamp}_${index}`,
+      type: entry.mode || 'email',
+      text: entry.text,
+      comment: entry.text,
+      outputFormat: entry.outputFormat,
+      selectedFormat: entry.selectedFormat,
+      taskName: entry.taskName,
+      displayName: entry.displayName,
+      hasFile: entry.hasFile,
+      fileName: entry.fileName,
+      status: entry.isTaskCompletion ? 'completed' : 'sent',
+      result: entry.result,
+      timestamp: entry.timestamp,
+      user: entry.user,
+      isTaskCompletion: entry.isTaskCompletion,
+      mode: entry.mode,
+      originalIndex: index
+    }));
+
+    // Combine and sort by timestamp (newest first)
+    const combined = [...unifiedTasks, ...unifiedHistory]
+      .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+    return combined;
+  };
+
+  const sortUnifiedRequests = (requests) => {
+    const statusPriority = {
+      'processing': 1,
+      'queued': 2,
+      'completed': 3,
+      'sent': 4,
+      'failed': 5,
+      'unknown': 6
+    };
+    
+    return requests.sort((a, b) => {
+      const stateA = getRequestState(a);
+      const stateB = getRequestState(b);
+      
+      // First sort by status priority
+      const priorityDiff = statusPriority[stateA.status] - statusPriority[stateB.status];
+      if (priorityDiff !== 0) return priorityDiff;
+      
+      // Then by timestamp (newest first)
+      return new Date(b.timestamp) - new Date(a.timestamp);
+    });
+  };
+
+  const getRequestDisplayName = (request) => {
+    // ⭐ Enhanced priority logic
+    if (request.taskName && request.taskName.trim()) {
+      return request.taskName.trim();
+    }
+    
+    if (request.displayName && request.displayName.trim()) {
+      return request.displayName.trim();
+    }
+    
+    // Generate from format selection
+    if (request.selectedFormat) {
+      const formatOption = formatOptions.find(f => f.value === request.selectedFormat);
+      if (formatOption && formatOption.label !== 'Select format...') {
+        return `${formatOption.label} Request`;
+      }
+    }
+    
+    // Generate from output format
+    if (request.outputFormat && request.outputFormat.trim() && request.outputFormat !== 'Select format...') {
+      return request.outputFormat.trim();
+    }
+    
+    // ⭐ SMARTER: Generate from comment text
+    if (request.text || request.comment) {
+      const text = (request.text || request.comment).trim();
+      
+      // Look for action words at the start
+      const actionPatterns = [
+        /^(create|write|generate|make|build|draft|compose)\s+(.+)/i,
+        /^(analyze|review|check|examine|evaluate)\s+(.+)/i,
+        /^(summarize|summary of|sum up)\s+(.+)/i,
+        /^(list|show|display)\s+(.+)/i
+      ];
+      
+      for (const pattern of actionPatterns) {
+        const match = text.match(pattern);
+        if (match) {
+          const action = match[1].toLowerCase();
+          const object = match[2].split(/[.,!?]/)[0].trim(); // Stop at punctuation
+          const shortObject = object.length > 25 ? object.substring(0, 25) + '...' : object;
+          
+          // Capitalize first letter of action
+          const capitalizedAction = action.charAt(0).toUpperCase() + action.slice(1);
+          return `${capitalizedAction} ${shortObject}`;
+        }
+      }
+      
+      // Fallback: First few words
+      const words = text.split(' ').slice(0, 4).join(' ');
+      return words.length > 30 ? words.substring(0, 30) + '...' : words;
+    }
+    
+    // Final fallbacks
+    if (request.mode === 'email' || request.type === 'email') {
+      return 'Email Request';
+    }
+    
+    return 'General Request';
+  };
+
   // ✅ FIXED: UnifiedRequestCard component
   const UnifiedRequestCard = ({ request, onDelete, onCopy, onInsert, onView }) => {
     const isExpanded = expandedRequests.has(request.id);
@@ -161,24 +392,7 @@ function App() {
       });
     };
     
-    // Determine the current state
-    const getRequestState = () => {
-      if (request.isTaskCompletion && request.result) {
-        return { status: 'completed', color: theme.colors.success };
-      }
-      if (request.status === 'pending') {
-        return { status: 'processing', color: theme.colors.accent };
-      }
-      if (request.status === 'failed') {
-        return { status: 'failed', color: theme.colors.error };
-      }
-      if (request.mode === 'email' || request.type === 'email') {
-        return { status: 'sent', color: theme.colors.info };
-      }
-      return { status: 'completed', color: theme.colors.success };
-    };
-
-    const state = getRequestState();
+    const state = getRequestState(request);
     
     return (
       <div style={{
@@ -209,7 +423,7 @@ function App() {
           </div>
           
           {/* Status Icon */}
-          {state.status === 'processing' ? (
+          {state.showSpinner ? (
             <div style={{ 
               width: `${theme.iconSize.md}px`, 
               height: `${theme.iconSize.md}px`, 
@@ -262,7 +476,7 @@ function App() {
             </div>
           </div>
           
-          {/* ✅ FIXED: Single set of action buttons in header */}
+          {/* Action buttons in header */}
           <div 
             style={{ display: 'flex', alignItems: 'center', gap: theme.spacing.xs }}
             onClick={(e) => e.stopPropagation()}
@@ -416,7 +630,7 @@ function App() {
                   />
                 </div>
                 
-                {/* ✅ Expanded action buttons */}
+                {/* Expanded action buttons */}
                 <div style={{ 
                   display: 'flex', 
                   gap: theme.spacing.sm,
@@ -450,7 +664,7 @@ function App() {
                     Copy
                   </button>
                   
-                  {/* ✅ Prominent expanded insert button */}
+                  {/* Prominent expanded insert button */}
                   <button
                     onClick={() => onInsert(request.result)}
                     style={{
@@ -546,326 +760,8 @@ function App() {
       </div>
     );
   };
-// ✅ IMPROVEMENT 4: Better Request Header Layout
-const RequestHeader = ({ request, state, onToggle, onQuickAction, onDelete }) => (
-  <div 
-    onClick={onToggle}
-    style={{ 
-      display: 'flex', 
-      alignItems: 'center', 
-      cursor: 'pointer',
-      padding: theme.spacing.sm,
-      borderRadius: theme.borderRadius.sm,
-      transition: 'background-color 0.2s ease',
-      marginBottom: theme.spacing.xs
-    }}
-    onMouseEnter={(e) => e.target.style.backgroundColor = theme.colors.background}
-    onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
-  >
-    {/* Expand Arrow */}
-    <div style={{ 
-      marginRight: theme.spacing.sm,
-      transform: expandedRequests.has(request.id) ? 'rotate(90deg)' : 'rotate(0deg)',
-      transition: 'transform 0.2s ease',
-      fontSize: theme.fontSize.xs,
-      color: theme.colors.tertiary,
-      minWidth: '12px'
-    }}>
-      ▶
-    </div>
-    
-    {/* Status Icon/Spinner */}
-    <div style={{ marginRight: theme.spacing.sm, minWidth: '16px' }}>
-      {state.showSpinner ? (
-        <div style={{ 
-          width: `${theme.iconSize.md}px`, 
-          height: `${theme.iconSize.md}px`, 
-          border: `2px solid ${state.color}`,
-          borderTop: '2px solid transparent',
-          borderRadius: '50%',
-          animation: 'spin 1s linear infinite'
-        }} />
-      ) : state.status === 'completed' ? (
-        <CheckmarkIcon size={theme.iconSize.md} color={state.color} />
-      ) : state.status === 'sent' ? (
-        <EmailIcon size={theme.iconSize.md} color={state.color} />
-      ) : state.status === 'failed' ? (
-        <WarningIcon size={theme.iconSize.md} color={state.color} />
-      ) : (
-        <TaskIcon size={theme.iconSize.md} color={state.color} />
-      )}
-    </div>
-    
-    {/* Request Info */}
-    <div style={{ flex: 1, minWidth: 0 }}>
-      {/* Title Row */}
-      <div style={{ 
-        display: 'flex', 
-        alignItems: 'center', 
-        marginBottom: '2px',
-        gap: theme.spacing.sm
-      }}>
-        <span style={{ 
-          color: theme.colors.primary,
-          fontWeight: '600',
-          fontSize: theme.fontSize.sm,
-          flex: 1,
-          minWidth: 0,
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap'
-        }}>
-          {getRequestDisplayName(request)}
-        </span>
-        
-        {request.hasFile && (
-          <AttachmentIcon 
-            size={theme.iconSize.sm} 
-            color={theme.colors.tertiary}
-            style={{ flexShrink: 0 }}
-          />
-        )}
-        
-        {/* ⭐ NEW: Status badge in header for quick glance */}
-        <StatusBadge state={state} size="sm" />
-      </div>
-      
-      {/* Subtitle Row */}
-      <div style={{ 
-        display: 'flex',
-        alignItems: 'center',
-        gap: theme.spacing.md,
-        color: theme.colors.tertiary, 
-        fontSize: theme.fontSize.xs
-      }}>
-        <span>{formatDate(request.timestamp)}</span>
-        <span>•</span>
-        <span>{request.user}</span>
-        {state.status === 'completed' && request.completedAt && (
-          <>
-            <span>•</span>
-            <span style={{ color: state.color }}>
-              Done {formatDate(request.completedAt)}
-            </span>
-          </>
-        )}
-      </div>
-    </div>
-    
-    {/* Quick Actions */}
-    <div 
-      style={{ display: 'flex', alignItems: 'center', gap: theme.spacing.xs }}
-      onClick={(e) => e.stopPropagation()}
-    >
-      {/* Quick Insert for completed */}
-      {(request.result && state.status === 'completed') && (
-        <button
-          onClick={() => onQuickAction(request.result)}
-          style={{
-            background: theme.colors.accent,
-            border: 'none',
-            cursor: 'pointer',
-            padding: `${theme.spacing.sm} ${theme.spacing.md}`,
-            borderRadius: theme.borderRadius.md,
-            color: 'white',
-            fontSize: theme.fontSize.xs,
-            fontWeight: '600',
-            display: 'flex',
-            alignItems: 'center',
-            transition: 'all 0.2s ease'
-          }}
-          title="Insert into draft"
-        >
-          <InsertIcon size={theme.iconSize.sm} color="white" style={{ marginRight: theme.spacing.xs }} />
-          Insert
-        </button>
-      )}
-      
-      {/* Delete button */}
-      <button
-        onClick={() => onDelete(request)}
-        style={{
-          background: 'none',
-          border: 'none',
-          cursor: 'pointer',
-          padding: theme.spacing.xs,
-          borderRadius: theme.borderRadius.sm,
-          color: theme.colors.tertiary,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center'
-        }}
-        onMouseEnter={(e) => e.target.style.color = theme.colors.error}
-        onMouseLeave={(e) => e.target.style.color = theme.colors.tertiary}
-        title="Delete request"
-      >
-        <CrossIcon size={theme.iconSize.sm} />
-      </button>
-    </div>
-  </div>
-);
-const EmptyRequestsState = () => (
-  <div style={{
-    textAlign: 'center',
-    padding: `${theme.spacing.xl} ${theme.spacing.lg}`,
-    color: theme.colors.tertiary
-  }}>
-    <div style={{ 
-      fontSize: '2em', 
-      marginBottom: theme.spacing.sm,
-      opacity: 0.5
-    }}>
-      📝
-    </div>
-    <div style={{ 
-      fontSize: theme.fontSize.sm,
-      fontWeight: '500',
-      marginBottom: theme.spacing.xs
-    }}>
-      No requests yet
-    </div>
-    <div style={{ fontSize: theme.fontSize.xs }}>
-      Create an email or task to get started
-    </div>
-  </div>
-);
 
-  // ✅ FIXED: Helper functions
-  const combineRequestsAndTasks = (taskResults, commentHistory) => {
-    // Convert tasks to unified format
-    const unifiedTasks = taskResults.map(task => ({
-      id: task.id,
-      type: 'task',
-      text: task.comment,
-      comment: task.comment,
-      outputFormat: task.outputFormat,
-      selectedFormat: task.selectedFormat,
-      taskName: task.taskName,
-      displayName: task.displayName,
-      hasFile: task.hasFile,
-      fileName: task.fileName,
-      status: task.status,
-      result: task.result,
-      error: task.error,
-      timestamp: task.createdAt,
-      completedAt: task.completedAt,
-      user: task.user,
-      isTaskCompletion: task.status === 'completed' && task.result,
-      mode: 'task'
-    }));
-
-    // Convert history to unified format
-    const unifiedHistory = commentHistory.map((entry, index) => ({
-      id: `history_${entry.timestamp}_${index}`, // ✅ More unique ID
-      type: entry.mode || 'email',
-      text: entry.text,
-      comment: entry.text,
-      outputFormat: entry.outputFormat,
-      selectedFormat: entry.selectedFormat,
-      taskName: entry.taskName,
-      displayName: entry.displayName,
-      hasFile: entry.hasFile,
-      fileName: entry.fileName,
-      status: entry.isTaskCompletion ? 'completed' : 'sent',
-      result: entry.result,
-      timestamp: entry.timestamp,
-      user: entry.user,
-      isTaskCompletion: entry.isTaskCompletion,
-      mode: entry.mode,
-      originalIndex: index // ✅ Keep track of original position for deletion
-    }));
-
-    // Combine and sort by timestamp (newest first)
-    const combined = [...unifiedTasks, ...unifiedHistory]
-      .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-
-    return combined;
-  };
-const sortUnifiedRequests = (requests) => {
-  const statusPriority = {
-    'processing': 1,
-    'queued': 2,
-    'completed': 3,
-    'sent': 4,
-    'failed': 5,
-    'unknown': 6
-  };
-  
-  return requests.sort((a, b) => {
-    const stateA = getRequestState(a);
-    const stateB = getRequestState(b);
-    
-    // First sort by status priority
-    const priorityDiff = statusPriority[stateA.status] - statusPriority[stateB.status];
-    if (priorityDiff !== 0) return priorityDiff;
-    
-    // Then by timestamp (newest first)
-    return new Date(b.timestamp) - new Date(a.timestamp);
-  });
-};
-
-const getRequestDisplayName = (request) => {
-  // ⭐ Enhanced priority logic
-  if (request.taskName && request.taskName.trim()) {
-    return request.taskName.trim();
-  }
-  
-  if (request.displayName && request.displayName.trim()) {
-    return request.displayName.trim();
-  }
-  
-  // Generate from format selection
-  if (request.selectedFormat) {
-    const formatOption = formatOptions.find(f => f.value === request.selectedFormat);
-    if (formatOption && formatOption.label !== 'Select format...') {
-      return `${formatOption.label} Request`;
-    }
-  }
-  
-  // Generate from output format
-  if (request.outputFormat && request.outputFormat.trim() && request.outputFormat !== 'Select format...') {
-    return request.outputFormat.trim();
-  }
-  
-  // ⭐ SMARTER: Generate from comment text
-  if (request.text || request.comment) {
-    const text = (request.text || request.comment).trim();
-    
-    // Look for action words at the start
-    const actionPatterns = [
-      /^(create|write|generate|make|build|draft|compose)\s+(.+)/i,
-      /^(analyze|review|check|examine|evaluate)\s+(.+)/i,
-      /^(summarize|summary of|sum up)\s+(.+)/i,
-      /^(list|show|display)\s+(.+)/i
-    ];
-    
-    for (const pattern of actionPatterns) {
-      const match = text.match(pattern);
-      if (match) {
-        const action = match[1].toLowerCase();
-        const object = match[2].split(/[.,!?]/)[0].trim(); // Stop at punctuation
-        const shortObject = object.length > 25 ? object.substring(0, 25) + '...' : object;
-        
-        // Capitalize first letter of action
-        const capitalizedAction = action.charAt(0).toUpperCase() + action.slice(1);
-        return `${capitalizedAction} ${shortObject}`;
-      }
-    }
-    
-    // Fallback: First few words
-    const words = text.split(' ').slice(0, 4).join(' ');
-    return words.length > 30 ? words.substring(0, 30) + '...' : words;
-  }
-  
-  // Final fallbacks
-  if (request.mode === 'email' || request.type === 'email') {
-    return 'Email Request';
-  }
-  
-  return 'General Request';
-};
-
-  // ✅ FIXED: Action handlers
+  // ✅ Action handlers
   const clearAllRequests = async () => {
     if (!confirm('Delete all requests? This cannot be undone.')) return;
     
@@ -884,37 +780,6 @@ const getRequestDisplayName = (request) => {
       setStatus('Clear failed');
     }
   };
-
-const StatusBadge = ({ state, size = 'md' }) => {
-  const badgeStyle = {
-    display: 'inline-flex',
-    alignItems: 'center',
-    padding: size === 'sm' ? '2px 6px' : '4px 8px',
-    borderRadius: theme.borderRadius.sm,
-    fontSize: size === 'sm' ? theme.fontSize.xs : theme.fontSize.sm,
-    fontWeight: '500',
-    background: `${state.color}15`,
-    border: `1px solid ${state.color}`,
-    color: state.color
-  };
-  
-  return (
-    <div style={badgeStyle}>
-      {state.showSpinner && (
-        <div style={{ 
-          width: '8px', 
-          height: '8px', 
-          marginRight: '6px',
-          border: `1px solid ${state.color}`,
-          borderTop: '1px solid transparent',
-          borderRadius: '50%',
-          animation: 'spin 1s linear infinite'
-        }} />
-      )}
-      {state.label}
-    </div>
-  );
-};
 
   const deleteRequest = async (request) => {
     try {
@@ -1672,7 +1537,12 @@ const StatusBadge = ({ state, size = 'md' }) => {
                   status: result.status, 
                   result: result.data, 
                   completedAt: result.completedAt,
-                  error: result.error 
+                  error: result.error,
+                  // ✅ NEW: Update task name from webhook if available
+                  ...(result.metadata?.taskName && {
+                    taskName: result.metadata.taskName,
+                    displayName: result.metadata.taskName
+                  })
                 }
               : task
           );
@@ -1760,7 +1630,8 @@ const StatusBadge = ({ state, size = 'md' }) => {
     return combinedText;
   };
 
-  const createCompletePayload = async (combinedInstructions, taskId = null) => {
+  // ✅ FIX 2: Enhanced createCompletePayload with taskName parameter and better structure
+  const createCompletePayload = async (combinedInstructions, taskId = null, taskName = null) => {
     const timestamp = new Date().toISOString();
     const callbackUrl = taskId ? `${window.location.origin}/.netlify/functions/task-completion-webhook` : null;
     
@@ -1822,13 +1693,23 @@ const StatusBadge = ({ state, size = 'md' }) => {
       email: context.teammate.email
     } : null;
     
+    console.log('📤 TASK NAME IN PAYLOAD CREATION:', taskName);
+    
     return {
       airops_request: {
         combined_instructions: combinedInstructions,
+        // ⭐ ADD TASK NAME TO MULTIPLE LOCATIONS FOR COMPATIBILITY
+        taskName: taskName,
+        task_name: taskName,
+        displayName: taskName,
+        display_name: taskName,
+        
         output_format: {
           selected_format: selectedFormat,
           format_label: selectedFormat ? formatOptions.find(f => f.value === selectedFormat)?.label : null,
-          raw_instructions: comment
+          raw_instructions: comment,
+          taskName: taskName, // ⭐ Also here
+          task_name: taskName  // ⭐ Also here
         },
         attachment: uploadedFile ? {
           name: uploadedFile.name,
@@ -1842,6 +1723,8 @@ const StatusBadge = ({ state, size = 'md' }) => {
           timestamp: timestamp,
           plugin_context: context?.type,
           task_id: taskId,
+          taskName: taskName, // ⭐ Also here
+          task_name: taskName, // ⭐ Also here
           callback_url: callbackUrl,
           conversation_id: context?.conversation?.id,
           requesting_user_id: context?.teammate?.id
@@ -2163,6 +2046,7 @@ const StatusBadge = ({ state, size = 'md' }) => {
     }
   };
 
+  // ✅ FIX 3: Enhanced processRequest with proper task name generation and logging
   const processRequest = async () => {
     const now = Date.now();
     if (isProcessingRef.current || (now - lastCallTimeRef.current) < 1000) {
@@ -2182,42 +2066,62 @@ const StatusBadge = ({ state, size = 'md' }) => {
     try {
       const taskId = mode === 'task' ? `task_${Date.now()}_${Math.random().toString(36).substr(2, 9)}` : null;
       
+      // ⭐ ENHANCED: Generate taskName FIRST using the helper function
+      const taskName = generateTaskName(comment, selectedFormat, outputFormat, formatOptions, mode);
+      
+      console.log('🏷️ TASK NAME GENERATED:', taskName); // ⭐ DEBUG LOG
+      
       const combinedInstructions = createCombinedInstructions();
-      const payload = await createCompletePayload(combinedInstructions, taskId);
+      const payload = await createCompletePayload(combinedInstructions, taskId, taskName); // ⭐ Pass taskName
+      
+      console.log('📤 FINAL PAYLOAD WITH TASK NAME:', {
+        taskName: taskName,
+        payloadTaskName: payload.airops_request.taskName,
+        payloadTaskNameAlt: payload.airops_request.task_name,
+        requestInfoTaskName: payload.airops_request.request_info.taskName
+      }); // ⭐ DEBUG LOG
       
       if (context?.conversation) {
         const conversationId = context.conversation.id;
         
-        // Save history entry
+        // ⭐ ENHANCED: Save history entry with taskName
         const newEntry = {
           text: comment,
           mode: mode,
           outputFormat: outputFormat,
           selectedFormat: selectedFormat,
+          taskName: taskName, // ⭐ ADD TASK NAME
+          displayName: taskName, // ⭐ ADD DISPLAY NAME
           hasFile: !!uploadedFile,
           fileName: uploadedFile?.name,
           timestamp: new Date().toISOString(),
           user: context.teammate ? context.teammate.name : 'Unknown user'
         };
         
+        console.log('📚 HISTORY ENTRY WITH TASK NAME:', newEntry); // ⭐ DEBUG LOG
+        
         const historySaved = await saveHistoryToNetlify(conversationId, newEntry);
         if (historySaved) {
           setCommentHistory([newEntry, ...commentHistory]);
         }
 
-        // Create and save task if in task mode
+        // ⭐ ENHANCED: Create and save task with taskName if in task mode
         if (mode === 'task' && taskId) {
           const newTask = {
             id: taskId,
             comment: comment,
             outputFormat: outputFormat,
             selectedFormat: selectedFormat,
+            taskName: taskName, // ⭐ ADD TASK NAME
+            displayName: taskName, // ⭐ ADD DISPLAY NAME
             hasFile: !!uploadedFile,
             fileName: uploadedFile?.name,
             status: 'pending',
             createdAt: new Date().toISOString(),
             user: context.teammate ? context.teammate.name : 'Unknown user'
           };
+          
+          console.log('📝 COMPLETE TASK OBJECT WITH NAME:', newTask); // ⭐ DEBUG LOG
           
           const updatedTasks = [newTask, ...taskResults];
           setTaskResults(updatedTasks);
@@ -2241,6 +2145,14 @@ const StatusBadge = ({ state, size = 'md' }) => {
       }
       
       const webhookUrl = mode === 'email' ? EMAIL_WEBHOOK_URL : TASK_WEBHOOK_URL;
+      
+      console.log('📤 SENDING TO WEBHOOK:', webhookUrl); // ⭐ DEBUG LOG
+      console.log('📤 PAYLOAD SUMMARY:', {
+        taskName: payload.airops_request.taskName,
+        taskId: taskId,
+        mode: mode,
+        instructionsLength: combinedInstructions.length
+      }); // ⭐ DEBUG LOG
       
       const response = await fetch(webhookUrl, {
         method: 'POST',
@@ -2295,8 +2207,8 @@ const StatusBadge = ({ state, size = 'md' }) => {
 
   // ✅ Get combined requests
   const unifiedRequests = sortUnifiedRequests(
-  combineRequestsAndTasks(taskResults, commentHistory)
-);
+    combineRequestsAndTasks(taskResults, commentHistory)
+  );
 
   if (!context) {
     return (

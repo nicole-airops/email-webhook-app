@@ -69,6 +69,13 @@ const taskName =
     console.log('- payload.metadata?.taskName:', payload.metadata?.taskName);
     console.log('- payload.taskName:', payload.taskName);
     console.log('- Final taskName:', taskName);
+
+    // 🎯 ADD THIS NEW LINE RIGHT HERE:
+console.log('🏷️ TASK NAME EXTRACTION SUCCESS:', {
+  found: !!taskName,
+  source: taskName ? 'metadata.task_name' : 'not found',
+  value: taskName
+});
     
     // Extract other data
     const status = payload.status || 'completed';
