@@ -53,14 +53,13 @@ export default async (request, context) => {
     console.log('- payload.request_info?.conversation_id:', payload.request_info?.conversation_id);
     console.log('- Final conversationId:', conversationId);
     
-    // ✅ NEW: Multiple strategies to extract task name
-    const taskName = payload.metadata?.task_name || 
-                     payload.task_name ||
-                     payload.originalPayload?.metadata?.task_name ||
-                     payload.debug?.originalPayload?.metadata?.task_name ||
-                     payload.metadata?.taskName ||
-                     payload.taskName ||
-                     null;
+    // ✅ Fixed (checks where AirOps actually puts it)
+const taskName = 
+  payload.metadata?.task_name ||    // ⭐ AirOps step_161 puts it here
+  payload.metadata?.taskName ||     // ⭐ Alternative format
+  payload.taskName ||               // Fallback
+  payload.task_name ||              // Fallback
+  null;
     
     console.log('🔍 AIROPS WEBHOOK: Task name extraction attempts:');
     console.log('- payload.metadata?.task_name:', payload.metadata?.task_name);
@@ -289,4 +288,68 @@ export default async (request, context) => {
       }
     });
   }
+};
+const debugTaskNameExtraction = (payload) => {
+  console.log('🔍 TASK NAME DEBUG: Full payload structure:');
+  console.log(JSON.stringify(payload, null, 2));
+  
+  // Check ALL possible locations for task name
+  const possibleLocations = [
+    'payload.taskName',
+    'payload.task_name', 
+    'payload.metadata?.task_name',
+    'payload.metadata?.taskName',
+    'payload.request_info?.task_name',
+    'payload.airops_request?.task_name',
+    'payload.airops_request?.metadata?.task_name',
+    'payload.airops_response?.task_name',
+    'payload.output?.task_name',
+    'payload.result?.task_name',
+    'payload.data?.task_name',
+    'payload.execution?.task_name',
+    'payload.job?.task_name',
+    'payload.workflow?.task_name'
+  ];
+  
+  console.log('🔍 TASK NAME DEBUG: Checking all possible locations:');
+  possibleLocations.forEach(path => {
+    const value = getNestedValue(payload, path);
+    console.log(`- ${path}: ${value}`);
+  });
+  
+  // Also check for any field containing "task" or "name"
+  const allKeys = getAllKeys(payload);
+  const taskRelatedKeys = allKeys.filter(key => 
+    key.toLowerCase().includes('task') || 
+    key.toLowerCase().includes('name')
+  );
+  
+  console.log('🔍 TASK NAME DEBUG: All task/name related keys:', taskRelatedKeys);
+};
+
+const getNestedValue = (obj, path) => {
+  try {
+    return path.split('.').reduce((current, key) => {
+      if (key.includes('?')) {
+        const cleanKey = key.replace('?', '');
+        return current?.[cleanKey];
+      }
+      return current[key];
+    }, obj);
+  } catch {
+    return undefined;
+  }
+};
+
+const getAllKeys = (obj, prefix = '') => {
+  let keys = [];
+  for (const key in obj) {
+    const fullKey = prefix ? `${prefix}.${key}` : key;
+    keys.push(fullKey);
+    
+    if (typeof obj[key] === 'object' && obj[key] !== null && !Array.isArray(obj[key])) {
+      keys = keys.concat(getAllKeys(obj[key], fullKey));
+    }
+  }
+  return keys;
 };
