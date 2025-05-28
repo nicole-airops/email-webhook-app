@@ -2792,26 +2792,6 @@ function App() {
         {/* Debug buttons */}
         <div style={{ display: 'flex', gap: theme.spacing.xs }}>
           <button
-            onClick={debugDeletion}
-            style={{
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              padding: theme.spacing.xs,
-              borderRadius: theme.borderRadius.sm,
-              color: theme.colors.tertiary,
-              fontSize: theme.fontSize.lg,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}
-            onMouseEnter={(e) => e.target.style.color = theme.colors.error}
-            onMouseLeave={(e) => e.target.style.color = theme.colors.tertiary}
-            title="Debug deletion (check console)"
-          >
-            🗑️
-          </button>
-          <button
             onClick={debugHistoryAPI}
             style={{
               background: 'none',
