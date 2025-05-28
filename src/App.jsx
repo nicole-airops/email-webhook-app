@@ -165,6 +165,9 @@ function App() {
   const [taskResults, setTaskResults] = useState([]);
   const [pollingTasks, setPollingTasks] = useState(new Set());
   const [expandedRequests, setExpandedRequests] = useState(new Set()); 
+  // ✅ NEW: Hierarchical expansion states
+  const [expandedInputs, setExpandedInputs] = useState(new Set());
+  const [expandedOutputs, setExpandedOutputs] = useState(new Set());
   
   // Compact auto-resize state
   const [cardSize, setCardSize] = useState({ width: 244, height: 360 });
@@ -376,12 +379,51 @@ function App() {
     return 'General Request';
   };
 
-  // ✅ FIXED: UnifiedRequestCard component
+  // ✅ FIXED: Enhanced UnifiedRequestCard with hierarchical toggles
   const UnifiedRequestCard = ({ request, onDelete, onCopy, onInsert, onView }) => {
     const isExpanded = expandedRequests.has(request.id);
+    const isInputExpanded = expandedInputs.has(request.id);
+    const isOutputExpanded = expandedOutputs.has(request.id);
     
-    const toggleExpansion = () => {
+    const toggleMainExpansion = () => {
       setExpandedRequests(prev => {
+        const newSet = new Set(prev);
+        if (newSet.has(request.id)) {
+          newSet.delete(request.id);
+          // Also collapse sub-sections when main card collapses
+          setExpandedInputs(prev => {
+            const newInputSet = new Set(prev);
+            newInputSet.delete(request.id);
+            return newInputSet;
+          });
+          setExpandedOutputs(prev => {
+            const newOutputSet = new Set(prev);
+            newOutputSet.delete(request.id);
+            return newOutputSet;
+          });
+        } else {
+          newSet.add(request.id);
+        }
+        return newSet;
+      });
+    };
+
+    const toggleInputExpansion = (e) => {
+      e.stopPropagation();
+      setExpandedInputs(prev => {
+        const newSet = new Set(prev);
+        if (newSet.has(request.id)) {
+          newSet.delete(request.id);
+        } else {
+          newSet.add(request.id);
+        }
+        return newSet;
+      });
+    };
+
+    const toggleOutputExpansion = (e) => {
+      e.stopPropagation();
+      setExpandedOutputs(prev => {
         const newSet = new Set(prev);
         if (newSet.has(request.id)) {
           newSet.delete(request.id);
@@ -404,7 +446,7 @@ function App() {
       }}>
         {/* Request Header */}
         <div 
-          onClick={toggleExpansion}
+          onClick={toggleMainExpansion}
           style={{ 
             display: 'flex', 
             alignItems: 'center', 
@@ -468,7 +510,7 @@ function App() {
             </div>
           </div>
           
-          {/* Action buttons in header */}
+          {/* Header action buttons */}
           <div 
             style={{ display: 'flex', alignItems: 'center', gap: theme.spacing.xs }}
             onClick={(e) => e.stopPropagation()}
@@ -481,55 +523,30 @@ function App() {
                   background: theme.colors.accent,
                   border: `1px solid ${theme.colors.accent}`,
                   cursor: 'pointer',
-                  padding: `${theme.spacing.sm} ${theme.spacing.md}`,
-                  borderRadius: theme.borderRadius.md,
+                  padding: `${theme.spacing.xs} ${theme.spacing.sm}`,
+                  borderRadius: theme.borderRadius.sm,
                   color: 'white',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   fontSize: theme.fontSize.xs,
-                  fontWeight: '600',
+                  fontWeight: '500',
                   transition: 'all 0.2s ease',
                   boxShadow: theme.shadows.sm,
-                  minWidth: '60px'
+                  minWidth: '50px'
                 }}
                 onMouseEnter={(e) => {
                   e.target.style.background = '#5855eb';
                   e.target.style.transform = 'translateY(-1px)';
-                  e.target.style.boxShadow = theme.shadows.md;
                 }}
                 onMouseLeave={(e) => {
                   e.target.style.background = theme.colors.accent;
                   e.target.style.transform = 'translateY(0)';
-                  e.target.style.boxShadow = theme.shadows.sm;
                 }}
                 title="Insert into draft"
               >
                 <InsertIcon size={theme.iconSize.sm} color="white" style={{ marginRight: theme.spacing.xs }} />
                 Insert
-              </button>
-            )}
-            
-            {/* View button for completed requests */}
-            {(request.result && state.status === 'completed') && (
-              <button
-                onClick={() => onView(request)}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  padding: theme.spacing.xs,
-                  borderRadius: theme.borderRadius.sm,
-                  color: theme.colors.tertiary,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center'
-                }}
-                onMouseEnter={(e) => e.target.style.color = theme.colors.info}
-                onMouseLeave={(e) => e.target.style.color = theme.colors.tertiary}
-                title="View result"
-              >
-                <ViewIcon size={theme.iconSize.md} color="currentColor" />
               </button>
             )}
             
@@ -556,165 +573,167 @@ function App() {
           </div>
         </div>
 
-        {/* Expanded Content */}
+        {/* Expanded Content with Sub-toggles */}
         {isExpanded && (
           <div style={{ 
             paddingLeft: theme.spacing.lg,
             animation: 'fadeIn 0.2s ease-out'
           }}>
-            {/* Original Request */}
-            <div style={{
-              background: theme.colors.surface,
-              border: `1px solid ${theme.colors.border}`,
-              borderRadius: theme.borderRadius.sm,
-              padding: theme.spacing.sm,
-              marginBottom: theme.spacing.sm
-            }}>
-              <div style={{ 
-                fontSize: theme.fontSize.xs, 
-                color: theme.colors.tertiary, 
-                marginBottom: theme.spacing.xs,
-                fontWeight: '600'
-              }}>
-                Original Request:
-              </div>
-              <div style={{ color: theme.colors.secondary, fontSize: theme.fontSize.sm }}>
-                {request.text || request.comment}
-              </div>
-              {request.outputFormat && (
+            {/* Original Request Section */}
+            <div style={{ marginBottom: theme.spacing.sm }}>
+              <div 
+                onClick={toggleInputExpansion}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  cursor: 'pointer',
+                  padding: `${theme.spacing.xs} 0`,
+                  marginBottom: theme.spacing.xs
+                }}
+              >
                 <div style={{ 
-                  marginTop: theme.spacing.xs,
+                  marginRight: theme.spacing.sm,
+                  transform: isInputExpanded ? 'rotate(90deg)' : 'rotate(0deg)',
+                  transition: 'transform 0.2s ease',
                   fontSize: theme.fontSize.xs,
-                  color: theme.colors.tertiary 
+                  color: theme.colors.tertiary
                 }}>
-                  Format: {request.outputFormat}
+                  ▶
+                </div>
+                <div style={{ 
+                  fontSize: theme.fontSize.sm, 
+                  color: theme.colors.secondary, 
+                  fontWeight: '600'
+                }}>
+                  Original Request
+                </div>
+              </div>
+
+              {isInputExpanded && (
+                <div style={{
+                  background: theme.colors.surface,
+                  border: `1px solid ${theme.colors.border}`,
+                  borderRadius: theme.borderRadius.sm,
+                  padding: theme.spacing.sm,
+                  marginLeft: theme.spacing.lg
+                }}>
+                  <div style={{ color: theme.colors.secondary, fontSize: theme.fontSize.sm }}>
+                    {request.text || request.comment}
+                  </div>
+                  {request.outputFormat && (
+                    <div style={{ 
+                      marginTop: theme.spacing.xs,
+                      fontSize: theme.fontSize.xs,
+                      color: theme.colors.tertiary 
+                    }}>
+                      Format: {request.outputFormat}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
 
-            {/* Result (if available) */}
+            {/* Result Section */}
             {(request.result && state.status === 'completed') && (
               <div>
-                <div style={{
-                  background: theme.colors.surface,
-                  border: `1px solid ${state.color}`,
-                  borderRadius: theme.borderRadius.sm,
-                  padding: theme.spacing.sm,
-                  marginBottom: theme.spacing.sm,
-                  maxHeight: '200px',
-                  overflowY: 'auto'
-                }}>
+                <div 
+                  onClick={toggleOutputExpansion}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    cursor: 'pointer',
+                    padding: `${theme.spacing.xs} 0`,
+                    marginBottom: theme.spacing.xs
+                  }}
+                >
                   <div style={{ 
-                    fontSize: theme.fontSize.xs, 
+                    marginRight: theme.spacing.sm,
+                    transform: isOutputExpanded ? 'rotate(90deg)' : 'rotate(0deg)',
+                    transition: 'transform 0.2s ease',
+                    fontSize: theme.fontSize.xs,
+                    color: theme.colors.tertiary
+                  }}>
+                    ▶
+                  </div>
+                  <div style={{ 
+                    fontSize: theme.fontSize.sm, 
                     color: state.color, 
-                    marginBottom: theme.spacing.xs,
                     fontWeight: '600'
                   }}>
-                    Result:
+                    Result
                   </div>
-                  <div 
-                    dangerouslySetInnerHTML={{ __html: request.result }}
-                    style={{ 
-                      color: theme.colors.primary,
-                      fontSize: theme.fontSize.result,
-                      lineHeight: '1.5'
-                    }}
-                  />
-                </div>
-                
-                {/* Expanded action buttons */}
-                <div style={{ 
-                  display: 'flex', 
-                  gap: theme.spacing.sm,
-                  flexWrap: 'wrap'
-                }}>
-                  <button
-                    onClick={() => onCopy(request.result)}
-                    style={{
-                      padding: `${theme.spacing.sm} ${theme.spacing.lg}`,
-                      fontSize: theme.fontSize.sm,
-                      minHeight: 'auto',
-                      display: 'flex',
-                      alignItems: 'center',
-                      background: theme.colors.background,
-                      border: `1px solid ${theme.colors.border}`,
-                      borderRadius: theme.borderRadius.sm,
-                      cursor: 'pointer',
-                      color: theme.colors.secondary,
-                      transition: 'all 0.2s ease'
-                    }}
-                    onMouseEnter={(e) => {
-                      e.target.style.borderColor = theme.colors.borderHover;
-                      e.target.style.backgroundColor = theme.colors.surface;
-                    }}
-                    onMouseLeave={(e) => {
-                      e.target.style.borderColor = theme.colors.border;
-                      e.target.style.backgroundColor = theme.colors.background;
-                    }}
-                  >
-                    <CopyIcon size={theme.iconSize.sm} style={{ marginRight: theme.spacing.xs }} />
-                    Copy
-                  </button>
-                  
-                  {/* Prominent expanded insert button */}
-                  <button
-                    onClick={() => onInsert(request.result)}
-                    style={{
-                      padding: `${theme.spacing.lg} ${theme.spacing.xl}`,
-                      fontSize: theme.fontSize.base,
-                      fontWeight: '600',
-                      minHeight: 'auto',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      background: `linear-gradient(135deg, ${theme.colors.accent}, ${theme.colors.info})`,
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: theme.borderRadius.lg,
-                      cursor: 'pointer',
-                      transition: 'all 0.2s ease',
-                      boxShadow: theme.shadows.md,
-                      position: 'relative',
-                      overflow: 'hidden'
-                    }}
-                    onMouseEnter={(e) => {
-                      e.target.style.transform = 'translateY(-2px) scale(1.02)';
-                      e.target.style.boxShadow = theme.shadows.lg;
-                      e.target.style.background = `linear-gradient(135deg, ${theme.colors.info}, ${theme.colors.accent})`;
-                    }}
-                    onMouseLeave={(e) => {
-                      e.target.style.transform = 'translateY(0) scale(1)';
-                      e.target.style.boxShadow = theme.shadows.md;
-                      e.target.style.background = `linear-gradient(135deg, ${theme.colors.accent}, ${theme.colors.info})`;
-                    }}
-                  >
-                    <InsertIcon 
-                      size={theme.iconSize.md} 
-                      color="white" 
-                      style={{ marginRight: theme.spacing.sm }} 
-                    />
-                    <span style={{ 
-                      textShadow: '0 1px 2px rgba(0,0,0,0.2)',
-                      letterSpacing: '0.5px'
-                    }}>
-                      Insert into Draft
-                    </span>
-                    
-                    {/* Shine effect */}
-                    <div
+                  {/* Quick action buttons next to Result header */}
+                  <div style={{ marginLeft: 'auto', display: 'flex', gap: theme.spacing.xs }}>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onCopy(request.result);
+                      }}
                       style={{
-                        position: 'absolute',
-                        top: 0,
-                        left: '-100%',
-                        width: '100%',
-                        height: '100%',
-                        background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent)',
-                        animation: 'shine 3s infinite',
-                        pointerEvents: 'none'
+                        background: 'none',
+                        border: 'none',
+                        cursor: 'pointer',
+                        padding: theme.spacing.xs,
+                        borderRadius: theme.borderRadius.sm,
+                        color: theme.colors.tertiary,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}
+                      onMouseEnter={(e) => e.target.style.color = theme.colors.secondary}
+                      onMouseLeave={(e) => e.target.style.color = theme.colors.tertiary}
+                      title="Copy result"
+                    >
+                      <CopyIcon size={theme.iconSize.sm} />
+                    </button>
+                    
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onInsert(request.result);
+                      }}
+                      style={{
+                        background: theme.colors.accent,
+                        border: 'none',
+                        cursor: 'pointer',
+                        padding: `${theme.spacing.xs} ${theme.spacing.sm}`,
+                        borderRadius: theme.borderRadius.sm,
+                        color: 'white',
+                        display: 'flex',
+                        alignItems: 'center',
+                        fontSize: theme.fontSize.xs,
+                        fontWeight: '500'
+                      }}
+                      onMouseEnter={(e) => e.target.style.background = '#5855eb'}
+                      onMouseLeave={(e) => e.target.style.background = theme.colors.accent}
+                      title="Insert into draft"
+                    >
+                      <InsertIcon size={theme.iconSize.sm} color="white" style={{ marginRight: theme.spacing.xs }} />
+                      Insert
+                    </button>
+                  </div>
+                </div>
+
+                {isOutputExpanded && (
+                  <div style={{
+                    background: theme.colors.surface,
+                    border: `1px solid ${state.color}`,
+                    borderRadius: theme.borderRadius.sm,
+                    padding: theme.spacing.sm,
+                    marginLeft: theme.spacing.lg,
+                    maxHeight: '300px',
+                    overflowY: 'auto'
+                  }}>
+                    <div 
+                      dangerouslySetInnerHTML={{ __html: request.result }}
+                      style={{ 
+                        color: theme.colors.primary,
+                        fontSize: theme.fontSize.result,
+                        lineHeight: '1.5'
                       }}
                     />
-                  </button>
-                </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -764,8 +783,10 @@ function App() {
         clearHistory()
       ]);
       
-      // Clear expansion state
+      // Clear all expansion states
       setExpandedRequests(new Set());
+      setExpandedInputs(new Set());
+      setExpandedOutputs(new Set());
       setStatus('All requests cleared');
     } catch (error) {
       console.error('❌ Error clearing requests:', error);
@@ -774,30 +795,79 @@ function App() {
   };
 
   const deleteRequest = async (request) => {
+    console.log('🗑️ DELETING REQUEST:', {
+      id: request.id,
+      type: request.type,
+      hasOriginalIndex: request.originalIndex !== undefined,
+      originalIndex: request.originalIndex
+    });
+
     try {
       if (request.type === 'task') {
         await deleteTask(request.id);
       } else {
-        // Use originalIndex if available, otherwise find by matching properties
-        const historyIndex = request.originalIndex !== undefined ? 
-          request.originalIndex :
-          commentHistory.findIndex(entry => 
-            entry.timestamp === request.timestamp && 
-            entry.user === request.user &&
-            entry.text === request.text
-          );
+        // ✅ ENHANCED: Better history matching logic
+        let historyIndex = -1;
         
-        if (historyIndex !== -1) {
+        if (request.originalIndex !== undefined) {
+          // Use originalIndex if available
+          historyIndex = request.originalIndex;
+          console.log('🗑️ Using originalIndex:', historyIndex);
+        } else {
+          // Fallback: Find by matching properties
+          historyIndex = commentHistory.findIndex((entry, index) => {
+            const match = entry.timestamp === request.timestamp && 
+                         entry.user === request.user &&
+                         entry.text === request.text;
+            console.log(`🗑️ Checking index ${index}:`, {
+              timestampMatch: entry.timestamp === request.timestamp,
+              userMatch: entry.user === request.user,
+              textMatch: entry.text === request.text,
+              overallMatch: match
+            });
+            return match;
+          });
+          console.log('🗑️ Found historyIndex via search:', historyIndex);
+        }
+        
+        if (historyIndex !== -1 && historyIndex < commentHistory.length) {
+          console.log('🗑️ Deleting history entry at index:', historyIndex);
           await deleteHistoryEntry(historyIndex);
+        } else {
+          console.error('🗑️ Could not find history entry to delete:', {
+            historyIndex,
+            historyLength: commentHistory.length,
+            request: {
+              timestamp: request.timestamp,
+              user: request.user,
+              textPreview: request.text?.substring(0, 50)
+            }
+          });
+          setStatus('❌ Could not locate entry to delete');
+          return;
         }
       }
       
-      // Remove from expansion state
+      // Remove from all expansion states
       setExpandedRequests(prev => {
         const newSet = new Set(prev);
         newSet.delete(request.id);
         return newSet;
       });
+      
+      setExpandedInputs(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(request.id);
+        return newSet;
+      });
+      
+      setExpandedOutputs(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(request.id);
+        return newSet;
+      });
+      
+      console.log('✅ Request deleted successfully');
       
     } catch (error) {
       console.error('❌ Error deleting request:', error);
@@ -1331,6 +1401,25 @@ const manualRefresh = async () => {
       if (response.ok) {
         setTaskResults([]);
         setPollingTasks(new Set());
+        
+        // Clear all expansion states for tasks
+        const taskIds = taskResults.map(task => task.id);
+        setExpandedRequests(prev => {
+          const newSet = new Set(prev);
+          taskIds.forEach(id => newSet.delete(id));
+          return newSet;
+        });
+        setExpandedInputs(prev => {
+          const newSet = new Set(prev);
+          taskIds.forEach(id => newSet.delete(id));
+          return newSet;
+        });
+        setExpandedOutputs(prev => {
+          const newSet = new Set(prev);
+          taskIds.forEach(id => newSet.delete(id));
+          return newSet;
+        });
+        
         setStatus('Tasks cleared');
       }
     } catch (error) {
@@ -1465,6 +1554,25 @@ const manualRefresh = async () => {
         console.log(`✅ AIROPS CLEAR ALL: API success:`, result);
         
         setCommentHistory([]);
+        
+        // Clear all expansion states for history entries
+        const historyIds = commentHistory.map((_, index) => `history_${commentHistory[index].timestamp}_${index}`);
+        setExpandedRequests(prev => {
+          const newSet = new Set(prev);
+          historyIds.forEach(id => newSet.delete(id));
+          return newSet;
+        });
+        setExpandedInputs(prev => {
+          const newSet = new Set(prev);
+          historyIds.forEach(id => newSet.delete(id));
+          return newSet;
+        });
+        setExpandedOutputs(prev => {
+          const newSet = new Set(prev);
+          historyIds.forEach(id => newSet.delete(id));
+          return newSet;
+        });
+        
         setStatus('✅ All history cleared');
         console.log(`✅ AIROPS CLEAR ALL: Local state cleared`);
         
@@ -1502,6 +1610,24 @@ const manualRefresh = async () => {
           newSet.delete(taskId);
           return newSet;
         });
+        
+        // Clear from all expansion states
+        setExpandedRequests(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(taskId);
+          return newSet;
+        });
+        setExpandedInputs(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(taskId);
+          return newSet;
+        });
+        setExpandedOutputs(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(taskId);
+          return newSet;
+        });
+        
         setStatus('Task deleted');
       }
     } catch (error) {
@@ -1570,9 +1696,8 @@ const checkTaskStatus = async (taskId) => {
         console.log(`✅ TASK UPDATED: ${taskId} status=${result.status}`);
         setTaskResults(updatedTasks);
         
-        if (result.status === 'completed') {
-          setExpandedRequests(prev => new Set([...prev, taskId]));
-        }
+        // ✅ REMOVED: Auto-expansion for completed tasks
+        // Tasks stay minimized by default
         
         if (context?.conversation?.id) {
           await saveTaskResultsToNetlify(context.conversation.id, updatedTasks);
@@ -1859,14 +1984,8 @@ const checkTaskStatus = async (taskId) => {
         if (tasks && Array.isArray(tasks)) {
           setTaskResults(tasks);
           
-          const completedTaskIds = tasks.filter(task => task.status === 'completed').map(task => task.id);
-          if (completedTaskIds.length > 0) {
-            setExpandedRequests(prev => {
-              const newSet = new Set(prev);
-              completedTaskIds.forEach(taskId => newSet.add(taskId));
-              return newSet;
-            });
-          }
+          // ✅ REMOVED: Auto-expansion for completed tasks
+          // All requests now start minimized by default
           
           const pendingTasks = tasks.filter(task => task.status === 'pending').map(task => task.id);
           if (pendingTasks.length > 0) {
