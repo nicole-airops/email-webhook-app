@@ -3133,28 +3133,6 @@ function App() {
             >
               <div style={{ marginLeft: '-2px', marginRight: '-2px' }}>
                 {/* Helper text for deletion - subtle and compact */}
-                {unifiedRequests.length > 0 && (
-                  <div style={{
-                    padding: `${theme.spacing.xs} ${theme.spacing.sm}`,
-                    background: `${theme.colors.info}06`,
-                    border: `1px solid ${theme.colors.info}20`,
-                    borderRadius: theme.borderRadius.sm,
-                    marginBottom: theme.spacing.xs,
-                    fontSize: theme.fontSize.xs,
-                    color: theme.colors.secondary,
-                    textAlign: 'center',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: theme.spacing.xs,
-                    opacity: 0.8
-                  }}>
-                    <span style={{ fontSize: '10px' }}>💡</span>
-                    <span style={{ fontSize: theme.fontSize.xs }}>Hold Shift +</span>
-                    <TrashIcon size={10} color={theme.colors.secondary} />
-                    <span style={{ fontSize: theme.fontSize.xs }}>to test deletion</span>
-                  </div>
-                )}
                 
                 {unifiedRequests.length > 0 ? (
                   unifiedRequests.slice(0, 15).map((request) => (
