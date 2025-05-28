@@ -171,7 +171,7 @@ function App() {
   const [expandedOutputs, setExpandedOutputs] = useState(new Set());
   
   // Compact auto-resize state
-  const [cardSize, setCardSize] = useState({ width: 244, height: 360 });
+  const [cardSize, setCardSize] = useState({ width: 344, height: 360 });
   const [isResizing, setIsResizing] = useState(false);
   const [textareaHeight, setTextareaHeight] = useState(65);
   const [isTextareaResizing, setIsTextareaResizing] = useState(false);
