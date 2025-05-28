@@ -170,12 +170,12 @@ function App() {
   const [expandedInputs, setExpandedInputs] = useState(new Set());
   const [expandedOutputs, setExpandedOutputs] = useState(new Set());
   
-  // Compact auto-resize state
-  const [cardSize, setCardSize] = useState({ width: 344, height: 360 });
-  const [isResizing, setIsResizing] = useState(false);
-  const [textareaHeight, setTextareaHeight] = useState(65);
-  const [isTextareaResizing, setIsTextareaResizing] = useState(false);
-  const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
+const [cardSize, setCardSize] = useState({ width: 320, height: 400 }); // Increased from 244 to 320
+const [isResizing, setIsResizing] = useState(false);
+const [resizeType, setResizeType] = useState(''); // 'corner', 'right', 'bottom', 'left', 'top'
+const [textareaHeight, setTextareaHeight] = useState(65);
+const [isTextareaResizing, setIsTextareaResizing] = useState(false);
+const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
   
   // Refs for functionality
   const isProcessingRef = useRef(false);
@@ -183,6 +183,86 @@ function App() {
   const fileInputRef = useRef(null);
   const cardRef = useRef(null);
   const textareaContainerRef = useRef(null);
+
+  const getResizeType = (e, cardRect) => {
+  const { clientX, clientY } = e;
+  const { left, top, right, bottom } = cardRect;
+  
+  const edgeThreshold = 8; // pixels from edge to trigger resize
+  const cornerThreshold = 16; // pixels for corner resize area
+  
+  const nearLeft = clientX - left < edgeThreshold;
+  const nearRight = right - clientX < edgeThreshold;
+  const nearTop = clientY - top < edgeThreshold;
+  const nearBottom = bottom - clientY < edgeThreshold;
+  
+  const inCornerZone = (
+    (clientX - left < cornerThreshold || right - clientX < cornerThreshold) &&
+    (clientY - top < cornerThreshold || bottom - clientY < cornerThreshold)
+  );
+  
+  if (inCornerZone) {
+    if (nearTop && nearLeft) return 'nw-resize';
+    if (nearTop && nearRight) return 'ne-resize';
+    if (nearBottom && nearLeft) return 'sw-resize';
+    if (nearBottom && nearRight) return 'se-resize';
+  }
+  
+  if (nearRight) return 'e-resize';
+  if (nearLeft) return 'w-resize';
+  if (nearBottom) return 's-resize';
+  if (nearTop) return 'n-resize';
+  
+  return null;
+};
+
+// ✅ ENHANCED: Card mouse handlers for background resize
+const handleCardMouseMove = (e) => {
+  if (isResizing || isTextareaResizing) return;
+  
+  const cardRect = cardRef.current?.getBoundingClientRect();
+  if (!cardRect) return;
+  
+  const resizeType = getResizeType(e, cardRect);
+  
+  if (resizeType) {
+    e.target.style.cursor = resizeType;
+  } else {
+    e.target.style.cursor = '';
+  }
+};
+
+const handleCardMouseDown = (e) => {
+  // Don't interfere with other interactive elements
+  if (e.target.tagName === 'BUTTON' || 
+      e.target.tagName === 'INPUT' || 
+      e.target.tagName === 'TEXTAREA' || 
+      e.target.tagName === 'SELECT' ||
+      e.target.closest('button') ||
+      e.target.closest('input') ||
+      e.target.closest('textarea') ||
+      e.target.closest('select')) {
+    return;
+  }
+  
+  const cardRect = cardRef.current?.getBoundingClientRect();
+  if (!cardRect) return;
+  
+  const resizeType = getResizeType(e, cardRect);
+  
+  if (resizeType) {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsResizing(true);
+    setResizeType(resizeType);
+  }
+};
+
+const handleCardMouseLeave = () => {
+  if (!isResizing) {
+    cardRef.current.style.cursor = '';
+  }
+};
   
   // WEBHOOK URLs
   const EMAIL_WEBHOOK_URL = 'https://app.airops.com/public_api/airops_apps/f124518f-2185-4e62-9520-c6ff0fc3fcb0/webhook_async_execute?auth_token=pxaMrQO7aOUSOXe6gSiLNz4cF1r-E9fOS4E378ws12BBD8SPt-OIVu500KEh';
@@ -225,13 +305,14 @@ function App() {
       lg: '6px'
     },
     fontSize: {
-      xs: `${Math.max(9, Math.min(11, cardSize.width / 32))}px`,
-      sm: `${Math.max(10, Math.min(12, cardSize.width / 28))}px`,
-      base: `${Math.max(11, Math.min(13, cardSize.width / 25))}px`,
-      lg: `${Math.max(12, Math.min(14, cardSize.width / 22))}px`,
-      xl: `${Math.max(13, Math.min(15, cardSize.width / 20))}px`,
-      result: `${Math.max(12, Math.min(14, cardSize.width / 22))}px`
-    },
+  // ✅ ENHANCED: Better scaling for wider cards (320px base instead of 244px)
+  xs: `${Math.max(9, Math.min(11, cardSize.width / 35))}px`,
+  sm: `${Math.max(10, Math.min(12, cardSize.width / 30))}px`,
+  base: `${Math.max(11, Math.min(13, cardSize.width / 28))}px`,
+  lg: `${Math.max(12, Math.min(14, cardSize.width / 25))}px`,
+  xl: `${Math.max(13, Math.min(15, cardSize.width / 23))}px`,
+  result: `${Math.max(12, Math.min(14, cardSize.width / 25))}px`
+},
     iconSize: {
       sm: Math.max(8, Math.min(12, cardSize.width / 28)),
       md: Math.max(10, Math.min(14, cardSize.width / 25)),
@@ -1284,61 +1365,82 @@ function App() {
   }, []);
 
   // ✅ Resize handling
-  useEffect(() => {
-    const handleMouseMove = (e) => {
-      if (isResizing && !isTextareaResizing) {
-        const cardRect = cardRef.current?.getBoundingClientRect();
-        if (!cardRect) return;
-        
-        const newWidth = e.clientX - cardRect.left;
-        const newHeight = e.clientY - cardRect.top;
-        
-        const minWidth = 220;
-        const maxWidth = 600;
-        const minHeight = 300;
-        const maxHeight = 800;
-        
-        const constrainedWidth = Math.max(minWidth, Math.min(maxWidth, newWidth));
-        const constrainedHeight = Math.max(minHeight, Math.min(maxHeight, newHeight));
-        
-        setCardSize({ width: constrainedWidth, height: constrainedHeight });
+useEffect(() => {
+  const handleMouseMove = (e) => {
+    if (isTextareaResizing) {
+      const rect = textareaContainerRef.current?.getBoundingClientRect();
+      if (rect) {
+        const newHeight = Math.max(35, Math.min(200, e.clientY - rect.top));
+        setTextareaHeight(newHeight);
+      }
+      return;
+    }
+    
+    if (isResizing && resizeType) {
+      const cardRect = cardRef.current?.getBoundingClientRect();
+      if (!cardRect) return;
+      
+      const minWidth = 240;
+      const maxWidth = 600;
+      const minHeight = 300;
+      const maxHeight = 800;
+      
+      let newWidth = cardSize.width;
+      let newHeight = cardSize.height;
+      
+      // Handle different resize types
+      if (resizeType.includes('e')) { // East (right)
+        newWidth = Math.max(minWidth, Math.min(maxWidth, e.clientX - cardRect.left));
+      }
+      if (resizeType.includes('w')) { // West (left)
+        const deltaX = cardRect.left - e.clientX;
+        newWidth = Math.max(minWidth, Math.min(maxWidth, cardSize.width + deltaX));
+      }
+      if (resizeType.includes('s')) { // South (bottom)
+        newHeight = Math.max(minHeight, Math.min(maxHeight, e.clientY - cardRect.top));
+      }
+      if (resizeType.includes('n')) { // North (top)
+        const deltaY = cardRect.top - e.clientY;
+        newHeight = Math.max(minHeight, Math.min(maxHeight, cardSize.height + deltaY));
       }
       
-      if (isTextareaResizing) {
-        const rect = textareaContainerRef.current?.getBoundingClientRect();
-        if (rect) {
-          const newHeight = Math.max(35, Math.min(200, e.clientY - rect.top));
-          setTextareaHeight(newHeight);
-        }
-      }
-    };
-
-    const handleMouseUp = () => {
-      setIsResizing(false);
-      setIsTextareaResizing(false);
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-      document.body.style.pointerEvents = '';
-    };
-
-    if (isResizing || isTextareaResizing) {
-      document.addEventListener('mousemove', handleMouseMove);
-      document.addEventListener('mouseup', handleMouseUp);
-      document.addEventListener('mouseleave', handleMouseUp);
-      document.body.style.cursor = isTextareaResizing ? 'ns-resize' : 'nw-resize';
-      document.body.style.userSelect = 'none';
-      document.body.style.pointerEvents = 'none';
+      setCardSize({ width: newWidth, height: newHeight });
     }
+  };
 
-    return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-      document.removeEventListener('mouseleave', handleMouseUp);
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-      document.body.style.pointerEvents = '';
-    };
-  }, [isResizing, isTextareaResizing]);
+  const handleMouseUp = () => {
+    setIsResizing(false);
+    setResizeType('');
+    setIsTextareaResizing(false);
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+    document.body.style.pointerEvents = '';
+  };
+
+  if (isResizing || isTextareaResizing) {
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+    document.addEventListener('mouseleave', handleMouseUp);
+    
+    if (isTextareaResizing) {
+      document.body.style.cursor = 'ns-resize';
+    } else if (resizeType) {
+      document.body.style.cursor = resizeType;
+    }
+    
+    document.body.style.userSelect = 'none';
+    document.body.style.pointerEvents = 'none';
+  }
+
+  return () => {
+    document.removeEventListener('mousemove', handleMouseMove);
+    document.removeEventListener('mouseup', handleMouseUp);
+    document.removeEventListener('mouseleave', handleMouseUp);
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+    document.body.style.pointerEvents = '';
+  };
+}, [isResizing, resizeType, isTextareaResizing, cardSize]);
 
   const handleCardResizeStart = (e) => {
     e.preventDefault();
@@ -1368,43 +1470,43 @@ function App() {
   }, [context]);
 
   // ✅ Manual refresh
-const manualRefresh = async () => {
-  if (!context?.conversation?.id) {
-    console.log('❌ AIROPS REFRESH: No conversation ID');
-    setStatus('No conversation context');
-    return;
-  }
-
-  console.log('🔄 AIROPS REFRESH: Manual refresh triggered for conversation:', context.conversation.id);
-  setStatus('Refreshing...');
-  
-  try {
-    // Load history and tasks from storage
-    await Promise.all([
-      loadHistoryFromNetlify(context.conversation.id),
-      loadTaskResultsFromNetlify(context.conversation.id)
-    ]);
-    
-    // ✅ NEW: Also check status of any currently polling tasks
-    if (pollingTasks.size > 0) {
-      console.log(`🔄 REFRESH: Also checking ${pollingTasks.size} polling tasks...`);
-      setStatus('Refreshing + checking tasks...');
-      
-      const tasksToCheck = Array.from(pollingTasks);
-      for (const taskId of tasksToCheck) {
-        await checkTaskStatus(taskId);
-        // Small delay to avoid overwhelming the API
-        await new Promise(resolve => setTimeout(resolve, 100));
-      }
+  const manualRefresh = async () => {
+    if (!context?.conversation?.id) {
+      console.log('❌ AIROPS REFRESH: No conversation ID');
+      setStatus('No conversation context');
+      return;
     }
+
+    console.log('🔄 AIROPS REFRESH: Manual refresh triggered for conversation:', context.conversation.id);
+    setStatus('Refreshing...');
     
-    setStatus('Refreshed!');
-    console.log('✅ AIROPS REFRESH: Manual refresh completed');
-  } catch (error) {
-    console.error('❌ AIROPS REFRESH: Failed:', error);
-    setStatus('Refresh failed');
-  }
-};
+    try {
+      // Load history and tasks from storage
+      await Promise.all([
+        loadHistoryFromNetlify(context.conversation.id),
+        loadTaskResultsFromNetlify(context.conversation.id)
+      ]);
+      
+      // ✅ NEW: Also check status of any currently polling tasks
+      if (pollingTasks.size > 0) {
+        console.log(`🔄 REFRESH: Also checking ${pollingTasks.size} polling tasks...`);
+        setStatus('Refreshing + checking tasks...');
+        
+        const tasksToCheck = Array.from(pollingTasks);
+        for (const taskId of tasksToCheck) {
+          await checkTaskStatus(taskId);
+          // Small delay to avoid overwhelming the API
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+      }
+      
+      setStatus('Refreshed!');
+      console.log('✅ AIROPS REFRESH: Manual refresh completed');
+    } catch (error) {
+      console.error('❌ AIROPS REFRESH: Failed:', error);
+      setStatus('Refresh failed');
+    }
+  };
 
   // ✅ ENHANCED: Comprehensive deletion debugging
   const debugDeletion = async () => {
@@ -1499,113 +1601,107 @@ const manualRefresh = async () => {
     
     setStatus('Deletion debug complete - check console');
   };
+
+  // Add this function to your main component, near the other debug functions
+  const debugHistoryAPI = async () => {
     console.log('🧪 HISTORY API DEBUG: Testing history operations');
     
     if (!context?.conversation?.id) {
       console.error('❌ HISTORY DEBUG: No conversation ID');
       return;
     }
-   // Add this function to your main component, near the other debug functions
-
-const debugHistoryAPI = async () => {
-  console.log('🧪 HISTORY API DEBUG: Testing history operations');
-  
-  if (!context?.conversation?.id) {
-    console.error('❌ HISTORY DEBUG: No conversation ID');
-    return;
-  }
-  
-  const conversationId = context.conversation.id;
-  console.log('🧪 HISTORY DEBUG: Conversation ID:', conversationId);
-  console.log('🧪 HISTORY DEBUG: Current history length:', commentHistory.length);
-  
-  // Test 1: Load current history
-  try {
-    console.log('🧪 TEST 1: Loading current history...');
-    const loadResponse = await fetch(`/.netlify/functions/get-conversation-history?conversationId=${conversationId}`);
-    console.log('🧪 TEST 1: Load response status:', loadResponse.status);
     
-    if (loadResponse.ok) {
-      const loadData = await loadResponse.json();
-      console.log('🧪 TEST 1: ✅ Current history from API:', {
-        length: loadData.history?.length || 0,
-        firstEntry: loadData.history?.[0] || null
+    const conversationId = context.conversation.id;
+    console.log('🧪 HISTORY DEBUG: Conversation ID:', conversationId);
+    console.log('🧪 HISTORY DEBUG: Current history length:', commentHistory.length);
+    
+    // Test 1: Load current history
+    try {
+      console.log('🧪 TEST 1: Loading current history...');
+      const loadResponse = await fetch(`/.netlify/functions/get-conversation-history?conversationId=${conversationId}`);
+      console.log('🧪 TEST 1: Load response status:', loadResponse.status);
+      
+      if (loadResponse.ok) {
+        const loadData = await loadResponse.json();
+        console.log('🧪 TEST 1: ✅ Current history from API:', {
+          length: loadData.history?.length || 0,
+          firstEntry: loadData.history?.[0] || null
+        });
+      } else {
+        const errorText = await loadResponse.text();
+        console.error('🧪 TEST 1: ❌ Load failed:', errorText);
+      }
+    } catch (error) {
+      console.error('🧪 TEST 1: ❌ Load error:', error);
+    }
+    
+    // Test 2: Save empty history (clear test)
+    try {
+      console.log('🧪 TEST 2: Testing clear history...');
+      const clearPayload = {
+        conversationId: conversationId,
+        history: [],
+        clearAll: true
+      };
+      
+      const clearResponse = await fetch('/.netlify/functions/save-conversation-history', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(clearPayload)
       });
-    } else {
-      const errorText = await loadResponse.text();
-      console.error('🧪 TEST 1: ❌ Load failed:', errorText);
+      
+      console.log('🧪 TEST 2: Clear response status:', clearResponse.status);
+      
+      if (clearResponse.ok) {
+        const clearResult = await clearResponse.json();
+        console.log('🧪 TEST 2: ✅ Clear successful:', clearResult);
+      } else {
+        const errorText = await clearResponse.text();
+        console.error('🧪 TEST 2: ❌ Clear failed:', errorText);
+      }
+    } catch (error) {
+      console.error('🧪 TEST 2: ❌ Clear error:', error);
     }
-  } catch (error) {
-    console.error('🧪 TEST 1: ❌ Load error:', error);
-  }
-  
-  // Test 2: Save empty history (clear test)
-  try {
-    console.log('🧪 TEST 2: Testing clear history...');
-    const clearPayload = {
-      conversationId: conversationId,
-      history: [],
-      clearAll: true
-    };
     
-    const clearResponse = await fetch('/.netlify/functions/save-conversation-history', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(clearPayload)
-    });
-    
-    console.log('🧪 TEST 2: Clear response status:', clearResponse.status);
-    
-    if (clearResponse.ok) {
-      const clearResult = await clearResponse.json();
-      console.log('🧪 TEST 2: ✅ Clear successful:', clearResult);
-    } else {
-      const errorText = await clearResponse.text();
-      console.error('🧪 TEST 2: ❌ Clear failed:', errorText);
+    // Test 3: Add test entry
+    try {
+      console.log('🧪 TEST 3: Adding test entry...');
+      const testEntry = {
+        text: 'Test entry from debug',
+        mode: 'test',
+        timestamp: new Date().toISOString(),
+        user: context.teammate?.name || 'Debug User'
+      };
+      
+      const addPayload = {
+        conversationId: conversationId,
+        entry: testEntry
+      };
+      
+      const addResponse = await fetch('/.netlify/functions/save-conversation-history', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(addPayload)
+      });
+      
+      console.log('🧪 TEST 3: Add response status:', addResponse.status);
+      
+      if (addResponse.ok) {
+        const addResult = await addResponse.json();
+        console.log('🧪 TEST 3: ✅ Add successful:', addResult);
+      } else {
+        const errorText = await addResponse.text();
+        console.error('🧪 TEST 3: ❌ Add failed:', errorText);
+      }
+    } catch (error) {
+      console.error('🧪 TEST 3: ❌ Add error:', error);
     }
-  } catch (error) {
-    console.error('🧪 TEST 2: ❌ Clear error:', error);
-  }
-  
-  // Test 3: Add test entry
-  try {
-    console.log('🧪 TEST 3: Adding test entry...');
-    const testEntry = {
-      text: 'Test entry from debug',
-      mode: 'test',
-      timestamp: new Date().toISOString(),
-      user: context.teammate?.name || 'Debug User'
-    };
     
-    const addPayload = {
-      conversationId: conversationId,
-      entry: testEntry
-    };
+    // Reload data
+    await manualRefresh();
     
-    const addResponse = await fetch('/.netlify/functions/save-conversation-history', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(addPayload)
-    });
-    
-    console.log('🧪 TEST 3: Add response status:', addResponse.status);
-    
-    if (addResponse.ok) {
-      const addResult = await addResponse.json();
-      console.log('🧪 TEST 3: ✅ Add successful:', addResult);
-    } else {
-      const errorText = await addResponse.text();
-      console.error('🧪 TEST 3: ❌ Add failed:', errorText);
-    }
-  } catch (error) {
-    console.error('🧪 TEST 3: ❌ Add error:', error);
-  }
-  
-  // Reload data
-  await manualRefresh();
-  
-  setStatus('History debug complete - check console');
-};
+    setStatus('History debug complete - check console');
+  };
 
   // ✅ Clear functions
   const clearAllTasks = async () => {
@@ -1880,69 +1976,69 @@ const debugHistoryAPI = async () => {
     }
   };
 
-const checkTaskStatus = async (taskId) => {
-  try {
-    const response = await fetch(`/.netlify/functions/task-status?taskId=${taskId}`);
-    
-    if (response.ok) {
-      const result = await response.json();
+  const checkTaskStatus = async (taskId) => {
+    try {
+      const response = await fetch(`/.netlify/functions/task-status?taskId=${taskId}`);
       
-      console.log(`🔍 TASK STATUS CHECK: Task ${taskId}`, {
-        status: result.status,
-        hasResult: !!result.data,
-        taskName: result.metadata?.taskName || result.metadata?.task_name,
-        metadata: result.metadata
-      });
-      
-      if (result.status === 'completed' || result.status === 'failed') {
-        const updatedTasks = taskResults.map(task => {
-          if (task.id === taskId) {
-            const updatedTask = { 
-              ...task, 
-              status: result.status, 
-              result: result.data, 
-              completedAt: result.completedAt,
-              error: result.error,
-            };
-            
-            // ✅ ENHANCED: Update task name from webhook metadata
-            if (result.metadata?.taskName || result.metadata?.task_name) {
-              const newTaskName = result.metadata.taskName || result.metadata.task_name;
-              updatedTask.taskName = newTaskName;
-              updatedTask.displayName = newTaskName;
-              console.log(`🏷️ TASK NAME UPDATED: ${taskId} -> "${newTaskName}"`);
+      if (response.ok) {
+        const result = await response.json();
+        
+        console.log(`🔍 TASK STATUS CHECK: Task ${taskId}`, {
+          status: result.status,
+          hasResult: !!result.data,
+          taskName: result.metadata?.taskName || result.metadata?.task_name,
+          metadata: result.metadata
+        });
+        
+        if (result.status === 'completed' || result.status === 'failed') {
+          const updatedTasks = taskResults.map(task => {
+            if (task.id === taskId) {
+              const updatedTask = { 
+                ...task, 
+                status: result.status, 
+                result: result.data, 
+                completedAt: result.completedAt,
+                error: result.error,
+              };
+              
+              // ✅ ENHANCED: Update task name from webhook metadata
+              if (result.metadata?.taskName || result.metadata?.task_name) {
+                const newTaskName = result.metadata.taskName || result.metadata.task_name;
+                updatedTask.taskName = newTaskName;
+                updatedTask.displayName = newTaskName;
+                console.log(`🏷️ TASK NAME UPDATED: ${taskId} -> "${newTaskName}"`);
+              }
+              
+              return updatedTask;
             }
-            
-            return updatedTask;
+            return task;
+          });
+          
+          console.log(`✅ TASK UPDATED: ${taskId} status=${result.status}`);
+          setTaskResults(updatedTasks);
+          
+          // ✅ REMOVED: Auto-expansion for completed tasks
+          // Tasks stay minimized by default
+          
+          if (context?.conversation?.id) {
+            await saveTaskResultsToNetlify(context.conversation.id, updatedTasks);
           }
-          return task;
-        });
-        
-        console.log(`✅ TASK UPDATED: ${taskId} status=${result.status}`);
-        setTaskResults(updatedTasks);
-        
-        // ✅ REMOVED: Auto-expansion for completed tasks
-        // Tasks stay minimized by default
-        
-        if (context?.conversation?.id) {
-          await saveTaskResultsToNetlify(context.conversation.id, updatedTasks);
+          
+          setPollingTasks(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(taskId);
+            return newSet;
+          });
+          
+          setStatus(`Task ${result.status}!`);
+          return true;
         }
-        
-        setPollingTasks(prev => {
-          const newSet = new Set(prev);
-          newSet.delete(taskId);
-          return newSet;
-        });
-        
-        setStatus(`Task ${result.status}!`);
-        return true;
       }
+    } catch (error) {
+      console.error(`❌ AIROPS POLLING: Error checking task ${taskId}:`, error);
     }
-  } catch (error) {
-    console.error(`❌ AIROPS POLLING: Error checking task ${taskId}:`, error);
-  }
-  return false;
-};
+    return false;
+  };
 
   // ✅ Polling system
   useEffect(() => {
@@ -2350,167 +2446,166 @@ const checkTaskStatus = async (taskId) => {
     setStatus('📋 Copied to clipboard');
   };
 
-// ✅ ROBUST: Replace your copyToClipboard function with this version
-
-const copyToClipboard = (content) => {
-  // ✅ ENHANCED: Better HTML to Markdown conversion
-  const htmlToMarkdown = (html) => {
-    const tempDiv = document.createElement('div');
-    tempDiv.innerHTML = html;
-    
-    // Convert HTML elements to markdown
-    tempDiv.querySelectorAll('h1').forEach(h => h.replaceWith('# ' + h.textContent + '\n\n'));
-    tempDiv.querySelectorAll('h2').forEach(h => h.replaceWith('## ' + h.textContent + '\n\n'));
-    tempDiv.querySelectorAll('h3').forEach(h => h.replaceWith('### ' + h.textContent + '\n\n'));
-    tempDiv.querySelectorAll('h4').forEach(h => h.replaceWith('#### ' + h.textContent + '\n\n'));
-    tempDiv.querySelectorAll('h5').forEach(h => h.replaceWith('##### ' + h.textContent + '\n\n'));
-    tempDiv.querySelectorAll('h6').forEach(h => h.replaceWith('###### ' + h.textContent + '\n\n'));
-    
-    // Convert paragraphs
-    tempDiv.querySelectorAll('p').forEach(p => p.replaceWith(p.textContent + '\n\n'));
-    
-    // Convert line breaks
-    tempDiv.querySelectorAll('br').forEach(br => br.replaceWith('\n'));
-    
-    // Convert bold and italic
-    tempDiv.querySelectorAll('strong, b').forEach(b => b.replaceWith('**' + b.textContent + '**'));
-    tempDiv.querySelectorAll('em, i').forEach(i => i.replaceWith('*' + i.textContent + '*'));
-    
-    // Convert lists
-    tempDiv.querySelectorAll('li').forEach(li => li.replaceWith('• ' + li.textContent + '\n'));
-    tempDiv.querySelectorAll('ul, ol').forEach(list => list.replaceWith(list.textContent + '\n\n'));
-    
-    // ✅ ENHANCED: Better table conversion
-    tempDiv.querySelectorAll('table').forEach(table => {
-      let markdownTable = '';
-      const rows = table.querySelectorAll('tr');
+  // ✅ ROBUST: Replace your copyToClipboard function with this version
+  const copyToClipboard = (content) => {
+    // ✅ ENHANCED: Better HTML to Markdown conversion
+    const htmlToMarkdown = (html) => {
+      const tempDiv = document.createElement('div');
+      tempDiv.innerHTML = html;
       
-      rows.forEach((row, rowIndex) => {
-        const cells = Array.from(row.querySelectorAll('td, th')).map(cell => {
-          // Clean cell content
-          return cell.textContent.trim().replace(/\s+/g, ' ');
+      // Convert HTML elements to markdown
+      tempDiv.querySelectorAll('h1').forEach(h => h.replaceWith('# ' + h.textContent + '\n\n'));
+      tempDiv.querySelectorAll('h2').forEach(h => h.replaceWith('## ' + h.textContent + '\n\n'));
+      tempDiv.querySelectorAll('h3').forEach(h => h.replaceWith('### ' + h.textContent + '\n\n'));
+      tempDiv.querySelectorAll('h4').forEach(h => h.replaceWith('#### ' + h.textContent + '\n\n'));
+      tempDiv.querySelectorAll('h5').forEach(h => h.replaceWith('##### ' + h.textContent + '\n\n'));
+      tempDiv.querySelectorAll('h6').forEach(h => h.replaceWith('###### ' + h.textContent + '\n\n'));
+      
+      // Convert paragraphs
+      tempDiv.querySelectorAll('p').forEach(p => p.replaceWith(p.textContent + '\n\n'));
+      
+      // Convert line breaks
+      tempDiv.querySelectorAll('br').forEach(br => br.replaceWith('\n'));
+      
+      // Convert bold and italic
+      tempDiv.querySelectorAll('strong, b').forEach(b => b.replaceWith('**' + b.textContent + '**'));
+      tempDiv.querySelectorAll('em, i').forEach(i => i.replaceWith('*' + i.textContent + '*'));
+      
+      // Convert lists
+      tempDiv.querySelectorAll('li').forEach(li => li.replaceWith('• ' + li.textContent + '\n'));
+      tempDiv.querySelectorAll('ul, ol').forEach(list => list.replaceWith(list.textContent + '\n\n'));
+      
+      // ✅ ENHANCED: Better table conversion
+      tempDiv.querySelectorAll('table').forEach(table => {
+        let markdownTable = '';
+        const rows = table.querySelectorAll('tr');
+        
+        rows.forEach((row, rowIndex) => {
+          const cells = Array.from(row.querySelectorAll('td, th')).map(cell => {
+            // Clean cell content
+            return cell.textContent.trim().replace(/\s+/g, ' ');
+          });
+          
+          if (cells.length > 0) {
+            markdownTable += '| ' + cells.join(' | ') + ' |\n';
+            
+            // Add header separator after first row if it has th elements
+            if (rowIndex === 0 && row.querySelector('th')) {
+              markdownTable += '| ' + cells.map(() => '---').join(' | ') + ' |\n';
+            }
+          }
         });
         
-        if (cells.length > 0) {
-          markdownTable += '| ' + cells.join(' | ') + ' |\n';
-          
-          // Add header separator after first row if it has th elements
-          if (rowIndex === 0 && row.querySelector('th')) {
-            markdownTable += '| ' + cells.map(() => '---').join(' | ') + ' |\n';
-          }
-        }
+        table.replaceWith(markdownTable + '\n');
       });
       
-      table.replaceWith(markdownTable + '\n');
-    });
+      // Clean up extra whitespace and return
+      return tempDiv.textContent || tempDiv.innerText || html.replace(/<[^>]*>/g, '');
+    };
     
-    // Clean up extra whitespace and return
-    return tempDiv.textContent || tempDiv.innerText || html.replace(/<[^>]*>/g, '');
-  };
-  
-  const cleanContent = htmlToMarkdown(content);
-  
-  // ✅ SIMPLIFIED: Focus on the most reliable method for Front
-  const copyToClipboardReliable = (text) => {
-    // Method 1: Try the most compatible approach first
-    try {
-      const textArea = document.createElement('textarea');
-      textArea.value = text;
-      
-      // Make it invisible but selectable
-      textArea.style.position = 'fixed';
-      textArea.style.top = '0';
-      textArea.style.left = '0';
-      textArea.style.width = '2em';
-      textArea.style.height = '2em';
-      textArea.style.padding = '0';
-      textArea.style.border = 'none';
-      textArea.style.outline = 'none';
-      textArea.style.boxShadow = 'none';
-      textArea.style.background = 'transparent';
-      textArea.style.fontSize = '16px'; // Prevent zoom on iOS
-      
-      document.body.appendChild(textArea);
-      
-      // Focus and select
-      textArea.focus();
-      textArea.select();
-      textArea.setSelectionRange(0, text.length);
-      
-      // Try to copy
-      const successful = document.execCommand('copy');
-      document.body.removeChild(textArea);
-      
-      if (successful) {
-        setStatus('✅ Copied to clipboard!');
-        return true;
+    const cleanContent = htmlToMarkdown(content);
+    
+    // ✅ SIMPLIFIED: Focus on the most reliable method for Front
+    const copyToClipboardReliable = (text) => {
+      // Method 1: Try the most compatible approach first
+      try {
+        const textArea = document.createElement('textarea');
+        textArea.value = text;
+        
+        // Make it invisible but selectable
+        textArea.style.position = 'fixed';
+        textArea.style.top = '0';
+        textArea.style.left = '0';
+        textArea.style.width = '2em';
+        textArea.style.height = '2em';
+        textArea.style.padding = '0';
+        textArea.style.border = 'none';
+        textArea.style.outline = 'none';
+        textArea.style.boxShadow = 'none';
+        textArea.style.background = 'transparent';
+        textArea.style.fontSize = '16px'; // Prevent zoom on iOS
+        
+        document.body.appendChild(textArea);
+        
+        // Focus and select
+        textArea.focus();
+        textArea.select();
+        textArea.setSelectionRange(0, text.length);
+        
+        // Try to copy
+        const successful = document.execCommand('copy');
+        document.body.removeChild(textArea);
+        
+        if (successful) {
+          setStatus('✅ Copied to clipboard!');
+          return true;
+        }
+      } catch (err) {
+        console.log('Copy method 1 failed:', err);
       }
-    } catch (err) {
-      console.log('Copy method 1 failed:', err);
-    }
+      
+      // Method 2: Fallback with visible selection
+      try {
+        const textArea = document.createElement('textarea');
+        textArea.value = text;
+        textArea.style.position = 'absolute';
+        textArea.style.top = '50%';
+        textArea.style.left = '50%';
+        textArea.style.transform = 'translate(-50%, -50%)';
+        textArea.style.width = '80%';
+        textArea.style.height = '200px';
+        textArea.style.zIndex = '10000';
+        textArea.style.background = 'white';
+        textArea.style.border = '2px solid #333';
+        textArea.style.borderRadius = '4px';
+        textArea.style.padding = '10px';
+        textArea.style.fontSize = '12px';
+        textArea.style.fontFamily = 'monospace';
+        
+        document.body.appendChild(textArea);
+        textArea.select();
+        
+        // Add instructions
+        const instructions = document.createElement('div');
+        instructions.innerHTML = '<strong>Press Ctrl+C (or Cmd+C) to copy</strong>';
+        instructions.style.position = 'absolute';
+        instructions.style.top = '40%';
+        instructions.style.left = '50%';
+        instructions.style.transform = 'translate(-50%, -50%)';
+        instructions.style.background = '#333';
+        instructions.style.color = 'white';
+        instructions.style.padding = '10px';
+        instructions.style.borderRadius = '4px';
+        instructions.style.zIndex = '10001';
+        instructions.style.fontSize = '14px';
+        
+        document.body.appendChild(instructions);
+        
+        // Auto-cleanup after 5 seconds
+        setTimeout(() => {
+          if (document.body.contains(textArea)) {
+            document.body.removeChild(textArea);
+          }
+          if (document.body.contains(instructions)) {
+            document.body.removeChild(instructions);
+          }
+        }, 5000);
+        
+        setStatus('📋 Text selected - Press Ctrl+C to copy');
+        return true;
+        
+      } catch (err) {
+        console.log('Copy method 2 failed:', err);
+      }
+      
+      // Method 3: Last resort - log to console
+      console.log('📋 COPY THIS TEXT:\n' + text);
+      setStatus('❌ Copy failed - check console for text');
+      return false;
+    };
     
-    // Method 2: Fallback with visible selection
-    try {
-      const textArea = document.createElement('textarea');
-      textArea.value = text;
-      textArea.style.position = 'absolute';
-      textArea.style.top = '50%';
-      textArea.style.left = '50%';
-      textArea.style.transform = 'translate(-50%, -50%)';
-      textArea.style.width = '80%';
-      textArea.style.height = '200px';
-      textArea.style.zIndex = '10000';
-      textArea.style.background = 'white';
-      textArea.style.border = '2px solid #333';
-      textArea.style.borderRadius = '4px';
-      textArea.style.padding = '10px';
-      textArea.style.fontSize = '12px';
-      textArea.style.fontFamily = 'monospace';
-      
-      document.body.appendChild(textArea);
-      textArea.select();
-      
-      // Add instructions
-      const instructions = document.createElement('div');
-      instructions.innerHTML = '<strong>Press Ctrl+C (or Cmd+C) to copy</strong>';
-      instructions.style.position = 'absolute';
-      instructions.style.top = '40%';
-      instructions.style.left = '50%';
-      instructions.style.transform = 'translate(-50%, -50%)';
-      instructions.style.background = '#333';
-      instructions.style.color = 'white';
-      instructions.style.padding = '10px';
-      instructions.style.borderRadius = '4px';
-      instructions.style.zIndex = '10001';
-      instructions.style.fontSize = '14px';
-      
-      document.body.appendChild(instructions);
-      
-      // Auto-cleanup after 5 seconds
-      setTimeout(() => {
-        if (document.body.contains(textArea)) {
-          document.body.removeChild(textArea);
-        }
-        if (document.body.contains(instructions)) {
-          document.body.removeChild(instructions);
-        }
-      }, 5000);
-      
-      setStatus('📋 Text selected - Press Ctrl+C to copy');
-      return true;
-      
-    } catch (err) {
-      console.log('Copy method 2 failed:', err);
-    }
-    
-    // Method 3: Last resort - log to console
-    console.log('📋 COPY THIS TEXT:\n' + text);
-    setStatus('❌ Copy failed - check console for text');
-    return false;
+    copyToClipboardReliable(cleanContent);
   };
-  
-  copyToClipboardReliable(cleanContent);
-};
 
   // ✅ FIX 3: Enhanced processRequest with proper task name generation and logging
   const processRequest = async () => {
@@ -2728,10 +2823,13 @@ const copyToClipboard = (content) => {
   }
 
   return (
-    <div 
-      ref={cardRef}
-      className="airops-plugin-card"
-      style={{
+<div 
+  ref={cardRef}
+  className="airops-plugin-card"
+  onMouseMove={handleCardMouseMove}
+  onMouseDown={handleCardMouseDown}
+  onMouseLeave={handleCardMouseLeave}
+  style={{
         width: `${cardSize.width}px`,
         height: `${cardSize.height}px`,
         background: theme.colors.surface,
@@ -2745,7 +2843,7 @@ const copyToClipboard = (content) => {
         boxShadow: theme.shadows.md,
         display: 'flex',
         flexDirection: 'column',
-        minWidth: '200px',
+        minWidth: '240px',
         minHeight: '280px',
         maxWidth: '100%',
         maxHeight: '100%',
@@ -2787,14 +2885,25 @@ const copyToClipboard = (content) => {
             marginRight: theme.spacing.sm
           }}
         />
-        <span style={{
-          fontSize: theme.fontSize.lg,
-          fontWeight: '600',
-          color: theme.colors.primary,
-          flex: 1
-        }}>
-          {cardSize.width < 220 ? 'AirOps' : 'Send to AirOps'}
-        </span>
+<span style={{
+  fontSize: theme.fontSize.lg,
+  fontWeight: '600',
+  color: theme.colors.primary,
+  flex: 1,
+  position: 'relative'
+}}>
+  {cardSize.width < 280 ? 'AirOps' : 'Send to AirOps'}
+  {/* Subtle resize hint */}
+  <span style={{
+    fontSize: theme.fontSize.xs,
+    color: theme.colors.tertiary,
+    fontWeight: '400',
+    marginLeft: theme.spacing.sm,
+    opacity: 0.7
+  }}>
+    {cardSize.width >= 300 ? '• Drag edges to resize' : ''}
+  </span>
+</span>
         
         {/* Debug buttons */}
         <div style={{ display: 'flex', gap: theme.spacing.xs }}>
@@ -3124,7 +3233,7 @@ const copyToClipboard = (content) => {
           </div>
         )}
 
-        {/* ✅ FIXED: Unified Requests Section */}
+{/* ✅ FIXED: Unified Requests Section */}
         {unifiedRequests.length > 0 && (
           <Accordion expandMode="multi">
             <AccordionSection
@@ -3291,45 +3400,45 @@ const copyToClipboard = (content) => {
         )}
       </div>
 
-      {/* Card resize handle */}
-      <div
-        onMouseDown={handleCardResizeStart}
-        style={{
-          position: 'absolute',
-          bottom: '0px',
-          right: '0px',
-          width: '18px',
-          height: '18px',
-          cursor: 'nw-resize',
-          background: `linear-gradient(-45deg, transparent 30%, ${theme.colors.tertiary} 30%, ${theme.colors.tertiary} 35%, transparent 35%, transparent 65%, ${theme.colors.tertiary} 65%, ${theme.colors.tertiary} 70%, transparent 70%)`,
-          backgroundSize: '4px 4px',
-          opacity: 0.6,
-          borderRadius: `0 0 ${theme.borderRadius.lg} 0`,
-          transition: 'opacity 0.2s ease, background-color 0.2s ease',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 100
-        }}
-        onMouseEnter={(e) => {
-          e.target.style.opacity = '1.0';
-          e.target.style.background = `linear-gradient(-45deg, transparent 30%, ${theme.colors.accent} 30%, ${theme.colors.accent} 35%, transparent 35%, transparent 65%, ${theme.colors.accent} 65%, ${theme.colors.accent} 70%, transparent 70%)`;
-        }}
-        onMouseLeave={(e) => {
-          e.target.style.opacity = '0.6';
-          e.target.style.background = `linear-gradient(-45deg, transparent 30%, ${theme.colors.tertiary} 30%, ${theme.colors.tertiary} 35%, transparent 35%, transparent 65%, ${theme.colors.tertiary} 65%, ${theme.colors.tertiary} 70%, transparent 70%)`;
-        }}
-        title="Drag to resize card"
-      >
-        <div style={{
-          width: '8px',
-          height: '8px',
-          background: 'transparent',
-          border: `2px solid currentColor`,
-          borderRadius: '2px',
-          opacity: 0.8
-        }} />
-      </div>
+{/* Enhanced corner resize handle */}
+<div
+  onMouseDown={handleCardResizeStart}
+  style={{
+    position: 'absolute',
+    bottom: '0px',
+    right: '0px',
+    width: '20px', // Slightly larger
+    height: '20px',
+    cursor: 'nw-resize',
+    background: `linear-gradient(-45deg, transparent 30%, ${theme.colors.tertiary} 30%, ${theme.colors.tertiary} 35%, transparent 35%, transparent 65%, ${theme.colors.tertiary} 65%, ${theme.colors.tertiary} 70%, transparent 70%)`,
+    backgroundSize: '4px 4px',
+    opacity: 0.6,
+    borderRadius: `0 0 ${theme.borderRadius.lg} 0`,
+    transition: 'opacity 0.2s ease, background-color 0.2s ease',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 100
+  }}
+  onMouseEnter={(e) => {
+    e.target.style.opacity = '1.0';
+    e.target.style.background = `linear-gradient(-45deg, transparent 30%, ${theme.colors.accent} 30%, ${theme.colors.accent} 35%, transparent 35%, transparent 65%, ${theme.colors.accent} 65%, ${theme.colors.accent} 70%, transparent 70%)`;
+  }}
+  onMouseLeave={(e) => {
+    e.target.style.opacity = '0.6';
+    e.target.style.background = `linear-gradient(-45deg, transparent 30%, ${theme.colors.tertiary} 30%, ${theme.colors.tertiary} 35%, transparent 35%, transparent 65%, ${theme.colors.tertiary} 65%, ${theme.colors.tertiary} 70%, transparent 70%)`;
+  }}
+  title="Drag to resize card (or drag edges/corners)"
+>
+  <div style={{
+    width: '10px',
+    height: '10px',
+    background: 'transparent',
+    border: `2px solid currentColor`,
+    borderRadius: '2px',
+    opacity: 0.8
+  }} />
+</div>
     </div>
   );
 }
