@@ -170,12 +170,12 @@ function App() {
   const [expandedInputs, setExpandedInputs] = useState(new Set());
   const [expandedOutputs, setExpandedOutputs] = useState(new Set());
   
-const [cardSize, setCardSize] = useState({ width: 320, height: 400 }); // Increased from 244 to 320
-const [isResizing, setIsResizing] = useState(false);
-const [resizeType, setResizeType] = useState(''); // 'corner', 'right', 'bottom', 'left', 'top'
-const [textareaHeight, setTextareaHeight] = useState(65);
-const [isTextareaResizing, setIsTextareaResizing] = useState(false);
-const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
+  // Compact auto-resize state
+  const [cardSize, setCardSize] = useState({ width: 244, height: 360 });
+  const [isResizing, setIsResizing] = useState(false);
+  const [textareaHeight, setTextareaHeight] = useState(65);
+  const [isTextareaResizing, setIsTextareaResizing] = useState(false);
+  const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
   
   // Refs for functionality
   const isProcessingRef = useRef(false);
@@ -183,86 +183,6 @@ const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
   const fileInputRef = useRef(null);
   const cardRef = useRef(null);
   const textareaContainerRef = useRef(null);
-
-  const getResizeType = (e, cardRect) => {
-  const { clientX, clientY } = e;
-  const { left, top, right, bottom } = cardRect;
-  
-  const edgeThreshold = 8; // pixels from edge to trigger resize
-  const cornerThreshold = 16; // pixels for corner resize area
-  
-  const nearLeft = clientX - left < edgeThreshold;
-  const nearRight = right - clientX < edgeThreshold;
-  const nearTop = clientY - top < edgeThreshold;
-  const nearBottom = bottom - clientY < edgeThreshold;
-  
-  const inCornerZone = (
-    (clientX - left < cornerThreshold || right - clientX < cornerThreshold) &&
-    (clientY - top < cornerThreshold || bottom - clientY < cornerThreshold)
-  );
-  
-  if (inCornerZone) {
-    if (nearTop && nearLeft) return 'nw-resize';
-    if (nearTop && nearRight) return 'ne-resize';
-    if (nearBottom && nearLeft) return 'sw-resize';
-    if (nearBottom && nearRight) return 'se-resize';
-  }
-  
-  if (nearRight) return 'e-resize';
-  if (nearLeft) return 'w-resize';
-  if (nearBottom) return 's-resize';
-  if (nearTop) return 'n-resize';
-  
-  return null;
-};
-
-// ✅ ENHANCED: Card mouse handlers for background resize
-const handleCardMouseMove = (e) => {
-  if (isResizing || isTextareaResizing) return;
-  
-  const cardRect = cardRef.current?.getBoundingClientRect();
-  if (!cardRect) return;
-  
-  const resizeType = getResizeType(e, cardRect);
-  
-  if (resizeType) {
-    e.target.style.cursor = resizeType;
-  } else {
-    e.target.style.cursor = '';
-  }
-};
-
-const handleCardMouseDown = (e) => {
-  // Don't interfere with other interactive elements
-  if (e.target.tagName === 'BUTTON' || 
-      e.target.tagName === 'INPUT' || 
-      e.target.tagName === 'TEXTAREA' || 
-      e.target.tagName === 'SELECT' ||
-      e.target.closest('button') ||
-      e.target.closest('input') ||
-      e.target.closest('textarea') ||
-      e.target.closest('select')) {
-    return;
-  }
-  
-  const cardRect = cardRef.current?.getBoundingClientRect();
-  if (!cardRect) return;
-  
-  const resizeType = getResizeType(e, cardRect);
-  
-  if (resizeType) {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsResizing(true);
-    setResizeType(resizeType);
-  }
-};
-
-const handleCardMouseLeave = () => {
-  if (!isResizing) {
-    cardRef.current.style.cursor = '';
-  }
-};
   
   // WEBHOOK URLs
   const EMAIL_WEBHOOK_URL = 'https://app.airops.com/public_api/airops_apps/f124518f-2185-4e62-9520-c6ff0fc3fcb0/webhook_async_execute?auth_token=pxaMrQO7aOUSOXe6gSiLNz4cF1r-E9fOS4E378ws12BBD8SPt-OIVu500KEh';
@@ -305,14 +225,13 @@ const handleCardMouseLeave = () => {
       lg: '6px'
     },
     fontSize: {
-  // ✅ ENHANCED: Better scaling for wider cards (320px base instead of 244px)
-  xs: `${Math.max(9, Math.min(11, cardSize.width / 35))}px`,
-  sm: `${Math.max(10, Math.min(12, cardSize.width / 30))}px`,
-  base: `${Math.max(11, Math.min(13, cardSize.width / 28))}px`,
-  lg: `${Math.max(12, Math.min(14, cardSize.width / 25))}px`,
-  xl: `${Math.max(13, Math.min(15, cardSize.width / 23))}px`,
-  result: `${Math.max(12, Math.min(14, cardSize.width / 25))}px`
-},
+      xs: `${Math.max(9, Math.min(11, cardSize.width / 32))}px`,
+      sm: `${Math.max(10, Math.min(12, cardSize.width / 28))}px`,
+      base: `${Math.max(11, Math.min(13, cardSize.width / 25))}px`,
+      lg: `${Math.max(12, Math.min(14, cardSize.width / 22))}px`,
+      xl: `${Math.max(13, Math.min(15, cardSize.width / 20))}px`,
+      result: `${Math.max(12, Math.min(14, cardSize.width / 22))}px`
+    },
     iconSize: {
       sm: Math.max(8, Math.min(12, cardSize.width / 28)),
       md: Math.max(10, Math.min(14, cardSize.width / 25)),
@@ -1365,82 +1284,61 @@ const handleCardMouseLeave = () => {
   }, []);
 
   // ✅ Resize handling
-useEffect(() => {
-  const handleMouseMove = (e) => {
-    if (isTextareaResizing) {
-      const rect = textareaContainerRef.current?.getBoundingClientRect();
-      if (rect) {
-        const newHeight = Math.max(35, Math.min(200, e.clientY - rect.top));
-        setTextareaHeight(newHeight);
-      }
-      return;
-    }
-    
-    if (isResizing && resizeType) {
-      const cardRect = cardRef.current?.getBoundingClientRect();
-      if (!cardRect) return;
-      
-      const minWidth = 240;
-      const maxWidth = 600;
-      const minHeight = 300;
-      const maxHeight = 800;
-      
-      let newWidth = cardSize.width;
-      let newHeight = cardSize.height;
-      
-      // Handle different resize types
-      if (resizeType.includes('e')) { // East (right)
-        newWidth = Math.max(minWidth, Math.min(maxWidth, e.clientX - cardRect.left));
-      }
-      if (resizeType.includes('w')) { // West (left)
-        const deltaX = cardRect.left - e.clientX;
-        newWidth = Math.max(minWidth, Math.min(maxWidth, cardSize.width + deltaX));
-      }
-      if (resizeType.includes('s')) { // South (bottom)
-        newHeight = Math.max(minHeight, Math.min(maxHeight, e.clientY - cardRect.top));
-      }
-      if (resizeType.includes('n')) { // North (top)
-        const deltaY = cardRect.top - e.clientY;
-        newHeight = Math.max(minHeight, Math.min(maxHeight, cardSize.height + deltaY));
+  useEffect(() => {
+    const handleMouseMove = (e) => {
+      if (isResizing && !isTextareaResizing) {
+        const cardRect = cardRef.current?.getBoundingClientRect();
+        if (!cardRect) return;
+        
+        const newWidth = e.clientX - cardRect.left;
+        const newHeight = e.clientY - cardRect.top;
+        
+        const minWidth = 220;
+        const maxWidth = 600;
+        const minHeight = 300;
+        const maxHeight = 800;
+        
+        const constrainedWidth = Math.max(minWidth, Math.min(maxWidth, newWidth));
+        const constrainedHeight = Math.max(minHeight, Math.min(maxHeight, newHeight));
+        
+        setCardSize({ width: constrainedWidth, height: constrainedHeight });
       }
       
-      setCardSize({ width: newWidth, height: newHeight });
-    }
-  };
+      if (isTextareaResizing) {
+        const rect = textareaContainerRef.current?.getBoundingClientRect();
+        if (rect) {
+          const newHeight = Math.max(35, Math.min(200, e.clientY - rect.top));
+          setTextareaHeight(newHeight);
+        }
+      }
+    };
 
-  const handleMouseUp = () => {
-    setIsResizing(false);
-    setResizeType('');
-    setIsTextareaResizing(false);
-    document.body.style.cursor = '';
-    document.body.style.userSelect = '';
-    document.body.style.pointerEvents = '';
-  };
+    const handleMouseUp = () => {
+      setIsResizing(false);
+      setIsTextareaResizing(false);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      document.body.style.pointerEvents = '';
+    };
 
-  if (isResizing || isTextareaResizing) {
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
-    document.addEventListener('mouseleave', handleMouseUp);
-    
-    if (isTextareaResizing) {
-      document.body.style.cursor = 'ns-resize';
-    } else if (resizeType) {
-      document.body.style.cursor = resizeType;
+    if (isResizing || isTextareaResizing) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      document.addEventListener('mouseleave', handleMouseUp);
+      document.body.style.cursor = isTextareaResizing ? 'ns-resize' : 'nw-resize';
+      document.body.style.userSelect = 'none';
+      document.body.style.pointerEvents = 'none';
     }
-    
-    document.body.style.userSelect = 'none';
-    document.body.style.pointerEvents = 'none';
-  }
 
-  return () => {
-    document.removeEventListener('mousemove', handleMouseMove);
-    document.removeEventListener('mouseup', handleMouseUp);
-    document.removeEventListener('mouseleave', handleMouseUp);
-    document.body.style.cursor = '';
-    document.body.style.userSelect = '';
-    document.body.style.pointerEvents = '';
-  };
-}, [isResizing, resizeType, isTextareaResizing, cardSize]);
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      document.removeEventListener('mouseleave', handleMouseUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      document.body.style.pointerEvents = '';
+    };
+  }, [isResizing, isTextareaResizing]);
 
   const handleCardResizeStart = (e) => {
     e.preventDefault();
@@ -2823,13 +2721,10 @@ useEffect(() => {
   }
 
   return (
-<div 
-  ref={cardRef}
-  className="airops-plugin-card"
-  onMouseMove={handleCardMouseMove}
-  onMouseDown={handleCardMouseDown}
-  onMouseLeave={handleCardMouseLeave}
-  style={{
+    <div 
+      ref={cardRef}
+      className="airops-plugin-card"
+      style={{
         width: `${cardSize.width}px`,
         height: `${cardSize.height}px`,
         background: theme.colors.surface,
@@ -2843,7 +2738,7 @@ useEffect(() => {
         boxShadow: theme.shadows.md,
         display: 'flex',
         flexDirection: 'column',
-        minWidth: '240px',
+        minWidth: '200px',
         minHeight: '280px',
         maxWidth: '100%',
         maxHeight: '100%',
@@ -2885,25 +2780,14 @@ useEffect(() => {
             marginRight: theme.spacing.sm
           }}
         />
-<span style={{
-  fontSize: theme.fontSize.lg,
-  fontWeight: '600',
-  color: theme.colors.primary,
-  flex: 1,
-  position: 'relative'
-}}>
-  {cardSize.width < 280 ? 'AirOps' : 'Send to AirOps'}
-  {/* Subtle resize hint */}
-  <span style={{
-    fontSize: theme.fontSize.xs,
-    color: theme.colors.tertiary,
-    fontWeight: '400',
-    marginLeft: theme.spacing.sm,
-    opacity: 0.7
-  }}>
-    {cardSize.width >= 300 ? '• Drag edges to resize' : ''}
-  </span>
-</span>
+        <span style={{
+          fontSize: theme.fontSize.lg,
+          fontWeight: '600',
+          color: theme.colors.primary,
+          flex: 1
+        }}>
+          {cardSize.width < 220 ? 'AirOps' : 'Send to AirOps'}
+        </span>
         
         {/* Debug buttons */}
         <div style={{ display: 'flex', gap: theme.spacing.xs }}>
@@ -3232,7 +3116,6 @@ useEffect(() => {
             </div>
           </div>
         )}
-
 {/* ✅ FIXED: Unified Requests Section */}
         {unifiedRequests.length > 0 && (
           <Accordion expandMode="multi">
@@ -3400,45 +3283,45 @@ useEffect(() => {
         )}
       </div>
 
-{/* Enhanced corner resize handle */}
-<div
-  onMouseDown={handleCardResizeStart}
-  style={{
-    position: 'absolute',
-    bottom: '0px',
-    right: '0px',
-    width: '20px', // Slightly larger
-    height: '20px',
-    cursor: 'nw-resize',
-    background: `linear-gradient(-45deg, transparent 30%, ${theme.colors.tertiary} 30%, ${theme.colors.tertiary} 35%, transparent 35%, transparent 65%, ${theme.colors.tertiary} 65%, ${theme.colors.tertiary} 70%, transparent 70%)`,
-    backgroundSize: '4px 4px',
-    opacity: 0.6,
-    borderRadius: `0 0 ${theme.borderRadius.lg} 0`,
-    transition: 'opacity 0.2s ease, background-color 0.2s ease',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 100
-  }}
-  onMouseEnter={(e) => {
-    e.target.style.opacity = '1.0';
-    e.target.style.background = `linear-gradient(-45deg, transparent 30%, ${theme.colors.accent} 30%, ${theme.colors.accent} 35%, transparent 35%, transparent 65%, ${theme.colors.accent} 65%, ${theme.colors.accent} 70%, transparent 70%)`;
-  }}
-  onMouseLeave={(e) => {
-    e.target.style.opacity = '0.6';
-    e.target.style.background = `linear-gradient(-45deg, transparent 30%, ${theme.colors.tertiary} 30%, ${theme.colors.tertiary} 35%, transparent 35%, transparent 65%, ${theme.colors.tertiary} 65%, ${theme.colors.tertiary} 70%, transparent 70%)`;
-  }}
-  title="Drag to resize card (or drag edges/corners)"
->
-  <div style={{
-    width: '10px',
-    height: '10px',
-    background: 'transparent',
-    border: `2px solid currentColor`,
-    borderRadius: '2px',
-    opacity: 0.8
-  }} />
-</div>
+      {/* Card resize handle */}
+      <div
+        onMouseDown={handleCardResizeStart}
+        style={{
+          position: 'absolute',
+          bottom: '0px',
+          right: '0px',
+          width: '18px',
+          height: '18px',
+          cursor: 'nw-resize',
+          background: `linear-gradient(-45deg, transparent 30%, ${theme.colors.tertiary} 30%, ${theme.colors.tertiary} 35%, transparent 35%, transparent 65%, ${theme.colors.tertiary} 65%, ${theme.colors.tertiary} 70%, transparent 70%)`,
+          backgroundSize: '4px 4px',
+          opacity: 0.6,
+          borderRadius: `0 0 ${theme.borderRadius.lg} 0`,
+          transition: 'opacity 0.2s ease, background-color 0.2s ease',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 100
+        }}
+        onMouseEnter={(e) => {
+          e.target.style.opacity = '1.0';
+          e.target.style.background = `linear-gradient(-45deg, transparent 30%, ${theme.colors.accent} 30%, ${theme.colors.accent} 35%, transparent 35%, transparent 65%, ${theme.colors.accent} 65%, ${theme.colors.accent} 70%, transparent 70%)`;
+        }}
+        onMouseLeave={(e) => {
+          e.target.style.opacity = '0.6';
+          e.target.style.background = `linear-gradient(-45deg, transparent 30%, ${theme.colors.tertiary} 30%, ${theme.colors.tertiary} 35%, transparent 35%, transparent 65%, ${theme.colors.tertiary} 65%, ${theme.colors.tertiary} 70%, transparent 70%)`;
+        }}
+        title="Drag to resize card"
+      >
+        <div style={{
+          width: '8px',
+          height: '8px',
+          background: 'transparent',
+          border: `2px solid currentColor`,
+          borderRadius: '2px',
+          opacity: 0.8
+        }} />
+      </div>
     </div>
   );
 }
