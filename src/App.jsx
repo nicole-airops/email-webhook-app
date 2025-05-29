@@ -482,20 +482,13 @@ const UnifiedRequestCard = ({ request, onDelete, onInsert, onView }) => {
             marginBottom: theme.spacing.xs
           }}>
             {getRequestDisplayName(request)}
-            {request.hasFile && (
-              <AttachmentIcon 
-                size={theme.iconSize.sm} 
-                color={theme.colors.tertiary} 
-                style={{ marginLeft: theme.spacing.sm }} 
-              />
-            )}
           </div>
           
           <div style={{ 
             color: theme.colors.tertiary, 
             fontSize: theme.fontSize.sm
           }}>
-            {formatDate(request.timestamp)} • {request.user}
+            {formatDate(request.timestamp)}
           </div>
         </div>
         
@@ -893,86 +886,88 @@ const UnifiedRequestCard = ({ request, onDelete, onInsert, onView }) => {
     setStatus('🧪 Deletion test complete - check console');
   };
 
-  const deleteRequest = async (request) => {
-    console.log('🗑️ DELETING REQUEST:', {
-      id: request.id,
-      type: request.type,
-      hasOriginalIndex: request.originalIndex !== undefined,
-      originalIndex: request.originalIndex
-    });
+const deleteRequest = async (request) => {
+  console.log('🗑️ DELETING REQUEST:', {
+    id: request.id,
+    type: request.type,
+    hasOriginalIndex: request.originalIndex !== undefined,
+    originalIndex: request.originalIndex
+  });
 
-    try {
-      if (request.type === 'task') {
-        await deleteTask(request.id);
+  try {
+    let deleteSuccess = false;
+
+    // ✅ SIMPLE: Try to delete as task first (check if it exists in taskResults)
+    const taskIndex = taskResults.findIndex(task => task.id === request.id);
+    if (taskIndex !== -1) {
+      console.log('🗑️ Found as task, deleting...');
+      await deleteTask(request.id);
+      deleteSuccess = true;
+    } 
+    // ✅ SIMPLE: Otherwise try to delete as history
+    else {
+      console.log('🗑️ Not found as task, trying as history...');
+      let historyIndex = -1;
+      
+      if (request.originalIndex !== undefined) {
+        // Use originalIndex if available
+        historyIndex = request.originalIndex;
+        console.log('🗑️ Using originalIndex:', historyIndex);
       } else {
-        // ✅ ENHANCED: Better history matching logic
-        let historyIndex = -1;
-        
-        if (request.originalIndex !== undefined) {
-          // Use originalIndex if available
-          historyIndex = request.originalIndex;
-          console.log('🗑️ Using originalIndex:', historyIndex);
-        } else {
-          // Fallback: Find by matching properties
-          historyIndex = commentHistory.findIndex((entry, index) => {
-            const match = entry.timestamp === request.timestamp && 
-                         entry.user === request.user &&
-                         entry.text === request.text;
-            console.log(`🗑️ Checking index ${index}:`, {
-              timestampMatch: entry.timestamp === request.timestamp,
-              userMatch: entry.user === request.user,
-              textMatch: entry.text === request.text,
-              overallMatch: match
-            });
-            return match;
-          });
-          console.log('🗑️ Found historyIndex via search:', historyIndex);
-        }
-        
-        if (historyIndex !== -1 && historyIndex < commentHistory.length) {
-          console.log('🗑️ Deleting history entry at index:', historyIndex);
-          await deleteHistoryEntry(historyIndex);
-        } else {
-          console.error('🗑️ Could not find history entry to delete:', {
-            historyIndex,
-            historyLength: commentHistory.length,
-            request: {
-              timestamp: request.timestamp,
-              user: request.user,
-              textPreview: request.text?.substring(0, 50)
-            }
-          });
-          setStatus('❌ Could not locate entry to delete');
-          return;
-        }
+        // Fallback: Find by matching properties
+        historyIndex = commentHistory.findIndex((entry, index) => {
+          const match = entry.timestamp === request.timestamp && 
+                       entry.user === request.user &&
+                       entry.text === request.text;
+          return match;
+        });
+        console.log('🗑️ Found historyIndex via search:', historyIndex);
       }
       
-      // Remove from all expansion states
-      setExpandedRequests(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(request.id);
-        return newSet;
-      });
-      
-      setExpandedInputs(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(request.id);
-        return newSet;
-      });
-      
-      setExpandedOutputs(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(request.id);
-        return newSet;
-      });
-      
-      console.log('✅ Request deleted successfully');
-      
-    } catch (error) {
-      console.error('❌ Error deleting request:', error);
-      setStatus('Delete failed');
+      if (historyIndex !== -1 && historyIndex < commentHistory.length) {
+        console.log('🗑️ Deleting history entry at index:', historyIndex);
+        await deleteHistoryEntry(historyIndex);
+        deleteSuccess = true;
+      }
     }
-  };
+
+    if (!deleteSuccess) {
+      console.error('🗑️ Could not find entry to delete:', {
+        requestId: request.id,
+        taskResultsLength: taskResults.length,
+        historyLength: commentHistory.length
+      });
+      setStatus('❌ Could not locate entry to delete');
+      return;
+    }
+    
+    // Remove from all expansion states
+    setExpandedRequests(prev => {
+      const newSet = new Set(prev);
+      newSet.delete(request.id);
+      return newSet;
+    });
+    
+    setExpandedInputs(prev => {
+      const newSet = new Set(prev);
+      newSet.delete(request.id);
+      return newSet;
+    });
+    
+    setExpandedOutputs(prev => {
+      const newSet = new Set(prev);
+      newSet.delete(request.id);
+      return newSet;
+    });
+    
+    console.log('✅ Request deleted successfully');
+    setStatus('✅ Request deleted');
+    
+  } catch (error) {
+    console.error('❌ Error deleting request:', error);
+    setStatus('Delete failed');
+  }
+};
 
 // ✅ ENHANCED: Better HTML view window
 const viewRequestInNewWindow = (request) => {
