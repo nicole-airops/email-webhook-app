@@ -19,141 +19,46 @@ import {
   DocumentIcon,
   InsertIcon,
   CheckmarkIcon,
-  TrashIcon,
-  TrashFilledIcon
+  CrossIcon
 } from './CustomIcons';
 import './App.css';
 
-// ✅ FIX 1: Move getRequestState OUTSIDE the component to fix the error
-const getRequestState = (request) => {
-  if (request.isTaskCompletion && request.result) {
-    return { 
-      status: 'completed', 
-      color: '#22c55e',
-      label: 'Completed',
-      showSpinner: false
-    };
-  }
-  if (request.status === 'pending') {
-    return { 
-      status: 'processing', 
-      color: '#6366f1',
-      label: 'Processing',
-      showSpinner: true
-    };
-  }
-  if (request.status === 'failed') {
-    return { 
-      status: 'failed', 
-      color: '#ef4444',
-      label: 'Failed',
-      showSpinner: false
-    };
-  }
-  if (request.mode === 'email' || request.type === 'email') {
-    return { 
-      status: 'sent', 
-      color: '#3b82f6',
-      label: 'Sent',
-      showSpinner: false
-    };
-  }
-  return { 
-    status: 'completed', 
-    color: '#22c55e',
-    label: 'Completed',
-    showSpinner: false
+function App() {
+  const context = useFrontContext();
+    const getTaskDisplayName = (task) => {
+    {getTaskDisplayName(task)}
   };
-};
 
-// ✅ Enhanced task name generation helper
-const generateTaskName = (comment, selectedFormat, outputFormat, formatOptions, mode) => {
-  let taskName = '';
+const getHistoryDisplayName = (entry) => {
+  // Priority order: taskName from webhook > displayName > outputFormat based on mode > fallback
+  if (entry.taskName) {
+    return entry.taskName;
+  }
   
-  if (mode === 'email') {
+  if (entry.displayName) {
+    return entry.displayName;
+  }
+  
+  if (entry.isTaskCompletion) {
+    return entry.outputFormat || 'Task Completed';
+  }
+  
+  if (entry.mode === 'email') {
     return 'Email Request';
   }
   
-  // Priority 1: Selected format
-  if (selectedFormat && selectedFormat !== '') {
-    const formatOption = formatOptions.find(f => f.value === selectedFormat);
-    taskName = formatOption ? formatOption.label : 'Custom Format';
-    return taskName;
-  }
-  
-  // Priority 2: Output format text
-  if (outputFormat && outputFormat.trim()) {
-    return outputFormat.trim();
-  }
-  
-  // Priority 3: Smart extraction from comment
-  if (comment && comment.trim()) {
-    const text = comment.trim();
-    
-    // Look for action words at the start
-    const actionPatterns = [
-      /^(create|write|generate|make|build|draft|compose)\s+(.+)/i,
-      /^(analyze|review|check|examine|evaluate)\s+(.+)/i,
-      /^(summarize|summary of|sum up)\s+(.+)/i,
-      /^(list|show|display)\s+(.+)/i,
-      /^(update|edit|modify|change)\s+(.+)/i,
-      /^(format|convert|transform)\s+(.+)/i
-    ];
-    
-    for (const pattern of actionPatterns) {
-      const match = text.match(pattern);
-      if (match) {
-        const action = match[1].toLowerCase();
-        const object = match[2].split(/[.,!?]/)[0].trim(); // Stop at punctuation
-        const shortObject = object.length > 25 ? object.substring(0, 25) + '...' : object;
-        
-        // Capitalize first letter of action
-        const capitalizedAction = action.charAt(0).toUpperCase() + action.slice(1);
-        return `${capitalizedAction} ${shortObject}`;
+  if (entry.mode === 'task' || entry.mode === 'task_completion') {
+    if (entry.selectedFormat) {
+      const formatOption = formatOptions.find(f => f.value === entry.selectedFormat);
+      if (formatOption) {
+        return formatOption.label;
       }
     }
-    
-    // Fallback: First few words
-    const words = text.split(' ').slice(0, 4).join(' ');
-    return words.length > 30 ? words.substring(0, 30) + '...' : words;
+    return entry.outputFormat || 'Task Request';
   }
   
-  return 'General Task';
+  return 'Request';
 };
-
-function App() {
-  const context = useFrontContext();
-
-  const getHistoryDisplayName = (entry) => {
-    // Priority order: taskName from webhook > displayName > outputFormat based on mode > fallback
-    if (entry.taskName) {
-      return entry.taskName;
-    }
-    
-    if (entry.displayName) {
-      return entry.displayName;
-    }
-    
-    if (entry.isTaskCompletion) {
-      return entry.outputFormat || 'Task Completed';
-    }
-    
-    if (entry.mode === 'email') {
-      return 'Email Request';
-    }
-    
-    if (entry.mode === 'task' || entry.mode === 'task_completion') {
-      if (entry.selectedFormat) {
-        const formatOption = formatOptions.find(f => f.value === entry.selectedFormat);
-        if (formatOption) {
-          return formatOption.label;
-        }
-      }
-      return entry.outputFormat || 'Task Request';
-    }
-    
-    return 'Request';
-  };
 
   const [mode, setMode] = useState('email');
   const [comment, setComment] = useState('');
@@ -165,10 +70,8 @@ function App() {
   const [commentHistory, setCommentHistory] = useState([]);
   const [taskResults, setTaskResults] = useState([]);
   const [pollingTasks, setPollingTasks] = useState(new Set());
-  const [expandedRequests, setExpandedRequests] = useState(new Set()); 
-  // ✅ NEW: Hierarchical expansion states
-  const [expandedInputs, setExpandedInputs] = useState(new Set());
-  const [expandedOutputs, setExpandedOutputs] = useState(new Set());
+  const [expandedTasks, setExpandedTasks] = useState(new Set()); 
+  const [expandedHistory, setExpandedHistory] = useState(new Set()); 
   
   // Compact auto-resize state
   const [cardSize, setCardSize] = useState({ width: 244, height: 360 });
@@ -244,824 +147,32 @@ function App() {
     }
   };
 
-  // ✅ Helper functions
-  const combineRequestsAndTasks = (taskResults, commentHistory) => {
-    // Convert tasks to unified format
-    const unifiedTasks = taskResults.map(task => ({
-      id: task.id,
-      type: 'task',
-      text: task.comment,
-      comment: task.comment,
-      outputFormat: task.outputFormat,
-      selectedFormat: task.selectedFormat,
-      taskName: task.taskName,
-      displayName: task.displayName,
-      hasFile: task.hasFile,
-      fileName: task.fileName,
-      status: task.status,
-      result: task.result,
-      error: task.error,
-      timestamp: task.createdAt,
-      completedAt: task.completedAt,
-      user: task.user,
-      isTaskCompletion: task.status === 'completed' && task.result,
-      mode: 'task'
-    }));
-
-    // Convert history to unified format
-    const unifiedHistory = commentHistory.map((entry, index) => ({
-      id: `history_${entry.timestamp}_${index}`,
-      type: entry.mode || 'email',
-      text: entry.text,
-      comment: entry.text,
-      outputFormat: entry.outputFormat,
-      selectedFormat: entry.selectedFormat,
-      taskName: entry.taskName,
-      displayName: entry.displayName,
-      hasFile: entry.hasFile,
-      fileName: entry.fileName,
-      status: entry.isTaskCompletion ? 'completed' : 'sent',
-      result: entry.result,
-      timestamp: entry.timestamp,
-      user: entry.user,
-      isTaskCompletion: entry.isTaskCompletion,
-      mode: entry.mode,
-      originalIndex: index
-    }));
-
-    // Combine and sort by timestamp (newest first)
-    const combined = [...unifiedTasks, ...unifiedHistory]
-      .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-
-    return combined;
-  };
-
-  const sortUnifiedRequests = (requests) => {
-    const statusPriority = {
-      'processing': 1,
-      'queued': 2,
-      'completed': 3,
-      'sent': 4,
-      'failed': 5,
-      'unknown': 6
-    };
-    
-    return requests.sort((a, b) => {
-      const stateA = getRequestState(a);
-      const stateB = getRequestState(b);
-      
-      // First sort by status priority
-      const priorityDiff = statusPriority[stateA.status] - statusPriority[stateB.status];
-      if (priorityDiff !== 0) return priorityDiff;
-      
-      // Then by timestamp (newest first)
-      return new Date(b.timestamp) - new Date(a.timestamp);
+  // ✅ Toggle functions
+  const toggleTaskExpansion = (taskId) => {
+    setExpandedTasks(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(taskId)) {
+        newSet.delete(taskId);
+      } else {
+        newSet.add(taskId);
+      }
+      return newSet;
     });
   };
 
-  const getRequestDisplayName = (request) => {
-    // ⭐ Enhanced priority logic
-    if (request.taskName && request.taskName.trim()) {
-      return request.taskName.trim();
-    }
-    
-    if (request.displayName && request.displayName.trim()) {
-      return request.displayName.trim();
-    }
-    
-    // Generate from format selection
-    if (request.selectedFormat) {
-      const formatOption = formatOptions.find(f => f.value === request.selectedFormat);
-      if (formatOption && formatOption.label !== 'Select format...') {
-        return `${formatOption.label} Request`;
+  const toggleHistoryExpansion = (historyIndex) => {
+    setExpandedHistory(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(historyIndex)) {
+        newSet.delete(historyIndex);
+      } else {
+        newSet.add(historyIndex);
       }
-    }
-    
-    // Generate from output format
-    if (request.outputFormat && request.outputFormat.trim() && request.outputFormat !== 'Select format...') {
-      return request.outputFormat.trim();
-    }
-    
-    // ⭐ SMARTER: Generate from comment text
-    if (request.text || request.comment) {
-      const text = (request.text || request.comment).trim();
-      
-      // Look for action words at the start
-      const actionPatterns = [
-        /^(create|write|generate|make|build|draft|compose)\s+(.+)/i,
-        /^(analyze|review|check|examine|evaluate)\s+(.+)/i,
-        /^(summarize|summary of|sum up)\s+(.+)/i,
-        /^(list|show|display)\s+(.+)/i
-      ];
-      
-      for (const pattern of actionPatterns) {
-        const match = text.match(pattern);
-        if (match) {
-          const action = match[1].toLowerCase();
-          const object = match[2].split(/[.,!?]/)[0].trim(); // Stop at punctuation
-          const shortObject = object.length > 25 ? object.substring(0, 25) + '...' : object;
-          
-          // Capitalize first letter of action
-          const capitalizedAction = action.charAt(0).toUpperCase() + action.slice(1);
-          return `${capitalizedAction} ${shortObject}`;
-        }
-      }
-      
-      // Fallback: First few words
-      const words = text.split(' ').slice(0, 4).join(' ');
-      return words.length > 30 ? words.substring(0, 30) + '...' : words;
-    }
-    
-    // Final fallbacks
-    if (request.mode === 'email' || request.type === 'email') {
-      return 'Email Request';
-    }
-    
-    return 'General Request';
-  };
-
-  // ✅ FIXED: Enhanced UnifiedRequestCard with hierarchical toggles
-  const UnifiedRequestCard = ({ request, onDelete, onCopy, onInsert, onView }) => {
-    const isExpanded = expandedRequests.has(request.id);
-    const isInputExpanded = expandedInputs.has(request.id);
-    const isOutputExpanded = expandedOutputs.has(request.id);
-    
-    const toggleMainExpansion = () => {
-      setExpandedRequests(prev => {
-        const newSet = new Set(prev);
-        if (newSet.has(request.id)) {
-          newSet.delete(request.id);
-          // Also collapse sub-sections when main card collapses
-          setExpandedInputs(prev => {
-            const newInputSet = new Set(prev);
-            newInputSet.delete(request.id);
-            return newInputSet;
-          });
-          setExpandedOutputs(prev => {
-            const newOutputSet = new Set(prev);
-            newOutputSet.delete(request.id);
-            return newOutputSet;
-          });
-        } else {
-          newSet.add(request.id);
-        }
-        return newSet;
-      });
-    };
-
-    const toggleInputExpansion = (e) => {
-      e.stopPropagation();
-      setExpandedInputs(prev => {
-        const newSet = new Set(prev);
-        if (newSet.has(request.id)) {
-          newSet.delete(request.id);
-        } else {
-          newSet.add(request.id);
-        }
-        return newSet;
-      });
-    };
-
-    const toggleOutputExpansion = (e) => {
-      e.stopPropagation();
-      setExpandedOutputs(prev => {
-        const newSet = new Set(prev);
-        if (newSet.has(request.id)) {
-          newSet.delete(request.id);
-        } else {
-          newSet.add(request.id);
-        }
-        return newSet;
-      });
-    };
-    
-    const state = getRequestState(request);
-    
-    return (
-      <div style={{
-        background: theme.colors.background,
-        border: `1px solid ${state.color}`,
-        borderRadius: theme.borderRadius.md,
-        padding: theme.spacing.sm,
-        marginBottom: theme.spacing.xs
-      }}>
-        {/* Request Header */}
-        <div 
-          onClick={toggleMainExpansion}
-          style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            cursor: 'pointer',
-            marginBottom: theme.spacing.xs
-          }}
-        >
-          <div style={{ 
-            marginRight: theme.spacing.sm,
-            transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)',
-            transition: 'transform 0.2s ease',
-            fontSize: theme.fontSize.xs,
-            color: theme.colors.tertiary
-          }}>
-            ▶
-          </div>
-          
-          {/* Status Icon */}
-          {state.showSpinner ? (
-            <div style={{ 
-              width: `${theme.iconSize.md}px`, 
-              height: `${theme.iconSize.md}px`, 
-              marginRight: theme.spacing.sm,
-              border: `2px solid ${state.color}`,
-              borderTop: '2px solid transparent',
-              borderRadius: '50%',
-              animation: 'spin 1s linear infinite'
-            }} />
-          ) : state.status === 'completed' ? (
-            <CheckmarkIcon size={theme.iconSize.md} color={state.color} style={{ marginRight: theme.spacing.sm }} />
-          ) : state.status === 'sent' ? (
-            <EmailIcon size={theme.iconSize.md} color={state.color} style={{ marginRight: theme.spacing.sm }} />
-          ) : (
-            <WarningIcon size={theme.iconSize.md} color={state.color} style={{ marginRight: theme.spacing.sm }} />
-          )}
-          
-          {/* Request Summary */}
-          <div style={{ flex: 1 }}>
-            <div style={{ 
-              color: theme.colors.primary,
-              fontWeight: '600',
-              fontSize: theme.fontSize.sm,
-              marginBottom: '2px'
-            }}>
-              {getRequestDisplayName(request)}
-              {request.hasFile && (
-                <AttachmentIcon 
-                  size={theme.iconSize.sm} 
-                  color={theme.colors.tertiary} 
-                  style={{ marginLeft: theme.spacing.sm }} 
-                />
-              )}
-            </div>
-            
-            {/* Request Preview */}
-            <div style={{ 
-              color: theme.colors.tertiary, 
-              fontSize: theme.fontSize.xs
-            }}>
-              {formatDate(request.timestamp)} • {request.user}
-            </div>
-          </div>
-          
-          {/* Header action buttons */}
-          <div 
-            style={{ display: 'flex', alignItems: 'center', gap: theme.spacing.xs }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Quick Insert Button for completed requests */}
-            {(request.result && state.status === 'completed') && (
-              <button
-                onClick={() => onInsert(request.result)}
-                style={{
-                  background: theme.colors.accent,
-                  border: `1px solid ${theme.colors.accent}`,
-                  cursor: 'pointer',
-                  padding: `${theme.spacing.xs} ${theme.spacing.sm}`,
-                  borderRadius: theme.borderRadius.sm,
-                  color: 'white',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: theme.fontSize.xs,
-                  fontWeight: '500',
-                  transition: 'all 0.2s ease',
-                  boxShadow: theme.shadows.sm,
-                  minWidth: '50px'
-                }}
-                onMouseEnter={(e) => {
-                  e.target.style.background = '#5855eb';
-                  e.target.style.transform = 'translateY(-1px)';
-                }}
-                onMouseLeave={(e) => {
-                  e.target.style.background = theme.colors.accent;
-                  e.target.style.transform = 'translateY(0)';
-                }}
-                title="Insert into draft"
-              >
-                <InsertIcon size={theme.iconSize.sm} color="white" style={{ marginRight: theme.spacing.xs }} />
-                Insert
-              </button>
-            )}
-            
-            {/* Delete button */}
-            <button
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                // If Shift is held, test deletion instead of actually deleting
-                if (e.shiftKey) {
-                  testDeletion(request);
-                } else {
-                  onDelete(request);
-                }
-              }}
-              style={{
-                background: 'none',
-                border: 'none',
-                cursor: 'pointer',
-                padding: theme.spacing.xs,
-                borderRadius: theme.borderRadius.sm,
-                color: theme.colors.tertiary,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center'
-              }}
-              onMouseEnter={(e) => e.target.style.color = theme.colors.error}
-              onMouseLeave={(e) => e.target.style.color = theme.colors.tertiary}
-              title="Delete this request (Hold Shift to test deletion)"
-            >
-              <TrashIcon size={theme.iconSize.sm} />
-            </button>
-          </div>
-        </div>
-
-        {/* Expanded Content with Sub-toggles */}
-        {isExpanded && (
-          <div style={{ 
-            paddingLeft: theme.spacing.lg,
-            animation: 'fadeIn 0.2s ease-out'
-          }}>
-            {/* Original Request Section */}
-            <div style={{ marginBottom: theme.spacing.sm }}>
-              <div 
-                onClick={toggleInputExpansion}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  cursor: 'pointer',
-                  padding: `${theme.spacing.xs} 0`,
-                  marginBottom: theme.spacing.xs
-                }}
-              >
-                <div style={{ 
-                  marginRight: theme.spacing.sm,
-                  transform: isInputExpanded ? 'rotate(90deg)' : 'rotate(0deg)',
-                  transition: 'transform 0.2s ease',
-                  fontSize: theme.fontSize.xs,
-                  color: theme.colors.tertiary
-                }}>
-                  ▶
-                </div>
-                <div style={{ 
-                  fontSize: theme.fontSize.sm, 
-                  color: theme.colors.secondary, 
-                  fontWeight: '600'
-                }}>
-                  Original Request
-                </div>
-              </div>
-
-              {isInputExpanded && (
-                <div style={{
-                  background: theme.colors.surface,
-                  border: `1px solid ${theme.colors.border}`,
-                  borderRadius: theme.borderRadius.sm,
-                  padding: theme.spacing.sm,
-                  marginLeft: theme.spacing.lg
-                }}>
-                  <div style={{ color: theme.colors.secondary, fontSize: theme.fontSize.sm }}>
-                    {request.text || request.comment}
-                  </div>
-                  {request.outputFormat && (
-                    <div style={{ 
-                      marginTop: theme.spacing.xs,
-                      fontSize: theme.fontSize.xs,
-                      color: theme.colors.tertiary 
-                    }}>
-                      Format: {request.outputFormat}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* Result Section */}
-            {(request.result && state.status === 'completed') && (
-              <div>
-                <div 
-                  onClick={toggleOutputExpansion}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    cursor: 'pointer',
-                    padding: `${theme.spacing.xs} 0`,
-                    marginBottom: theme.spacing.xs
-                  }}
-                >
-                  <div style={{ 
-                    marginRight: theme.spacing.sm,
-                    transform: isOutputExpanded ? 'rotate(90deg)' : 'rotate(0deg)',
-                    transition: 'transform 0.2s ease',
-                    fontSize: theme.fontSize.xs,
-                    color: theme.colors.tertiary
-                  }}>
-                    ▶
-                  </div>
-                  <div style={{ 
-                    fontSize: theme.fontSize.sm, 
-                    color: state.color, 
-                    fontWeight: '600'
-                  }}>
-                    Result
-                  </div>
-                  {/* Quick action buttons next to Result header */}
-                  <div style={{ marginLeft: 'auto', display: 'flex', gap: theme.spacing.xs }}>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onView(request);
-                      }}
-                      style={{
-                        background: 'none',
-                        border: 'none',
-                        cursor: 'pointer',
-                        padding: theme.spacing.xs,
-                        borderRadius: theme.borderRadius.sm,
-                        color: theme.colors.tertiary,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center'
-                      }}
-                      onMouseEnter={(e) => e.target.style.color = theme.colors.info}
-                      onMouseLeave={(e) => e.target.style.color = theme.colors.tertiary}
-                      title="View in new window"
-                    >
-                      <ViewIcon size={theme.iconSize.sm} />
-                    </button>
-                    
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onCopy(request.result);
-                      }}
-                      style={{
-                        background: 'none',
-                        border: 'none',
-                        cursor: 'pointer',
-                        padding: theme.spacing.xs,
-                        borderRadius: theme.borderRadius.sm,
-                        color: theme.colors.tertiary,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center'
-                      }}
-                      onMouseEnter={(e) => e.target.style.color = theme.colors.secondary}
-                      onMouseLeave={(e) => e.target.style.color = theme.colors.tertiary}
-                      title="Copy result"
-                    >
-                      <CopyIcon size={theme.iconSize.sm} />
-                    </button>
-                    
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onInsert(request.result);
-                      }}
-                      style={{
-                        background: theme.colors.accent,
-                        border: 'none',
-                        cursor: 'pointer',
-                        padding: `${theme.spacing.xs} ${theme.spacing.sm}`,
-                        borderRadius: theme.borderRadius.sm,
-                        color: 'white',
-                        display: 'flex',
-                        alignItems: 'center',
-                        fontSize: theme.fontSize.xs,
-                        fontWeight: '500'
-                      }}
-                      onMouseEnter={(e) => e.target.style.background = '#5855eb'}
-                      onMouseLeave={(e) => e.target.style.background = theme.colors.accent}
-                      title="Insert into draft"
-                    >
-                      <InsertIcon size={theme.iconSize.sm} color="white" style={{ marginRight: theme.spacing.xs }} />
-                      Insert
-                    </button>
-                  </div>
-                </div>
-
-                {isOutputExpanded && (
-                  <div style={{
-                    background: theme.colors.surface,
-                    border: `1px solid ${state.color}`,
-                    borderRadius: theme.borderRadius.sm,
-                    padding: theme.spacing.sm,
-                    marginLeft: theme.spacing.lg,
-                    maxHeight: '300px',
-                    overflowY: 'auto'
-                  }}>
-                    <div 
-                      dangerouslySetInnerHTML={{ __html: request.result }}
-                      style={{ 
-                        color: theme.colors.primary,
-                        fontSize: theme.fontSize.result,
-                        lineHeight: '1.5'
-                      }}
-                    />
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Processing Message */}
-            {state.status === 'processing' && (
-              <div style={{
-                background: `${theme.colors.accent}15`,
-                border: `1px solid ${theme.colors.accent}`,
-                borderRadius: theme.borderRadius.sm,
-                padding: theme.spacing.sm,
-                color: theme.colors.accent,
-                fontSize: theme.fontSize.sm,
-                fontWeight: '500'
-              }}>
-                ⏳ Processing your request...
-              </div>
-            )}
-
-            {/* Error Message */}
-            {state.status === 'failed' && (
-              <div style={{
-                background: `${theme.colors.error}15`,
-                border: `1px solid ${theme.colors.error}`,
-                borderRadius: theme.borderRadius.sm,
-                padding: theme.spacing.sm,
-                color: theme.colors.error,
-                fontSize: theme.fontSize.sm,
-                fontWeight: '500'
-              }}>
-                ❌ Request failed: {request.error || 'Unknown error'}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  // ✅ Action handlers
-  const clearAllRequests = async () => {
-    if (!confirm('Delete all requests? This cannot be undone.')) return;
-    
-    try {
-      // Clear both tasks and history
-      await Promise.all([
-        clearAllTasks(),
-        clearHistory()
-      ]);
-      
-      // Clear all expansion states
-      setExpandedRequests(new Set());
-      setExpandedInputs(new Set());
-      setExpandedOutputs(new Set());
-      setStatus('All requests cleared');
-    } catch (error) {
-      console.error('❌ Error clearing requests:', error);
-      setStatus('Clear failed');
-    }
-  };
-
-  // ✅ ENHANCED: Test deletion without actually deleting (for debugging)
-  const testDeletion = async (request) => {
-    console.log('🧪 TEST DELETION (NO ACTUAL DELETE)');
-    console.log('=====================================');
-    console.log('🗑️ REQUEST TO DELETE:', {
-      id: request.id,
-      type: request.type,
-      hasOriginalIndex: request.originalIndex !== undefined,
-      originalIndex: request.originalIndex,
-      timestamp: request.timestamp,
-      user: request.user,
-      textPreview: request.text?.substring(0, 50)
+      return newSet;
     });
-
-    if (request.type === 'task') {
-      console.log('🗑️ TASK DELETION TEST:');
-      const taskExists = taskResults.find(task => task.id === request.id);
-      console.log('   - Task exists in taskResults:', !!taskExists);
-      console.log('   - Task index in array:', taskResults.findIndex(task => task.id === request.id));
-      if (taskExists) {
-        console.log('   - Task details:', taskExists);
-        console.log('   - ✅ Task deletion would succeed');
-      } else {
-        console.log('   - ❌ Task not found - deletion would fail');
-      }
-    } else {
-      console.log('🗑️ HISTORY DELETION TEST:');
-      console.log('   - Current history length:', commentHistory.length);
-      
-      let historyIndex = -1;
-      
-      if (request.originalIndex !== undefined) {
-        historyIndex = request.originalIndex;
-        console.log('   - Using originalIndex:', historyIndex);
-        console.log('   - Index valid:', historyIndex >= 0 && historyIndex < commentHistory.length);
-        
-        if (historyIndex >= 0 && historyIndex < commentHistory.length) {
-          const entry = commentHistory[historyIndex];
-          console.log('   - Entry at originalIndex:', {
-            timestamp: entry.timestamp,
-            user: entry.user,
-            textPreview: entry.text?.substring(0, 50)
-          });
-          console.log('   - ✅ Original index deletion would succeed');
-        } else {
-          console.log('   - ❌ Original index out of bounds');
-        }
-      } else {
-        console.log('   - No originalIndex, searching...');
-        historyIndex = commentHistory.findIndex((entry, index) => {
-          const timestampMatch = entry.timestamp === request.timestamp;
-          const userMatch = entry.user === request.user;
-          const textMatch = entry.text === request.text;
-          const overallMatch = timestampMatch && userMatch && textMatch;
-          
-          console.log(`   - Checking index ${index}:`, {
-            timestampMatch,
-            userMatch,
-            textMatch,
-            overallMatch,
-            entryTimestamp: entry.timestamp,
-            requestTimestamp: request.timestamp,
-            entryUser: entry.user,
-            requestUser: request.user
-          });
-          
-          return overallMatch;
-        });
-        
-        console.log('   - Search result index:', historyIndex);
-        
-        if (historyIndex >= 0) {
-          console.log('   - ✅ Search-based deletion would succeed');
-        } else {
-          console.log('   - ❌ No matching entry found - deletion would fail');
-          
-          // Extra debugging - show all history entries for comparison
-          console.log('   - ALL HISTORY ENTRIES FOR COMPARISON:');
-          commentHistory.forEach((entry, index) => {
-            console.log(`     [${index}]`, {
-              timestamp: entry.timestamp,
-              user: entry.user,
-              textPreview: entry.text?.substring(0, 30)
-            });
-          });
-        }
-      }
-    }
-    
-    setStatus('🧪 Deletion test complete - check console');
   };
 
-  const deleteRequest = async (request) => {
-    console.log('🗑️ DELETING REQUEST:', {
-      id: request.id,
-      type: request.type,
-      hasOriginalIndex: request.originalIndex !== undefined,
-      originalIndex: request.originalIndex
-    });
-
-    try {
-      if (request.type === 'task') {
-        await deleteTask(request.id);
-      } else {
-        // ✅ ENHANCED: Better history matching logic
-        let historyIndex = -1;
-        
-        if (request.originalIndex !== undefined) {
-          // Use originalIndex if available
-          historyIndex = request.originalIndex;
-          console.log('🗑️ Using originalIndex:', historyIndex);
-        } else {
-          // Fallback: Find by matching properties
-          historyIndex = commentHistory.findIndex((entry, index) => {
-            const match = entry.timestamp === request.timestamp && 
-                         entry.user === request.user &&
-                         entry.text === request.text;
-            console.log(`🗑️ Checking index ${index}:`, {
-              timestampMatch: entry.timestamp === request.timestamp,
-              userMatch: entry.user === request.user,
-              textMatch: entry.text === request.text,
-              overallMatch: match
-            });
-            return match;
-          });
-          console.log('🗑️ Found historyIndex via search:', historyIndex);
-        }
-        
-        if (historyIndex !== -1 && historyIndex < commentHistory.length) {
-          console.log('🗑️ Deleting history entry at index:', historyIndex);
-          await deleteHistoryEntry(historyIndex);
-        } else {
-          console.error('🗑️ Could not find history entry to delete:', {
-            historyIndex,
-            historyLength: commentHistory.length,
-            request: {
-              timestamp: request.timestamp,
-              user: request.user,
-              textPreview: request.text?.substring(0, 50)
-            }
-          });
-          setStatus('❌ Could not locate entry to delete');
-          return;
-        }
-      }
-      
-      // Remove from all expansion states
-      setExpandedRequests(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(request.id);
-        return newSet;
-      });
-      
-      setExpandedInputs(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(request.id);
-        return newSet;
-      });
-      
-      setExpandedOutputs(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(request.id);
-        return newSet;
-      });
-      
-      console.log('✅ Request deleted successfully');
-      
-    } catch (error) {
-      console.error('❌ Error deleting request:', error);
-      setStatus('Delete failed');
-    }
-  };
-
-  const viewRequestInNewWindow = (request) => {
-    const content = request.result || request.text || request.comment;
-    const title = getRequestDisplayName(request);
-    
-    const newWindow = window.open('', '_blank');
-    newWindow.document.write(`
-      <html>
-        <head>
-          <title>AirOps Request: ${title}</title>
-          <meta charset="utf-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1">
-          <style>
-            body { 
-              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
-              max-width: 1000px; 
-              margin: 20px auto; 
-              padding: 20px; 
-              line-height: 1.6; 
-              color: #0f172a;
-              background: #f8fafc;
-            }
-            .container {
-              background: white;
-              border-radius: 12px;
-              box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-              overflow: hidden;
-            }
-            .header { 
-              background: linear-gradient(135deg, #6366f1, #8b5cf6);
-              color: white;
-              padding: 24px;
-            }
-            .content { padding: 24px; }
-            .meta { 
-              color: #64748b; 
-              font-size: 14px; 
-              margin-bottom: 16px;
-              padding-bottom: 16px;
-              border-bottom: 1px solid #e2e8f0;
-            }
-          </style>
-        </head>
-        <body>
-          <div class="container">
-            <div class="header">
-              <h1>${title}</h1>
-            </div>
-            <div class="content">
-              <div class="meta">
-                Requested by ${request.user} on ${formatDate(request.timestamp)}
-                ${request.completedAt ? ` • Completed on ${formatDate(request.completedAt)}` : ''}
-              </div>
-              ${content}
-            </div>
-          </div>
-        </body>
-      </html>
-    `);
-    newWindow.document.close();
-  };
-
-  // ✅ ENHANCED: Front context debugging based on the API definitions
+  // ✅ FIXED: Enhanced Front context debugging based on the API definitions
   const comprehensiveContextDebug = async () => {
     console.log('🔍 COMPREHENSIVE FRONT CONTEXT DEBUG');
     console.log('=====================================');
@@ -1379,25 +490,10 @@ function App() {
     setStatus('Refreshing...');
     
     try {
-      // Load history and tasks from storage
       await Promise.all([
         loadHistoryFromNetlify(context.conversation.id),
         loadTaskResultsFromNetlify(context.conversation.id)
       ]);
-      
-      // ✅ NEW: Also check status of any currently polling tasks
-      if (pollingTasks.size > 0) {
-        console.log(`🔄 REFRESH: Also checking ${pollingTasks.size} polling tasks...`);
-        setStatus('Refreshing + checking tasks...');
-        
-        const tasksToCheck = Array.from(pollingTasks);
-        for (const taskId of tasksToCheck) {
-          await checkTaskStatus(taskId);
-          // Small delay to avoid overwhelming the API
-          await new Promise(resolve => setTimeout(resolve, 100));
-        }
-      }
-      
       setStatus('Refreshed!');
       console.log('✅ AIROPS REFRESH: Manual refresh completed');
     } catch (error) {
@@ -1406,200 +502,129 @@ function App() {
     }
   };
 
-  // ✅ ENHANCED: Comprehensive deletion debugging
-  const debugDeletion = async () => {
-    console.log('🔍 DELETION DEBUG: Complete analysis');
-    console.log('=====================================');
-    
-    // 1. Current state analysis
-    console.log('1. CURRENT STATE:');
-    console.log('   - Comment History Length:', commentHistory.length);
-    console.log('   - Task Results Length:', taskResults.length);
-    console.log('   - Unified Requests Length:', unifiedRequests.length);
-    console.log('   - Conversation ID:', context?.conversation?.id);
-    
-    // 2. Detailed breakdown of all requests
-    console.log('2. DETAILED REQUEST BREAKDOWN:');
-    unifiedRequests.forEach((request, index) => {
-      console.log(`   Request ${index}:`, {
-        id: request.id,
-        type: request.type,
-        hasOriginalIndex: request.originalIndex !== undefined,
-        originalIndex: request.originalIndex,
-        timestamp: request.timestamp,
-        user: request.user,
-        textPreview: request.text?.substring(0, 30) + '...'
-      });
-    });
-    
-    // 3. Raw history analysis
-    console.log('3. RAW HISTORY ANALYSIS:');
-    commentHistory.forEach((entry, index) => {
-      console.log(`   History ${index}:`, {
-        timestamp: entry.timestamp,
-        user: entry.user,
-        mode: entry.mode,
-        textPreview: entry.text?.substring(0, 30) + '...'
-      });
-    });
-    
-    // 4. Raw tasks analysis
-    console.log('4. RAW TASKS ANALYSIS:');
-    taskResults.forEach((task, index) => {
-      console.log(`   Task ${index}:`, {
-        id: task.id,
-        status: task.status,
-        user: task.user,
-        textPreview: task.comment?.substring(0, 30) + '...'
-      });
-    });
-    
-    // 5. Test deletion on first request
-    if (unifiedRequests.length > 0) {
-      const testRequest = unifiedRequests[0];
-      console.log('5. TESTING DELETION ON FIRST REQUEST:');
-      console.log('   Test Request:', testRequest);
-      
-      // Don't actually delete, just simulate the matching logic
-      if (testRequest.type === 'task') {
-        console.log('   → Would delete task with ID:', testRequest.id);
-        const taskExists = taskResults.find(task => task.id === testRequest.id);
-        console.log('   → Task exists in taskResults:', !!taskExists);
-      } else {
-        console.log('   → Would delete history entry');
-        console.log('   → originalIndex:', testRequest.originalIndex);
-        
-        // Test matching logic
-        let matchIndex = -1;
-        if (testRequest.originalIndex !== undefined) {
-          matchIndex = testRequest.originalIndex;
-          console.log('   → Using originalIndex:', matchIndex);
-        } else {
-          matchIndex = commentHistory.findIndex(entry => 
-            entry.timestamp === testRequest.timestamp && 
-            entry.user === testRequest.user &&
-            entry.text === testRequest.text
-          );
-          console.log('   → Found via search:', matchIndex);
-        }
-        
-        console.log('   → Final match index:', matchIndex);
-        console.log('   → Index valid:', matchIndex >= 0 && matchIndex < commentHistory.length);
-        
-        if (matchIndex >= 0 && matchIndex < commentHistory.length) {
-          const matchedEntry = commentHistory[matchIndex];
-          console.log('   → Matched entry:', {
-            timestamp: matchedEntry.timestamp,
-            user: matchedEntry.user,
-            textPreview: matchedEntry.text?.substring(0, 30) + '...'
-          });
-        }
-      }
-    }
-    
-    setStatus('Deletion debug complete - check console');
-  };
+// ✅ Add this debug function to your App component
 
-  // Add this function to your main component, near the other debug functions
-  const debugHistoryAPI = async () => {
-    console.log('🧪 HISTORY API DEBUG: Testing history operations');
+const debugHistoryAPI = async () => {
+  console.log('🧪 HISTORY API DEBUG: Testing history operations');
+  
+  if (!context?.conversation?.id) {
+    console.error('❌ HISTORY DEBUG: No conversation ID');
+    return;
+  }
+  
+  const conversationId = context.conversation.id;
+  console.log('🧪 HISTORY DEBUG: Conversation ID:', conversationId);
+  console.log('🧪 HISTORY DEBUG: Current history length:', commentHistory.length);
+  
+  // Test 1: Load current history
+  try {
+    console.log('🧪 TEST 1: Loading current history...');
+    const loadResponse = await fetch(`/.netlify/functions/get-conversation-history?conversationId=${conversationId}`);
+    console.log('🧪 TEST 1: Load response status:', loadResponse.status);
     
-    if (!context?.conversation?.id) {
-      console.error('❌ HISTORY DEBUG: No conversation ID');
-      return;
-    }
-    
-    const conversationId = context.conversation.id;
-    console.log('🧪 HISTORY DEBUG: Conversation ID:', conversationId);
-    console.log('🧪 HISTORY DEBUG: Current history length:', commentHistory.length);
-    
-    // Test 1: Load current history
-    try {
-      console.log('🧪 TEST 1: Loading current history...');
-      const loadResponse = await fetch(`/.netlify/functions/get-conversation-history?conversationId=${conversationId}`);
-      console.log('🧪 TEST 1: Load response status:', loadResponse.status);
-      
-      if (loadResponse.ok) {
-        const loadData = await loadResponse.json();
-        console.log('🧪 TEST 1: ✅ Current history from API:', {
-          length: loadData.history?.length || 0,
-          firstEntry: loadData.history?.[0] || null
-        });
-      } else {
-        const errorText = await loadResponse.text();
-        console.error('🧪 TEST 1: ❌ Load failed:', errorText);
-      }
-    } catch (error) {
-      console.error('🧪 TEST 1: ❌ Load error:', error);
-    }
-    
-    // Test 2: Save empty history (clear test)
-    try {
-      console.log('🧪 TEST 2: Testing clear history...');
-      const clearPayload = {
-        conversationId: conversationId,
-        history: [],
-        clearAll: true
-      };
-      
-      const clearResponse = await fetch('/.netlify/functions/save-conversation-history', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(clearPayload)
+    if (loadResponse.ok) {
+      const loadData = await loadResponse.json();
+      console.log('🧪 TEST 1: ✅ Current history from API:', {
+        length: loadData.history?.length || 0,
+        firstEntry: loadData.history?.[0] || null
       });
-      
-      console.log('🧪 TEST 2: Clear response status:', clearResponse.status);
-      
-      if (clearResponse.ok) {
-        const clearResult = await clearResponse.json();
-        console.log('🧪 TEST 2: ✅ Clear successful:', clearResult);
-      } else {
-        const errorText = await clearResponse.text();
-        console.error('🧪 TEST 2: ❌ Clear failed:', errorText);
-      }
-    } catch (error) {
-      console.error('🧪 TEST 2: ❌ Clear error:', error);
+    } else {
+      const errorText = await loadResponse.text();
+      console.error('🧪 TEST 1: ❌ Load failed:', errorText);
     }
+  } catch (error) {
+    console.error('🧪 TEST 1: ❌ Load error:', error);
+  }
+  
+  // Test 2: Save empty history (clear test)
+  try {
+    console.log('🧪 TEST 2: Testing clear history...');
+    const clearPayload = {
+      conversationId: conversationId,
+      history: [],
+      clearAll: true
+    };
     
-    // Test 3: Add test entry
-    try {
-      console.log('🧪 TEST 3: Adding test entry...');
-      const testEntry = {
-        text: 'Test entry from debug',
-        mode: 'test',
-        timestamp: new Date().toISOString(),
-        user: context.teammate?.name || 'Debug User'
-      };
-      
-      const addPayload = {
-        conversationId: conversationId,
-        entry: testEntry
-      };
-      
-      const addResponse = await fetch('/.netlify/functions/save-conversation-history', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(addPayload)
-      });
-      
-      console.log('🧪 TEST 3: Add response status:', addResponse.status);
-      
-      if (addResponse.ok) {
-        const addResult = await addResponse.json();
-        console.log('🧪 TEST 3: ✅ Add successful:', addResult);
-      } else {
-        const errorText = await addResponse.text();
-        console.error('🧪 TEST 3: ❌ Add failed:', errorText);
-      }
-    } catch (error) {
-      console.error('🧪 TEST 3: ❌ Add error:', error);
+    const clearResponse = await fetch('/.netlify/functions/save-conversation-history', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(clearPayload)
+    });
+    
+    console.log('🧪 TEST 2: Clear response status:', clearResponse.status);
+    
+    if (clearResponse.ok) {
+      const clearResult = await clearResponse.json();
+      console.log('🧪 TEST 2: ✅ Clear successful:', clearResult);
+    } else {
+      const errorText = await clearResponse.text();
+      console.error('🧪 TEST 2: ❌ Clear failed:', errorText);
     }
+  } catch (error) {
+    console.error('🧪 TEST 2: ❌ Clear error:', error);
+  }
+  
+  // Test 3: Add test entry
+  try {
+    console.log('🧪 TEST 3: Adding test entry...');
+    const testEntry = {
+      text: 'Test entry from debug',
+      mode: 'test',
+      timestamp: new Date().toISOString(),
+      user: context.teammate?.name || 'Debug User'
+    };
     
-    // Reload data
-    await manualRefresh();
+    const addPayload = {
+      conversationId: conversationId,
+      entry: testEntry
+    };
     
-    setStatus('History debug complete - check console');
-  };
+    const addResponse = await fetch('/.netlify/functions/save-conversation-history', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(addPayload)
+    });
+    
+    console.log('🧪 TEST 3: Add response status:', addResponse.status);
+    
+    if (addResponse.ok) {
+      const addResult = await addResponse.json();
+      console.log('🧪 TEST 3: ✅ Add successful:', addResult);
+    } else {
+      const errorText = await addResponse.text();
+      console.error('🧪 TEST 3: ❌ Add failed:', errorText);
+    }
+  } catch (error) {
+    console.error('🧪 TEST 3: ❌ Add error:', error);
+  }
+  
+  // Reload data
+  await manualRefresh();
+  
+  setStatus('History debug complete - check console');
+};
+
+// ✅ Add this button next to your other debug buttons:
+<button
+  onClick={debugHistoryAPI}
+  style={{
+    background: 'none',
+    border: 'none',
+    cursor: 'pointer',
+    padding: theme.spacing.xs,
+    borderRadius: theme.borderRadius.sm,
+    color: theme.colors.tertiary,
+    fontSize: theme.fontSize.lg,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center'
+  }}
+  onMouseEnter={(e) => e.target.style.color = theme.colors.warning}
+  onMouseLeave={(e) => e.target.style.color = theme.colors.tertiary}
+  title="Debug history API (check console)"
+>
+  🗑️
+</button>
 
   // ✅ Clear functions
   const clearAllTasks = async () => {
@@ -1620,25 +645,7 @@ function App() {
       if (response.ok) {
         setTaskResults([]);
         setPollingTasks(new Set());
-        
-        // Clear all expansion states for tasks
-        const taskIds = taskResults.map(task => task.id);
-        setExpandedRequests(prev => {
-          const newSet = new Set(prev);
-          taskIds.forEach(id => newSet.delete(id));
-          return newSet;
-        });
-        setExpandedInputs(prev => {
-          const newSet = new Set(prev);
-          taskIds.forEach(id => newSet.delete(id));
-          return newSet;
-        });
-        setExpandedOutputs(prev => {
-          const newSet = new Set(prev);
-          taskIds.forEach(id => newSet.delete(id));
-          return newSet;
-        });
-        
+        setExpandedTasks(new Set());
         setStatus('Tasks cleared');
       }
     } catch (error) {
@@ -1647,165 +654,163 @@ function App() {
     }
   };
 
-  // ✅ ENHANCED: Better history deletion with comprehensive debugging
-  const deleteHistoryEntry = async (entryIndex) => {
-    console.log(`🗑️ AIROPS DELETE: Starting deletion process`);
-    console.log(`🗑️ AIROPS DELETE: Entry index: ${entryIndex}`);
-    console.log(`🗑️ AIROPS DELETE: Current history length: ${commentHistory.length}`);
-    console.log(`🗑️ AIROPS DELETE: Conversation ID: ${context?.conversation?.id}`);
+// ✅ ENHANCED: Better history deletion with comprehensive debugging
+
+const deleteHistoryEntry = async (entryIndex) => {
+  console.log(`🗑️ AIROPS DELETE: Starting deletion process`);
+  console.log(`🗑️ AIROPS DELETE: Entry index: ${entryIndex}`);
+  console.log(`🗑️ AIROPS DELETE: Current history length: ${commentHistory.length}`);
+  console.log(`🗑️ AIROPS DELETE: Conversation ID: ${context?.conversation?.id}`);
+  
+  if (!context?.conversation?.id) {
+    console.error('❌ AIROPS DELETE: No conversation ID available');
+    setStatus('❌ No conversation context');
+    return;
+  }
+  
+  if (entryIndex < 0 || entryIndex >= commentHistory.length) {
+    console.error(`❌ AIROPS DELETE: Invalid index ${entryIndex} for array length ${commentHistory.length}`);
+    setStatus('❌ Invalid entry index');
+    return;
+  }
+  
+  const entryToDelete = commentHistory[entryIndex];
+  console.log(`🗑️ AIROPS DELETE: Entry to delete:`, {
+    index: entryIndex,
+    timestamp: entryToDelete.timestamp,
+    user: entryToDelete.user,
+    mode: entryToDelete.mode,
+    textLength: entryToDelete.text?.length || 0
+  });
+  
+  try {
+    // Create updated history array
+    const updatedHistory = commentHistory.filter((_, index) => index !== entryIndex);
+    console.log(`🗑️ AIROPS DELETE: Updated history length: ${updatedHistory.length}`);
     
-    if (!context?.conversation?.id) {
-      console.error('❌ AIROPS DELETE: No conversation ID available');
-      setStatus('❌ No conversation context');
-      return;
-    }
+    const payload = { 
+      conversationId: context.conversation.id, 
+      history: updatedHistory 
+    };
     
-    if (entryIndex < 0 || entryIndex >= commentHistory.length) {
-      console.error(`❌ AIROPS DELETE: Invalid index ${entryIndex} for array length ${commentHistory.length}`);
-      setStatus('❌ Invalid entry index');
-      return;
-    }
-    
-    const entryToDelete = commentHistory[entryIndex];
-    console.log(`🗑️ AIROPS DELETE: Entry to delete:`, {
-      index: entryIndex,
-      timestamp: entryToDelete.timestamp,
-      user: entryToDelete.user,
-      mode: entryToDelete.mode,
-      textLength: entryToDelete.text?.length || 0
+    console.log(`🗑️ AIROPS DELETE: API payload:`, {
+      conversationId: payload.conversationId,
+      historyLength: payload.history.length,
+      url: '/.netlify/functions/save-conversation-history'
     });
     
-    try {
-      // Create updated history array
-      const updatedHistory = commentHistory.filter((_, index) => index !== entryIndex);
-      console.log(`🗑️ AIROPS DELETE: Updated history length: ${updatedHistory.length}`);
+    // Make API call
+    const response = await fetch('/.netlify/functions/save-conversation-history', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    
+    console.log(`🗑️ AIROPS DELETE: API response status: ${response.status}`);
+    console.log(`🗑️ AIROPS DELETE: API response ok: ${response.ok}`);
+    
+    if (response.ok) {
+      const result = await response.json();
+      console.log(`✅ AIROPS DELETE: API success response:`, result);
       
-      const payload = { 
-        conversationId: context.conversation.id, 
-        history: updatedHistory 
-      };
+      // ✅ Update local state
+      setCommentHistory(updatedHistory);
+      console.log(`✅ AIROPS DELETE: Local state updated to ${updatedHistory.length} entries`);
       
-      console.log(`🗑️ AIROPS DELETE: API payload:`, {
-        conversationId: payload.conversationId,
-        historyLength: payload.history.length,
-        url: '/.netlify/functions/save-conversation-history'
-      });
-      
-      // Make API call
-      const response = await fetch('/.netlify/functions/save-conversation-history', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      
-      console.log(`🗑️ AIROPS DELETE: API response status: ${response.status}`);
-      console.log(`🗑️ AIROPS DELETE: API response ok: ${response.ok}`);
-      
-      if (response.ok) {
-        const result = await response.json();
-        console.log(`✅ AIROPS DELETE: API success response:`, result);
-        
-        // ✅ Update local state
-        setCommentHistory(updatedHistory);
-        console.log(`✅ AIROPS DELETE: Local state updated to ${updatedHistory.length} entries`);
-        
-        setStatus(`✅ Entry deleted (${updatedHistory.length} remain)`);
-        
-      } else {
-        const errorText = await response.text();
-        console.error(`❌ AIROPS DELETE: API failed - Status: ${response.status}`);
-        console.error(`❌ AIROPS DELETE: Error response:`, errorText);
-        
-        // Try to parse error details
-        try {
-          const errorJson = JSON.parse(errorText);
-          console.error(`❌ AIROPS DELETE: Error details:`, errorJson);
-        } catch (e) {
-          console.error(`❌ AIROPS DELETE: Raw error text:`, errorText);
+      // ✅ Update expanded history indices
+      setExpandedHistory(prev => {
+        const newSet = new Set();
+        for (const expandedIndex of prev) {
+          if (expandedIndex < entryIndex) {
+            newSet.add(expandedIndex);
+          } else if (expandedIndex > entryIndex) {
+            newSet.add(expandedIndex - 1);
+          }
+          // Skip the deleted index
         }
-        
-        setStatus(`❌ Delete failed (${response.status})`);
-      }
-      
-    } catch (error) {
-      console.error('❌ AIROPS DELETE: Network/JS error:', error);
-      console.error('❌ AIROPS DELETE: Error stack:', error.stack);
-      setStatus('❌ Delete failed - network error');
-    }
-  };
-
-  // ✅ ENHANCED: Clear all history with better debugging
-  const clearHistory = async () => {
-    console.log(`🗑️ AIROPS CLEAR ALL: Starting clear all process`);
-    console.log(`🗑️ AIROPS CLEAR ALL: Current history length: ${commentHistory.length}`);
-    console.log(`🗑️ AIROPS CLEAR ALL: Conversation ID: ${context?.conversation?.id}`);
-    
-    if (!context?.conversation?.id) {
-      console.error('❌ AIROPS CLEAR ALL: No conversation ID');
-      setStatus('❌ No conversation context');
-      return;
-    }
-    
-    if (!confirm(`Delete all ${commentHistory.length} history entries? This cannot be undone.`)) {
-      console.log('🗑️ AIROPS CLEAR ALL: User cancelled');
-      return;
-    }
-    
-    try {
-      const payload = { 
-        conversationId: context.conversation.id, 
-        history: [],
-        clearAll: true // Explicit flag for clearing
-      };
-      
-      console.log(`🗑️ AIROPS CLEAR ALL: API payload:`, payload);
-      
-      const response = await fetch('/.netlify/functions/save-conversation-history', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+        console.log(`✅ AIROPS DELETE: Updated expanded indices:`, Array.from(newSet));
+        return newSet;
       });
       
-      console.log(`🗑️ AIROPS CLEAR ALL: API response status: ${response.status}`);
+      setStatus(`✅ Entry deleted (${updatedHistory.length} remain)`);
       
-      if (response.ok) {
-        const result = await response.json();
-        console.log(`✅ AIROPS CLEAR ALL: API success:`, result);
-        
-        setCommentHistory([]);
-        
-        // Clear all expansion states for history entries
-        const historyIds = commentHistory.map((_, index) => `history_${commentHistory[index].timestamp}_${index}`);
-        setExpandedRequests(prev => {
-          const newSet = new Set(prev);
-          historyIds.forEach(id => newSet.delete(id));
-          return newSet;
-        });
-        setExpandedInputs(prev => {
-          const newSet = new Set(prev);
-          historyIds.forEach(id => newSet.delete(id));
-          return newSet;
-        });
-        setExpandedOutputs(prev => {
-          const newSet = new Set(prev);
-          historyIds.forEach(id => newSet.delete(id));
-          return newSet;
-        });
-        
-        setStatus('✅ All history cleared');
-        console.log(`✅ AIROPS CLEAR ALL: Local state cleared`);
-        
-      } else {
-        const errorText = await response.text();
-        console.error(`❌ AIROPS CLEAR ALL: API failed:`, response.status, errorText);
-        setStatus(`❌ Clear failed (${response.status})`);
+    } else {
+      const errorText = await response.text();
+      console.error(`❌ AIROPS DELETE: API failed - Status: ${response.status}`);
+      console.error(`❌ AIROPS DELETE: Error response:`, errorText);
+      
+      // Try to parse error details
+      try {
+        const errorJson = JSON.parse(errorText);
+        console.error(`❌ AIROPS DELETE: Error details:`, errorJson);
+      } catch (e) {
+        console.error(`❌ AIROPS DELETE: Raw error text:`, errorText);
       }
       
-    } catch (error) {
-      console.error('❌ AIROPS CLEAR ALL: Error:', error);
-      setStatus('❌ Clear failed - network error');
+      setStatus(`❌ Delete failed (${response.status})`);
     }
-  };
+    
+  } catch (error) {
+    console.error('❌ AIROPS DELETE: Network/JS error:', error);
+    console.error('❌ AIROPS DELETE: Error stack:', error.stack);
+    setStatus('❌ Delete failed - network error');
+  }
+};
+
+// ✅ ENHANCED: Clear all history with better debugging
+const clearHistory = async () => {
+  console.log(`🗑️ AIROPS CLEAR ALL: Starting clear all process`);
+  console.log(`🗑️ AIROPS CLEAR ALL: Current history length: ${commentHistory.length}`);
+  console.log(`🗑️ AIROPS CLEAR ALL: Conversation ID: ${context?.conversation?.id}`);
+  
+  if (!context?.conversation?.id) {
+    console.error('❌ AIROPS CLEAR ALL: No conversation ID');
+    setStatus('❌ No conversation context');
+    return;
+  }
+  
+  if (!confirm(`Delete all ${commentHistory.length} history entries? This cannot be undone.`)) {
+    console.log('🗑️ AIROPS CLEAR ALL: User cancelled');
+    return;
+  }
+  
+  try {
+    const payload = { 
+      conversationId: context.conversation.id, 
+      history: [],
+      clearAll: true // Explicit flag for clearing
+    };
+    
+    console.log(`🗑️ AIROPS CLEAR ALL: API payload:`, payload);
+    
+    const response = await fetch('/.netlify/functions/save-conversation-history', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    
+    console.log(`🗑️ AIROPS CLEAR ALL: API response status: ${response.status}`);
+    
+    if (response.ok) {
+      const result = await response.json();
+      console.log(`✅ AIROPS CLEAR ALL: API success:`, result);
+      
+      setCommentHistory([]);
+      setExpandedHistory(new Set());
+      setStatus('✅ All history cleared');
+      console.log(`✅ AIROPS CLEAR ALL: Local state cleared`);
+      
+    } else {
+      const errorText = await response.text();
+      console.error(`❌ AIROPS CLEAR ALL: API failed:`, response.status, errorText);
+      setStatus(`❌ Clear failed (${response.status})`);
+    }
+    
+  } catch (error) {
+    console.error('❌ AIROPS CLEAR ALL: Error:', error);
+    setStatus('❌ Clear failed - network error');
+  }
+};
 
   const deleteTask = async (taskId) => {
     if (!context?.conversation?.id) return;
@@ -1829,24 +834,11 @@ function App() {
           newSet.delete(taskId);
           return newSet;
         });
-        
-        // Clear from all expansion states
-        setExpandedRequests(prev => {
+        setExpandedTasks(prev => {
           const newSet = new Set(prev);
           newSet.delete(taskId);
           return newSet;
         });
-        setExpandedInputs(prev => {
-          const newSet = new Set(prev);
-          newSet.delete(taskId);
-          return newSet;
-        });
-        setExpandedOutputs(prev => {
-          const newSet = new Set(prev);
-          newSet.delete(taskId);
-          return newSet;
-        });
-        
         setStatus('Task deleted');
       }
     } catch (error) {
@@ -1881,42 +873,24 @@ function App() {
       if (response.ok) {
         const result = await response.json();
         
-        console.log(`🔍 TASK STATUS CHECK: Task ${taskId}`, {
-          status: result.status,
-          hasResult: !!result.data,
-          taskName: result.metadata?.taskName || result.metadata?.task_name,
-          metadata: result.metadata
-        });
-        
         if (result.status === 'completed' || result.status === 'failed') {
-          const updatedTasks = taskResults.map(task => {
-            if (task.id === taskId) {
-              const updatedTask = { 
-                ...task, 
-                status: result.status, 
-                result: result.data, 
-                completedAt: result.completedAt,
-                error: result.error,
-              };
-              
-              // ✅ ENHANCED: Update task name from webhook metadata
-              if (result.metadata?.taskName || result.metadata?.task_name) {
-                const newTaskName = result.metadata.taskName || result.metadata.task_name;
-                updatedTask.taskName = newTaskName;
-                updatedTask.displayName = newTaskName;
-                console.log(`🏷️ TASK NAME UPDATED: ${taskId} -> "${newTaskName}"`);
-              }
-              
-              return updatedTask;
-            }
-            return task;
-          });
+          const updatedTasks = taskResults.map(task => 
+            task.id === taskId 
+              ? { 
+                  ...task, 
+                  status: result.status, 
+                  result: result.data, 
+                  completedAt: result.completedAt,
+                  error: result.error 
+                }
+              : task
+          );
           
-          console.log(`✅ TASK UPDATED: ${taskId} status=${result.status}`);
           setTaskResults(updatedTasks);
           
-          // ✅ REMOVED: Auto-expansion for completed tasks
-          // Tasks stay minimized by default
+          if (result.status === 'completed') {
+            setExpandedTasks(prev => new Set([...prev, taskId]));
+          }
           
           if (context?.conversation?.id) {
             await saveTaskResultsToNetlify(context.conversation.id, updatedTasks);
@@ -1995,8 +969,7 @@ function App() {
     return combinedText;
   };
 
-  // ✅ FIX 2: Enhanced createCompletePayload with taskName parameter and better structure
-  const createCompletePayload = async (combinedInstructions, taskId = null, taskName = null) => {
+  const createCompletePayload = async (combinedInstructions, taskId = null) => {
     const timestamp = new Date().toISOString();
     const callbackUrl = taskId ? `${window.location.origin}/.netlify/functions/task-completion-webhook` : null;
     
@@ -2058,23 +1031,13 @@ function App() {
       email: context.teammate.email
     } : null;
     
-    console.log('📤 TASK NAME IN PAYLOAD CREATION:', taskName);
-    
     return {
       airops_request: {
         combined_instructions: combinedInstructions,
-        // ⭐ ADD TASK NAME TO MULTIPLE LOCATIONS FOR COMPATIBILITY
-        taskName: taskName,
-        task_name: taskName,
-        displayName: taskName,
-        display_name: taskName,
-        
         output_format: {
           selected_format: selectedFormat,
           format_label: selectedFormat ? formatOptions.find(f => f.value === selectedFormat)?.label : null,
-          raw_instructions: comment,
-          taskName: taskName, // ⭐ Also here
-          task_name: taskName  // ⭐ Also here
+          raw_instructions: comment
         },
         attachment: uploadedFile ? {
           name: uploadedFile.name,
@@ -2088,8 +1051,6 @@ function App() {
           timestamp: timestamp,
           plugin_context: context?.type,
           task_id: taskId,
-          taskName: taskName, // ⭐ Also here
-          task_name: taskName, // ⭐ Also here
           callback_url: callbackUrl,
           conversation_id: context?.conversation?.id,
           requesting_user_id: context?.teammate?.id
@@ -2203,8 +1164,14 @@ function App() {
         if (tasks && Array.isArray(tasks)) {
           setTaskResults(tasks);
           
-          // ✅ REMOVED: Auto-expansion for completed tasks
-          // All requests now start minimized by default
+          const completedTaskIds = tasks.filter(task => task.status === 'completed').map(task => task.id);
+          if (completedTaskIds.length > 0) {
+            setExpandedTasks(prev => {
+              const newSet = new Set(prev);
+              completedTaskIds.forEach(taskId => newSet.add(taskId));
+              return newSet;
+            });
+          }
           
           const pendingTasks = tasks.filter(task => task.status === 'pending').map(task => task.id);
           if (pendingTasks.length > 0) {
@@ -2218,294 +1185,339 @@ function App() {
     }
   };
 
-  // ✅ FIXED: Create drafts within the conversation context
-  const insertIntoDraft = async (content) => {
-    console.log('🔍 AIROPS INSERT: Starting conversation draft insertion');
-    console.log('🔍 AIROPS INSERT: Content length:', content.length);
-    console.log('🔍 AIROPS INSERT: Context type:', context?.type);
-    console.log('🔍 AIROPS INSERT: Conversation ID:', context?.conversation?.id);
-    console.log('🔍 AIROPS INSERT: Existing draft ID:', context?.conversation?.draftId);
-    
-    if (!context) {
-      copyToClipboard(content);
-      setStatus('Copied to clipboard (no context)');
-      return;
-    }
+// ✅ FIXED: Create drafts within the conversation context
 
-    // ✅ STRATEGY 1: Update existing conversation draft
-    if (context.conversation?.draftId && typeof context.updateDraft === 'function') {
-      console.log('🎯 AIROPS INSERT: Found existing conversation draft, updating...');
-      console.log('🎯 AIROPS INSERT: Draft ID:', context.conversation.draftId);
-      
-      try {
-        // Get the existing draft first to preserve its content
-        let existingDraft = null;
-        if (typeof context.fetchDraft === 'function') {
-          existingDraft = await context.fetchDraft(context.conversation.draftId);
-          console.log('🎯 AIROPS INSERT: Existing draft content:', existingDraft?.content?.body?.length || 0, 'chars');
-        }
-        
-        const existingBody = existingDraft?.content?.body || '';
-        const separator = existingBody ? '\n\n---\n\n' : '';
-        const newBody = existingBody + separator + content;
-        
-        await context.updateDraft(context.conversation.draftId, {
-          updateMode: 'replace',
-          content: {
-            body: newBody,
-            type: 'html'
-          }
-        });
-        
-        console.log('✅ AIROPS INSERT: Updated existing conversation draft');
-        setStatus('✅ Content added to conversation draft!');
-        return;
-        
-      } catch (error) {
-        console.error('❌ AIROPS INSERT: Update failed, will create new:', error);
-      }
-    }
-
-    // ✅ STRATEGY 2: Create new draft in conversation context
-    if (typeof context.createDraft === 'function' && context.conversation) {
-      console.log('🎯 AIROPS INSERT: Creating new conversation draft...');
-      console.log('🎯 AIROPS INSERT: Conversation channel:', context.conversation.channel?.id);
-      console.log('🎯 AIROPS INSERT: Conversation recipient:', context.conversation.recipient?.handle);
-      
-      try {
-        // ✅ Build draft template with conversation context
-        const draftTemplate = {
-          content: {
-            body: content,
-            type: 'html'
-          }
-        };
-
-        // ✅ Add conversation context if available
-        if (context.conversation.channel?.id) {
-          draftTemplate.channelId = context.conversation.channel.id;
-          console.log('🎯 AIROPS INSERT: Using channel ID:', draftTemplate.channelId);
-        }
-
-        // ✅ Add recipient if available
-        if (context.conversation.recipient?.handle) {
-          draftTemplate.to = [context.conversation.recipient.handle];
-          console.log('🎯 AIROPS INSERT: Adding recipient:', draftTemplate.to);
-        }
-
-        // ✅ Add subject if conversation has one
-        if (context.conversation.subject) {
-          draftTemplate.subject = `Re: ${context.conversation.subject}`;
-          console.log('🎯 AIROPS INSERT: Adding subject:', draftTemplate.subject);
-        }
-
-        console.log('🎯 AIROPS INSERT: Complete draft template:', draftTemplate);
-        
-        const result = await context.createDraft(draftTemplate);
-        
-        console.log('✅ AIROPS INSERT: New conversation draft created:', result);
-        setStatus('✅ New conversation draft created!');
-        return;
-        
-      } catch (error) {
-        console.error('❌ AIROPS INSERT: Conversation draft creation failed:', error);
-        console.error('❌ AIROPS INSERT: Error details:', {
-          message: error.message,
-          name: error.name,
-          stack: error.stack?.split('\n')[0]
-        });
-      }
-    }
-
-    // ✅ STRATEGY 3: Try simple draft creation (your current working method)
-    if (typeof context.createDraft === 'function') {
-      console.log('🎯 AIROPS INSERT: Trying simple draft creation...');
-      
-      try {
-        const result = await context.createDraft({
-          content: {
-            body: content,
-            type: 'html'
-          }
-        });
-        
-        console.log('✅ AIROPS INSERT: Simple draft created:', result);
-        setStatus('✅ Draft created!');
-        return;
-        
-      } catch (error) {
-        console.error('❌ AIROPS INSERT: Simple draft creation failed:', error);
-      }
-    }
-
-    // ✅ FALLBACK: Copy to clipboard
-    console.log('📋 AIROPS INSERT: All methods failed, copying to clipboard');
+const insertIntoDraft = async (content) => {
+  console.log('🔍 AIROPS INSERT: Starting conversation draft insertion');
+  console.log('🔍 AIROPS INSERT: Content length:', content.length);
+  console.log('🔍 AIROPS INSERT: Context type:', context?.type);
+  console.log('🔍 AIROPS INSERT: Conversation ID:', context?.conversation?.id);
+  console.log('🔍 AIROPS INSERT: Existing draft ID:', context?.conversation?.draftId);
+  
+  if (!context) {
     copyToClipboard(content);
-    setStatus('📋 Copied to clipboard');
-  };
+    setStatus('Copied to clipboard (no context)');
+    return;
+  }
 
-  // ✅ ROBUST: Replace your copyToClipboard function with this version
-  const copyToClipboard = (content) => {
-    // ✅ ENHANCED: Better HTML to Markdown conversion
-    const htmlToMarkdown = (html) => {
-      const tempDiv = document.createElement('div');
-      tempDiv.innerHTML = html;
+  // ✅ STRATEGY 1: Update existing conversation draft
+  if (context.conversation?.draftId && typeof context.updateDraft === 'function') {
+    console.log('🎯 AIROPS INSERT: Found existing conversation draft, updating...');
+    console.log('🎯 AIROPS INSERT: Draft ID:', context.conversation.draftId);
+    
+    try {
+      // Get the existing draft first to preserve its content
+      let existingDraft = null;
+      if (typeof context.fetchDraft === 'function') {
+        existingDraft = await context.fetchDraft(context.conversation.draftId);
+        console.log('🎯 AIROPS INSERT: Existing draft content:', existingDraft?.content?.body?.length || 0, 'chars');
+      }
       
-      // Convert HTML elements to markdown
-      tempDiv.querySelectorAll('h1').forEach(h => h.replaceWith('# ' + h.textContent + '\n\n'));
-      tempDiv.querySelectorAll('h2').forEach(h => h.replaceWith('## ' + h.textContent + '\n\n'));
-      tempDiv.querySelectorAll('h3').forEach(h => h.replaceWith('### ' + h.textContent + '\n\n'));
-      tempDiv.querySelectorAll('h4').forEach(h => h.replaceWith('#### ' + h.textContent + '\n\n'));
-      tempDiv.querySelectorAll('h5').forEach(h => h.replaceWith('##### ' + h.textContent + '\n\n'));
-      tempDiv.querySelectorAll('h6').forEach(h => h.replaceWith('###### ' + h.textContent + '\n\n'));
+      const existingBody = existingDraft?.content?.body || '';
+      const separator = existingBody ? '\n\n---\n\n' : '';
+      const newBody = existingBody + separator + content;
       
-      // Convert paragraphs
-      tempDiv.querySelectorAll('p').forEach(p => p.replaceWith(p.textContent + '\n\n'));
-      
-      // Convert line breaks
-      tempDiv.querySelectorAll('br').forEach(br => br.replaceWith('\n'));
-      
-      // Convert bold and italic
-      tempDiv.querySelectorAll('strong, b').forEach(b => b.replaceWith('**' + b.textContent + '**'));
-      tempDiv.querySelectorAll('em, i').forEach(i => i.replaceWith('*' + i.textContent + '*'));
-      
-      // Convert lists
-      tempDiv.querySelectorAll('li').forEach(li => li.replaceWith('• ' + li.textContent + '\n'));
-      tempDiv.querySelectorAll('ul, ol').forEach(list => list.replaceWith(list.textContent + '\n\n'));
-      
-      // ✅ ENHANCED: Better table conversion
-      tempDiv.querySelectorAll('table').forEach(table => {
-        let markdownTable = '';
-        const rows = table.querySelectorAll('tr');
-        
-        rows.forEach((row, rowIndex) => {
-          const cells = Array.from(row.querySelectorAll('td, th')).map(cell => {
-            // Clean cell content
-            return cell.textContent.trim().replace(/\s+/g, ' ');
-          });
-          
-          if (cells.length > 0) {
-            markdownTable += '| ' + cells.join(' | ') + ' |\n';
-            
-            // Add header separator after first row if it has th elements
-            if (rowIndex === 0 && row.querySelector('th')) {
-              markdownTable += '| ' + cells.map(() => '---').join(' | ') + ' |\n';
-            }
-          }
-        });
-        
-        table.replaceWith(markdownTable + '\n');
+      await context.updateDraft(context.conversation.draftId, {
+        updateMode: 'replace',
+        content: {
+          body: newBody,
+          type: 'html'
+        }
       });
       
-      // Clean up extra whitespace and return
-      return tempDiv.textContent || tempDiv.innerText || html.replace(/<[^>]*>/g, '');
-    };
+      console.log('✅ AIROPS INSERT: Updated existing conversation draft');
+      setStatus('✅ Content added to conversation draft!');
+      return;
+      
+    } catch (error) {
+      console.error('❌ AIROPS INSERT: Update failed, will create new:', error);
+    }
+  }
+
+  // ✅ STRATEGY 2: Create new draft in conversation context
+  if (typeof context.createDraft === 'function' && context.conversation) {
+    console.log('🎯 AIROPS INSERT: Creating new conversation draft...');
+    console.log('🎯 AIROPS INSERT: Conversation channel:', context.conversation.channel?.id);
+    console.log('🎯 AIROPS INSERT: Conversation recipient:', context.conversation.recipient?.handle);
     
-    const cleanContent = htmlToMarkdown(content);
+    try {
+      // ✅ Build draft template with conversation context
+      const draftTemplate = {
+        content: {
+          body: content,
+          type: 'html'
+        }
+      };
+
+      // ✅ Add conversation context if available
+      if (context.conversation.channel?.id) {
+        draftTemplate.channelId = context.conversation.channel.id;
+        console.log('🎯 AIROPS INSERT: Using channel ID:', draftTemplate.channelId);
+      }
+
+      // ✅ Add recipient if available
+      if (context.conversation.recipient?.handle) {
+        draftTemplate.to = [context.conversation.recipient.handle];
+        console.log('🎯 AIROPS INSERT: Adding recipient:', draftTemplate.to);
+      }
+
+      // ✅ Add subject if conversation has one
+      if (context.conversation.subject) {
+        draftTemplate.subject = `Re: ${context.conversation.subject}`;
+        console.log('🎯 AIROPS INSERT: Adding subject:', draftTemplate.subject);
+      }
+
+      console.log('🎯 AIROPS INSERT: Complete draft template:', draftTemplate);
+      
+      const result = await context.createDraft(draftTemplate);
+      
+      console.log('✅ AIROPS INSERT: New conversation draft created:', result);
+      setStatus('✅ New conversation draft created!');
+      return;
+      
+    } catch (error) {
+      console.error('❌ AIROPS INSERT: Conversation draft creation failed:', error);
+      console.error('❌ AIROPS INSERT: Error details:', {
+        message: error.message,
+        name: error.name,
+        stack: error.stack?.split('\n')[0]
+      });
+    }
+  }
+
+  // ✅ STRATEGY 3: Try simple draft creation (your current working method)
+  if (typeof context.createDraft === 'function') {
+    console.log('🎯 AIROPS INSERT: Trying simple draft creation...');
     
-    // ✅ SIMPLIFIED: Focus on the most reliable method for Front
-    const copyToClipboardReliable = (text) => {
-      // Method 1: Try the most compatible approach first
+    try {
+      const result = await context.createDraft({
+        content: {
+          body: content,
+          type: 'html'
+        }
+      });
+      
+      console.log('✅ AIROPS INSERT: Simple draft created:', result);
+      setStatus('✅ Draft created!');
+      return;
+      
+    } catch (error) {
+      console.error('❌ AIROPS INSERT: Simple draft creation failed:', error);
+    }
+  }
+
+  // ✅ FALLBACK: Copy to clipboard
+  console.log('📋 AIROPS INSERT: All methods failed, copying to clipboard');
+  copyToClipboard(content);
+  setStatus('📋 Copied to clipboard');
+};
+
+// ✅ Add this debug function to your App component
+
+const debugConversationContext = () => {
+  console.log('🔍 CONVERSATION CONTEXT DEBUG');
+  console.log('============================');
+  
+  if (!context) {
+    console.log('❌ No context available');
+    return;
+  }
+  
+  console.log('1. BASIC INFO:');
+  console.log('- Context type:', context.type);
+  console.log('- Context ID:', context.id);
+  
+  if (context.conversation) {
+    console.log('\n2. CONVERSATION INFO:');
+    console.log('- Conversation ID:', context.conversation.id);
+    console.log('- Conversation type:', context.conversation.type);
+    console.log('- Conversation subject:', context.conversation.subject);
+    console.log('- Conversation status:', context.conversation.status);
+    console.log('- Has draft ID:', context.conversation.draftId);
+    
+    console.log('\n3. CONVERSATION CHANNEL:');
+    console.log('- Channel:', context.conversation.channel);
+    if (context.conversation.channel) {
+      console.log('  - Channel ID:', context.conversation.channel.id);
+      console.log('  - Channel type:', context.conversation.channel.type);
+      console.log('  - Channel name:', context.conversation.channel.name);
+      console.log('  - Channel address:', context.conversation.channel.address);
+    }
+    
+    console.log('\n4. CONVERSATION RECIPIENT:');
+    console.log('- Recipient:', context.conversation.recipient);
+    if (context.conversation.recipient) {
+      console.log('  - Recipient handle:', context.conversation.recipient.handle);
+      console.log('  - Recipient name:', context.conversation.recipient.name);
+      console.log('  - Recipient type:', context.conversation.recipient.type);
+    }
+    
+    console.log('\n5. CONVERSATION INBOXES:');
+    console.log('- Inboxes:', context.conversation.inboxes?.map(inbox => ({
+      id: inbox.id,
+      name: inbox.name
+    })));
+  }
+  
+  if (context.draft) {
+    console.log('\n6. CURRENT DRAFT:');
+    console.log('- Draft ID:', context.draft.id);
+    console.log('- Draft editable:', context.draft.isEditable);
+    console.log('- Draft channel:', context.draft.channel);
+    console.log('- Draft body length:', context.draft.content?.body?.length || 0);
+    console.log('- Draft recipients:', {
+      to: context.draft.to?.length || 0,
+      cc: context.draft.cc?.length || 0,
+      bcc: context.draft.bcc?.length || 0
+    });
+  }
+  
+  console.log('\n7. TEAMMATE INFO:');
+  console.log('- Teammate ID:', context.teammate?.id);
+  console.log('- Teammate name:', context.teammate?.name);
+  console.log('- Teammate email:', context.teammate?.email);
+  
+  setStatus('Conversation debug complete - check console');
+};
+
+// ✅ Add this button to your debug section:
+<button
+  onClick={debugConversationContext}
+  style={{
+    background: 'none',
+    border: 'none',
+    cursor: 'pointer',
+    padding: theme.spacing.xs,
+    borderRadius: theme.borderRadius.sm,
+    color: theme.colors.tertiary,
+    fontSize: theme.fontSize.lg,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center'
+  }}
+  onMouseEnter={(e) => e.target.style.color = theme.colors.info}
+  onMouseLeave={(e) => e.target.style.color = theme.colors.tertiary}
+  title="Debug conversation context (check console)"
+>
+  💬
+</button>
+
+// ✅ ALSO: Add this debug function to test draft operations
+const debugDraftAPI = async () => {
+  console.log('🧪 DRAFT DEBUG: Testing draft operations');
+  
+  if (!context) {
+    console.log('❌ DRAFT DEBUG: No context');
+    return;
+  }
+  
+  console.log('🧪 DRAFT DEBUG: Context info:', {
+    type: context.type,
+    conversationId: context.conversation?.id,
+    draftId: context.draft?.id,
+    hasCreateDraft: typeof context.createDraft === 'function',
+    hasUpdateDraft: typeof context.updateDraft === 'function',
+    channelId: context.conversation?.channel?.id,
+    teammateId: context.teammate?.id,
+    teammateEmail: context.teammate?.email
+  });
+  
+  // Test with simple content
+  const testContent = "<p>Test draft content from AirOps plugin</p>";
+  
+  if (typeof context.createDraft === 'function') {
+    try {
+      console.log('🧪 DRAFT DEBUG: Testing createDraft...');
+      const result = await context.createDraft({
+        content: {
+          body: testContent,
+          type: 'html'
+        }
+      });
+      console.log('✅ DRAFT DEBUG: createDraft successful:', result);
+    } catch (error) {
+      console.error('❌ DRAFT DEBUG: createDraft failed:', error);
+    }
+  }
+  
+  if (typeof context.updateDraft === 'function' && context.draft?.id) {
+    try {
+      console.log('🧪 DRAFT DEBUG: Testing updateDraft...');
+      const result = await context.updateDraft(context.draft.id, {
+        updateMode: 'insert',
+        content: {
+          body: testContent,
+          type: 'html'
+        }
+      });
+      console.log('✅ DRAFT DEBUG: updateDraft successful:', result);
+    } catch (error) {
+      console.error('❌ DRAFT DEBUG: updateDraft failed:', error);
+    }
+  }
+};
+
+  const copyToClipboard = (content) => {
+    // Convert HTML to clean text
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = content;
+    
+    // Enhanced HTML to text conversion
+    tempDiv.querySelectorAll('br').forEach(br => br.replaceWith('\n'));
+    tempDiv.querySelectorAll('p').forEach(p => p.replaceWith(p.textContent + '\n\n'));
+    tempDiv.querySelectorAll('h1, h2, h3, h4, h5, h6').forEach(h => h.replaceWith('# ' + h.textContent + '\n\n'));
+    tempDiv.querySelectorAll('li').forEach(li => li.replaceWith('• ' + li.textContent + '\n'));
+    tempDiv.querySelectorAll('ul, ol').forEach(list => list.replaceWith(list.textContent + '\n\n'));
+    
+    // Enhanced table handling
+    tempDiv.querySelectorAll('table').forEach(table => {
+      let tableText = '';
+      const rows = table.querySelectorAll('tr');
+      rows.forEach((row, index) => {
+        const cells = Array.from(row.querySelectorAll('td, th')).map(cell => cell.textContent.trim());
+        tableText += cells.join(' | ') + '\n';
+        
+        if (index === 0 && row.querySelector('th')) {
+          tableText += cells.map(() => '---').join(' | ') + '\n';
+        }
+      });
+      table.replaceWith(tableText + '\n');
+    });
+    
+    const cleanContent = tempDiv.textContent || tempDiv.innerText || content.replace(/<[^>]*>/g, '');
+    
+    // Modern clipboard API with fallback
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(cleanContent).then(() => {
+        setStatus('Copied!');
+      }).catch(() => {
+        fallbackCopy(cleanContent);
+      });
+    } else {
+      fallbackCopy(cleanContent);
+    }
+    
+    function fallbackCopy(text) {
       try {
         const textArea = document.createElement('textarea');
         textArea.value = text;
-        
-        // Make it invisible but selectable
         textArea.style.position = 'fixed';
-        textArea.style.top = '0';
-        textArea.style.left = '0';
-        textArea.style.width = '2em';
-        textArea.style.height = '2em';
-        textArea.style.padding = '0';
-        textArea.style.border = 'none';
-        textArea.style.outline = 'none';
-        textArea.style.boxShadow = 'none';
-        textArea.style.background = 'transparent';
-        textArea.style.fontSize = '16px'; // Prevent zoom on iOS
-        
+        textArea.style.left = '-999999px';
+        textArea.style.top = '-999999px';
         document.body.appendChild(textArea);
-        
-        // Focus and select
         textArea.focus();
         textArea.select();
-        textArea.setSelectionRange(0, text.length);
         
-        // Try to copy
-        const successful = document.execCommand('copy');
+        const result = document.execCommand('copy');
         document.body.removeChild(textArea);
         
-        if (successful) {
-          setStatus('✅ Copied to clipboard!');
-          return true;
-        }
+        setStatus(result ? 'Copied!' : 'Copy failed');
       } catch (err) {
-        console.log('Copy method 1 failed:', err);
+        setStatus('Copy failed');
       }
-      
-      // Method 2: Fallback with visible selection
-      try {
-        const textArea = document.createElement('textarea');
-        textArea.value = text;
-        textArea.style.position = 'absolute';
-        textArea.style.top = '50%';
-        textArea.style.left = '50%';
-        textArea.style.transform = 'translate(-50%, -50%)';
-        textArea.style.width = '80%';
-        textArea.style.height = '200px';
-        textArea.style.zIndex = '10000';
-        textArea.style.background = 'white';
-        textArea.style.border = '2px solid #333';
-        textArea.style.borderRadius = '4px';
-        textArea.style.padding = '10px';
-        textArea.style.fontSize = '12px';
-        textArea.style.fontFamily = 'monospace';
-        
-        document.body.appendChild(textArea);
-        textArea.select();
-        
-        // Add instructions
-        const instructions = document.createElement('div');
-        instructions.innerHTML = '<strong>Press Ctrl+C (or Cmd+C) to copy</strong>';
-        instructions.style.position = 'absolute';
-        instructions.style.top = '40%';
-        instructions.style.left = '50%';
-        instructions.style.transform = 'translate(-50%, -50%)';
-        instructions.style.background = '#333';
-        instructions.style.color = 'white';
-        instructions.style.padding = '10px';
-        instructions.style.borderRadius = '4px';
-        instructions.style.zIndex = '10001';
-        instructions.style.fontSize = '14px';
-        
-        document.body.appendChild(instructions);
-        
-        // Auto-cleanup after 5 seconds
-        setTimeout(() => {
-          if (document.body.contains(textArea)) {
-            document.body.removeChild(textArea);
-          }
-          if (document.body.contains(instructions)) {
-            document.body.removeChild(instructions);
-          }
-        }, 5000);
-        
-        setStatus('📋 Text selected - Press Ctrl+C to copy');
-        return true;
-        
-      } catch (err) {
-        console.log('Copy method 2 failed:', err);
-      }
-      
-      // Method 3: Last resort - log to console
-      console.log('📋 COPY THIS TEXT:\n' + text);
-      setStatus('❌ Copy failed - check console for text');
-      return false;
-    };
-    
-    copyToClipboardReliable(cleanContent);
+    }
   };
 
-  // ✅ FIX 3: Enhanced processRequest with proper task name generation and logging
   const processRequest = async () => {
     const now = Date.now();
     if (isProcessingRef.current || (now - lastCallTimeRef.current) < 1000) {
@@ -2525,62 +1537,42 @@ function App() {
     try {
       const taskId = mode === 'task' ? `task_${Date.now()}_${Math.random().toString(36).substr(2, 9)}` : null;
       
-      // ⭐ ENHANCED: Generate taskName FIRST using the helper function
-      const taskName = generateTaskName(comment, selectedFormat, outputFormat, formatOptions, mode);
-      
-      console.log('🏷️ TASK NAME GENERATED:', taskName); // ⭐ DEBUG LOG
-      
       const combinedInstructions = createCombinedInstructions();
-      const payload = await createCompletePayload(combinedInstructions, taskId, taskName); // ⭐ Pass taskName
-      
-      console.log('📤 FINAL PAYLOAD WITH TASK NAME:', {
-        taskName: taskName,
-        payloadTaskName: payload.airops_request.taskName,
-        payloadTaskNameAlt: payload.airops_request.task_name,
-        requestInfoTaskName: payload.airops_request.request_info.taskName
-      }); // ⭐ DEBUG LOG
+      const payload = await createCompletePayload(combinedInstructions, taskId);
       
       if (context?.conversation) {
         const conversationId = context.conversation.id;
         
-        // ⭐ ENHANCED: Save history entry with taskName
+        // Save history entry
         const newEntry = {
           text: comment,
           mode: mode,
           outputFormat: outputFormat,
           selectedFormat: selectedFormat,
-          taskName: taskName, // ⭐ ADD TASK NAME
-          displayName: taskName, // ⭐ ADD DISPLAY NAME
           hasFile: !!uploadedFile,
           fileName: uploadedFile?.name,
           timestamp: new Date().toISOString(),
           user: context.teammate ? context.teammate.name : 'Unknown user'
         };
         
-        console.log('📚 HISTORY ENTRY WITH TASK NAME:', newEntry); // ⭐ DEBUG LOG
-        
         const historySaved = await saveHistoryToNetlify(conversationId, newEntry);
         if (historySaved) {
           setCommentHistory([newEntry, ...commentHistory]);
         }
 
-        // ⭐ ENHANCED: Create and save task with taskName if in task mode
+        // Create and save task if in task mode
         if (mode === 'task' && taskId) {
           const newTask = {
             id: taskId,
             comment: comment,
             outputFormat: outputFormat,
             selectedFormat: selectedFormat,
-            taskName: taskName, // ⭐ ADD TASK NAME
-            displayName: taskName, // ⭐ ADD DISPLAY NAME
             hasFile: !!uploadedFile,
             fileName: uploadedFile?.name,
             status: 'pending',
             createdAt: new Date().toISOString(),
             user: context.teammate ? context.teammate.name : 'Unknown user'
           };
-          
-          console.log('📝 COMPLETE TASK OBJECT WITH NAME:', newTask); // ⭐ DEBUG LOG
           
           const updatedTasks = [newTask, ...taskResults];
           setTaskResults(updatedTasks);
@@ -2604,14 +1596,6 @@ function App() {
       }
       
       const webhookUrl = mode === 'email' ? EMAIL_WEBHOOK_URL : TASK_WEBHOOK_URL;
-      
-      console.log('📤 SENDING TO WEBHOOK:', webhookUrl); // ⭐ DEBUG LOG
-      console.log('📤 PAYLOAD SUMMARY:', {
-        taskName: payload.airops_request.taskName,
-        taskId: taskId,
-        mode: mode,
-        instructionsLength: combinedInstructions.length
-      }); // ⭐ DEBUG LOG
       
       const response = await fetch(webhookUrl, {
         method: 'POST',
@@ -2664,10 +1648,105 @@ function App() {
     }
   };
 
-  // ✅ Get combined requests
-  const unifiedRequests = sortUnifiedRequests(
-    combineRequestsAndTasks(taskResults, commentHistory)
-  );
+  const viewTaskInNewWindow = (task) => {
+    const newWindow = window.open('', '_blank');
+    newWindow.document.write(`
+      <html>
+        <head>
+          <title>AirOps Task Result</title>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1">
+          <style>
+            body { 
+              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
+              max-width: 1000px; 
+              margin: 20px auto; 
+              padding: 20px; 
+              line-height: 1.6; 
+              color: #0f172a;
+              background: #f8fafc;
+            }
+            .container {
+              background: white;
+              border-radius: 12px;
+              box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+              overflow: hidden;
+            }
+            .header { 
+              background: linear-gradient(135deg, #6366f1, #8b5cf6);
+              color: white;
+              padding: 24px;
+              text-align: center;
+            }
+            h1 { margin: 0; font-size: 24px; font-weight: 600; }
+            .content { padding: 24px; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1>AirOps Task Result</h1>
+            </div>
+            <div class="content">
+              ${task.result || '<p>No result available yet.</p>'}
+            </div>
+          </div>
+        </body>
+      </html>
+    `);
+    newWindow.document.close();
+  };
+
+  const viewHistoryEntryInNewWindow = (entry) => {
+    const newWindow = window.open('', '_blank');
+    const content = entry.result || entry.text;
+    
+    newWindow.document.write(`
+      <html>
+        <head>
+          <title>AirOps History Entry</title>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1">
+          <style>
+            body { 
+              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
+              max-width: 1000px; 
+              margin: 20px auto; 
+              padding: 20px; 
+              line-height: 1.6; 
+              color: #0f172a;
+              background: #f8fafc;
+            }
+            .container {
+              background: white;
+              border-radius: 12px;
+              box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+              overflow: hidden;
+            }
+            .header { 
+              background: linear-gradient(135deg, #6366f1, #8b5cf6);
+              color: white;
+              padding: 24px;
+              text-align: center;
+            }
+            h1 { margin: 0; font-size: 24px; font-weight: 600; }
+            .content { padding: 24px; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1>AirOps History Entry</h1>
+            </div>
+            <div class="content">
+              ${content}
+            </div>
+          </div>
+        </body>
+      </html>
+    `);
+    newWindow.document.close();
+  };
 
   if (!context) {
     return (
@@ -2747,20 +1826,20 @@ function App() {
     >
       <style jsx>{`
         @keyframes spin {
-          0% { transform: rotate(0deg); }
-          100% { transform: rotate(360deg); }
-        }
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
 
-        @keyframes fadeIn {
-          0% { opacity: 0; transform: translateY(4px); }
-          100% { opacity: 1; transform: translateY(0); }
-        }
+@keyframes fadeIn {
+  0% { opacity: 0; transform: translateY(4px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
 
-        @keyframes shine {
-          0% { left: -100%; }
-          50% { left: 100%; }
-          100% { left: 100%; }
-        }
+@keyframes shine {
+  0% { left: -100%; }
+  50% { left: 100%; }
+  100% { left: 100%; }
+}
       `}</style>
 
       {/* Header */}
@@ -3089,89 +2168,681 @@ function App() {
                     onMouseLeave={(e) => e.target.style.color = theme.colors.tertiary}
                     title="Remove file"
                   >
-                    <TrashIcon size={theme.iconSize.sm} />
+                    <CrossIcon size={theme.iconSize.sm} />
                   </button>
                 </div>
               )}
             </div>
           </div>
         )}
-{/* ✅ FIXED: Unified Requests Section */}
-        {unifiedRequests.length > 0 && (
+
+        {/* ✅ FIXED: Results and History - Properly separated without syntax errors */}
+        {(taskResults.length > 0 || commentHistory.length > 0) && (
           <Accordion expandMode="multi">
-            <AccordionSection
-              id="unified-requests"
-              title={
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-                  <span style={{ fontSize: theme.fontSize.sm, fontWeight: '600', color: theme.colors.primary }}>
-                    Requests ({unifiedRequests.length})
-                  </span>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      clearAllRequests();
-                    }}
-                    style={{
-                      background: 'none',
-                      border: 'none',
-                      cursor: 'pointer',
-                      padding: theme.spacing.xs,
-                      borderRadius: theme.borderRadius.sm,
-                      color: theme.colors.tertiary,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center'
-                    }}
-                    onMouseEnter={(e) => e.target.style.color = theme.colors.error}
-                    onMouseLeave={(e) => e.target.style.color = theme.colors.tertiary}
-                    title="Clear all requests"
-                  >
-                    <TrashFilledIcon size={theme.iconSize.md} />
-                  </button>
-                </div>
-              }
-            >
-              <div style={{ marginLeft: '-2px', marginRight: '-2px' }}>
-                {/* Helper text for deletion - subtle and compact */}
-                
-                {unifiedRequests.length > 0 ? (
-                  unifiedRequests.slice(0, 15).map((request) => (
-                    <UnifiedRequestCard
-                      key={request.id}
-                      request={request}
-                      onDelete={deleteRequest}
-                      onCopy={copyToClipboard}
-                      onInsert={insertIntoDraft}
-                      onView={viewRequestInNewWindow}
-                    />
-                  ))
-                ) : (
-                  <div style={{
-                    textAlign: 'center',
-                    padding: `${theme.spacing.xl} ${theme.spacing.lg}`,
-                    color: theme.colors.tertiary
-                  }}>
-                    <div style={{ 
-                      fontSize: '2em', 
-                      marginBottom: theme.spacing.sm,
-                      opacity: 0.5
-                    }}>
-                      📝
-                    </div>
-                    <div style={{ 
-                      fontSize: theme.fontSize.sm,
-                      fontWeight: '500',
-                      marginBottom: theme.spacing.xs
-                    }}>
-                      No requests yet
-                    </div>
-                    <div style={{ fontSize: theme.fontSize.xs }}>
-                      Create an email or task to get started
-                    </div>
+            {taskResults.length > 0 && (
+              <AccordionSection
+                id="tasks"
+                title={
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                    <span style={{ fontSize: theme.fontSize.sm, fontWeight: '600', color: theme.colors.primary }}>
+                      Results ({taskResults.length})
+                    </span>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        clearAllTasks();
+                      }}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        cursor: 'pointer',
+                        padding: theme.spacing.xs,
+                        borderRadius: theme.borderRadius.sm,
+                        color: theme.colors.tertiary,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}
+                      onMouseEnter={(e) => e.target.style.color = theme.colors.secondary}
+                      onMouseLeave={(e) => e.target.style.color = theme.colors.tertiary}
+                      title="Delete all tasks"
+                    >
+                      <Icon name="TrashFilled" size={theme.iconSize.md} />
+                    </button>
                   </div>
+                }
+              >
+                <div style={{ marginLeft: '-2px', marginRight: '-2px' }}>
+                  {taskResults.slice(0, 5).map((task) => (
+                    <div
+                      key={task.id}
+                      style={{
+                        background: theme.colors.background,
+                        border: `1px solid ${theme.colors.border}`,
+                        borderRadius: theme.borderRadius.md,
+                        padding: theme.spacing.sm,
+                        marginBottom: theme.spacing.xs,
+                        fontSize: theme.fontSize.xs
+                      }}
+                    >
+                      {/* Task Header */}
+                      <div 
+                        onClick={() => toggleTaskExpansion(task.id)}
+                        style={{ 
+                          display: 'flex', 
+                          alignItems: 'center', 
+                          justifyContent: 'space-between',
+                          marginBottom: theme.spacing.xs,
+                          cursor: 'pointer',
+                          padding: theme.spacing.xs,
+                          borderRadius: theme.borderRadius.sm,
+                          transition: 'background-color 0.2s ease'
+                        }}
+                        onMouseEnter={(e) => e.target.style.backgroundColor = theme.colors.background}
+                        onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
+                        title="Click to expand/collapse"
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', flex: 1 }}>
+                          <div style={{ 
+                            marginRight: theme.spacing.sm,
+                            transform: expandedTasks.has(task.id) ? 'rotate(90deg)' : 'rotate(0deg)',
+                            transition: 'transform 0.2s ease',
+                            fontSize: theme.fontSize.xs,
+                            color: theme.colors.tertiary
+                          }}>
+                            ▶
+                          </div>
+                          
+                          {task.status === 'pending' ? (
+                            <div style={{ 
+                              width: `${theme.iconSize.md}px`, 
+                              height: `${theme.iconSize.md}px`, 
+                              marginRight: theme.spacing.sm,
+                              border: `2px solid ${theme.colors.accent}`,
+                              borderTop: '2px solid transparent',
+                              borderRadius: '50%',
+                              animation: 'spin 1s linear infinite'
+                            }} />
+                          ) : task.status === 'completed' ? (
+                            <CheckmarkIcon size={theme.iconSize.md} color={theme.colors.success} style={{ marginRight: theme.spacing.sm }} />
+                          ) : (
+                            <WarningIcon size={theme.iconSize.md} color={theme.colors.warning} style={{ marginRight: theme.spacing.sm }} />
+                          )}
+                          
+                          <div style={{ flex: 1 }}>
+                            <div style={{ 
+                              color: theme.colors.primary,
+                              fontWeight: '600',
+                              fontSize: theme.fontSize.sm
+                            }}>
+                              {/* ✅ NEW: Priority order for task names */}
+                              {task.taskName || // From webhook metadata
+                               task.displayName || // Alternative name field
+                               (task.selectedFormat ? 
+                                 formatOptions.find(f => f.value === task.selectedFormat)?.label 
+                                 : null) ||
+                               task.outputFormat || 
+                               'General Task'
+                              }
+                              
+                              {task.hasFile && (
+                                <AttachmentIcon 
+                                  size={theme.iconSize.sm} 
+                                  color={theme.colors.tertiary} 
+                                  style={{ marginLeft: theme.spacing.sm }} 
+                                />
+                              )}
+                            </div>
+                            <div style={{ 
+                              color: theme.colors.tertiary, 
+                              fontSize: theme.fontSize.xs,
+                              marginTop: '2px'
+                            }}>
+                              {formatDate(task.createdAt)} • {task.user}
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <div 
+                          style={{ display: 'flex', alignItems: 'center', gap: theme.spacing.xs }}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {task.result && (
+                            <button
+                              onClick={() => viewTaskInNewWindow(task)}
+                              style={{
+                                background: 'none',
+                                border: 'none',
+                                cursor: 'pointer',
+                                padding: theme.spacing.xs,
+                                borderRadius: theme.borderRadius.sm,
+                                color: theme.colors.tertiary,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center'
+                              }}
+                              onMouseEnter={(e) => e.target.style.color = theme.colors.info}
+                              onMouseLeave={(e) => e.target.style.color = theme.colors.tertiary}
+                              title="View task result"
+                            >
+                              <ViewIcon size={theme.iconSize.md} color="currentColor" />
+                            </button>
+                          )}
+                          <button
+                            onClick={() => deleteTask(task.id)}
+                            style={{
+                              background: 'none',
+                              border: 'none',
+                              cursor: 'pointer',
+                              padding: theme.spacing.xs,
+                              borderRadius: theme.borderRadius.sm,
+                              color: theme.colors.tertiary,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center'
+                            }}
+                            onMouseEnter={(e) => e.target.style.color = theme.colors.secondary}
+                            onMouseLeave={(e) => e.target.style.color = theme.colors.tertiary}
+                            title="Delete this task"
+                          >
+                            <Icon name="Trash" size={theme.iconSize.md} />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Expandable Content */}
+                      {expandedTasks.has(task.id) && (
+                        <div style={{ 
+                          paddingLeft: theme.spacing.lg,
+                          animation: 'fadeIn 0.2s ease-out'
+                        }}>
+                          {/* Task Status */}
+                          <div style={{
+                            padding: `${theme.spacing.sm} ${theme.spacing.lg}`,
+                            background: task.status === 'completed' ? 
+                              `${theme.colors.success}15` : 
+                              task.status === 'failed' ? 
+                              `${theme.colors.warning}15` : 
+                              `${theme.colors.accent}15`,
+                            border: `1px solid ${
+                              task.status === 'completed' ? 
+                              theme.colors.success : 
+                              task.status === 'failed' ? 
+                              theme.colors.warning : 
+                              theme.colors.accent
+                            }`,
+                            borderRadius: theme.borderRadius.sm,
+                            fontSize: theme.fontSize.sm,
+                            color: task.status === 'completed' ? 
+                              theme.colors.success : 
+                              task.status === 'failed' ? 
+                              theme.colors.warning : 
+                              theme.colors.accent,
+                            marginBottom: task.result ? theme.spacing.sm : '0',
+                            fontWeight: '500'
+                          }}>
+                            {task.status === 'pending' && 'Processing...'}
+                            {task.status === 'completed' && 'Completed'}
+                            {task.status === 'failed' && 'Failed'}
+                          </div>
+
+                          {/* Task Result Content */}
+                          {task.result && (
+                            <div>
+                              <div style={{
+                                background: theme.colors.surface,
+                                border: `1px solid ${theme.colors.border}`,
+                                borderRadius: theme.borderRadius.md,
+                                padding: theme.spacing.lg,
+                                marginBottom: theme.spacing.sm,
+                                maxHeight: '200px',
+                                overflowY: 'auto',
+                                fontSize: theme.fontSize.result,
+                                lineHeight: '1.5'
+                              }}>
+                                <div 
+                                  dangerouslySetInnerHTML={{ __html: task.result }}
+                                  style={{ color: theme.colors.primary }}
+                                />
+                              </div>
+                              
+                              <div style={{ 
+                                display: 'flex', 
+                                gap: theme.spacing.sm,
+                                flexWrap: 'wrap'
+                              }}>
+                                <button
+                                  onClick={() => copyToClipboard(task.result)}
+                                  style={{
+                                    padding: `${theme.spacing.sm} ${theme.spacing.lg}`,
+                                    fontSize: theme.fontSize.sm,
+                                    minHeight: 'auto',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    background: theme.colors.background,
+                                    border: `1px solid ${theme.colors.border}`,
+                                    borderRadius: theme.borderRadius.sm,
+                                    cursor: 'pointer',
+                                    color: theme.colors.secondary,
+                                    transition: 'all 0.2s ease'
+                                  }}
+                                  onMouseEnter={(e) => {
+                                    e.target.style.borderColor = theme.colors.borderHover;
+                                    e.target.style.backgroundColor = theme.colors.surface;
+                                  }}
+                                  onMouseLeave={(e) => {
+                                    e.target.style.borderColor = theme.colors.border;
+                                    e.target.style.backgroundColor = theme.colors.background;
+                                  }}
+                                >
+                                  <CopyIcon size={theme.iconSize.sm} style={{ marginRight: theme.spacing.xs }} />
+                                  Copy
+                                </button>
+                                <button
+                                  onClick={() => insertIntoDraft(task.result)}
+                                  style={{
+                                    padding: `${theme.spacing.lg} ${theme.spacing.xl}`, // Bigger padding
+                                    fontSize: theme.fontSize.base, // Larger font
+                                    fontWeight: '600', // Bold text  
+                                    minHeight: 'auto',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    background: `linear-gradient(135deg, ${theme.colors.accent}, ${theme.colors.info})`, // Gradient background
+                                    color: 'white', // White text
+                                    border: 'none',
+                                    borderRadius: theme.borderRadius.lg, // More rounded
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s ease',
+                                    boxShadow: theme.shadows.md, // Drop shadow
+                                    position: 'relative',
+                                    overflow: 'hidden'
+                                  }}
+                                  onMouseEnter={(e) => {
+                                    e.target.style.transform = 'translateY(-2px) scale(1.02)'; // Lift and scale
+                                    e.target.style.boxShadow = theme.shadows.lg; // Bigger shadow
+                                    e.target.style.background = `linear-gradient(135deg, ${theme.colors.info}, ${theme.colors.accent})`; // Reverse gradient
+                                  }}
+                                  onMouseLeave={(e) => {
+                                    e.target.style.transform = 'translateY(0) scale(1)'; // Reset
+                                    e.target.style.boxShadow = theme.shadows.md;
+                                    e.target.style.background = `linear-gradient(135deg, ${theme.colors.accent}, ${theme.colors.info})`;
+                                  }}
+                                  onMouseDown={(e) => {
+                                    e.target.style.transform = 'translateY(0) scale(0.98)'; // Press effect
+                                  }}
+                                  onMouseUp={(e) => {
+                                    e.target.style.transform = 'translateY(-2px) scale(1.02)'; // Back to hover
+                                  }}
+                                >
+                                  <InsertIcon 
+                                    size={theme.iconSize.md} 
+                                    color="white" 
+                                    style={{ marginRight: theme.spacing.sm }} 
+                                  />
+                                  <span style={{ 
+                                    textShadow: '0 1px 2px rgba(0,0,0,0.2)',
+                                    letterSpacing: '0.5px'
+                                  }}>
+                                    Insert into Draft
+                                  </span>
+                                  
+                                  {/* ✅ ADD: Subtle animated shine effect */}
+                                  <div
+                                    style={{
+                                      position: 'absolute',
+                                      top: 0,
+                                      left: '-100%',
+                                      width: '100%',
+                                      height: '100%',
+                                      background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent)',
+                                      animation: 'shine 3s infinite',
+                                      pointerEvents: 'none'
+                                    }}
+                                  />
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </AccordionSection>
+            )}
+
+            {commentHistory.length > 0 && (
+              <AccordionSection
+                id="history"
+                title={
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                    <span style={{ fontSize: theme.fontSize.sm, fontWeight: '600', color: theme.colors.primary }}>
+                      History ({commentHistory.length})
+                    </span>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        clearHistory();
+                      }}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        cursor: 'pointer',
+                        padding: theme.spacing.xs,
+                        borderRadius: theme.borderRadius.sm,
+                        color: theme.colors.tertiary,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}
+                      onMouseEnter={(e) => e.target.style.color = theme.colors.error}
+                      onMouseLeave={(e) => e.target.style.color = theme.colors.tertiary}
+                      title="Delete all history"
+                    >
+                      <Icon name="TrashFilled" size={theme.iconSize.md} />
+                    </button>
+                  </div>
+                }
+              >
+                <div style={{ marginLeft: '-2px', marginRight: '-2px' }}>
+<div style={{ marginLeft: '-2px', marginRight: '-2px' }}>
+  {commentHistory.slice(0, 8).map((entry, index) => {
+    const getBorderColor = () => {
+      if (entry.isTaskCompletion) return theme.colors.success;
+      if (entry.mode === 'email') return theme.colors.info;
+      return theme.colors.border;
+    };
+
+    const getStatusIcon = () => {
+      if (entry.isTaskCompletion) {
+        return <CheckmarkIcon size={theme.iconSize.md} color={theme.colors.success} style={{ marginRight: theme.spacing.sm }} />;
+      }
+      if (entry.mode === 'email') {
+        return <EmailIcon size={theme.iconSize.md} color={theme.colors.info} style={{ marginRight: theme.spacing.sm }} />;
+      }
+      return <TaskIcon size={theme.iconSize.md} color={theme.colors.secondary} style={{ marginRight: theme.spacing.sm }} />;
+    };
+
+    const getStatusText = () => {
+      if (entry.isTaskCompletion) return 'Task Completed';
+      if (entry.mode === 'email') return 'Email Request';
+      return 'Task Request';
+    };
+
+    return (
+      <div
+        key={index}
+        style={{
+          background: theme.colors.background,
+          border: `1px solid ${getBorderColor()}`,
+          borderRadius: theme.borderRadius.md,
+          padding: theme.spacing.sm,
+          marginBottom: theme.spacing.xs,
+          fontSize: theme.fontSize.xs
+        }}
+      >
+        {/* Header */}
+        <div 
+          onClick={() => toggleHistoryExpansion(index)}
+          style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'space-between',
+            marginBottom: theme.spacing.xs,
+            cursor: 'pointer',
+            padding: theme.spacing.xs,
+            borderRadius: theme.borderRadius.sm,
+            transition: 'background-color 0.2s ease'
+          }}
+          onMouseEnter={(e) => e.target.style.backgroundColor = theme.colors.surface}
+          onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
+          title="Click to expand/collapse"
+        >
+          <div style={{ display: 'flex', alignItems: 'center', flex: 1 }}>
+            <div style={{ 
+              marginRight: theme.spacing.sm,
+              transform: expandedHistory.has(index) ? 'rotate(90deg)' : 'rotate(0deg)',
+              transition: 'transform 0.2s ease',
+              fontSize: theme.fontSize.xs,
+              color: theme.colors.tertiary
+            }}>
+              ▶
+            </div>
+            
+            {getStatusIcon()}
+            
+            <div style={{ flex: 1 }}>
+              <div style={{ 
+                color: theme.colors.primary,
+                fontWeight: '600',
+                fontSize: theme.fontSize.sm
+              }}>
+                {getHistoryDisplayName(entry)}
+                {entry.hasFile && (
+                  <AttachmentIcon 
+                    size={theme.iconSize.sm} 
+                    color={theme.colors.tertiary} 
+                    style={{ marginLeft: theme.spacing.sm }} 
+                  />
                 )}
               </div>
-            </AccordionSection>
+              <div style={{ 
+                color: theme.colors.tertiary, 
+                fontSize: theme.fontSize.xs,
+                marginTop: '2px'
+              }}>
+                {formatDate(entry.timestamp)} • {entry.user}
+              </div>
+            </div>
+          </div>
+          
+          {/* Action Buttons */}
+          <div 
+            style={{ display: 'flex', alignItems: 'center', gap: theme.spacing.xs }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={() => viewHistoryEntryInNewWindow(entry)}
+              style={{
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                padding: theme.spacing.xs,
+                borderRadius: theme.borderRadius.sm,
+                color: theme.colors.tertiary,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
+              onMouseEnter={(e) => e.target.style.color = theme.colors.info}
+              onMouseLeave={(e) => e.target.style.color = theme.colors.tertiary}
+              title="View entry"
+            >
+              <ViewIcon size={theme.iconSize.md} color="currentColor" />
+            </button>
+            
+            <button
+              onClick={() => copyToClipboard(entry.result || entry.text)}
+              style={{
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                padding: theme.spacing.xs,
+                borderRadius: theme.borderRadius.sm,
+                color: theme.colors.tertiary,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
+              onMouseEnter={(e) => e.target.style.color = theme.colors.secondary}
+              onMouseLeave={(e) => e.target.style.color = theme.colors.tertiary}
+              title="Copy content"
+            >
+              <CopyIcon size={theme.iconSize.md} />
+            </button>
+            
+            {/* ✅ PROMINENT INSERT BUTTON */}
+            <button
+              onClick={() => insertIntoDraft(entry.result || entry.text)}
+              style={{
+                background: theme.colors.accent,
+                border: `1px solid ${theme.colors.accent}`,
+                cursor: 'pointer',
+                padding: `${theme.spacing.sm} ${theme.spacing.md}`,
+                borderRadius: theme.borderRadius.md,
+                color: 'white',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: theme.fontSize.xs,
+                fontWeight: '600',
+                transition: 'all 0.2s ease',
+                boxShadow: theme.shadows.sm,
+                minWidth: '60px'
+              }}
+              onMouseEnter={(e) => {
+                e.target.style.background = '#5855eb';
+                e.target.style.transform = 'translateY(-1px)';
+                e.target.style.boxShadow = theme.shadows.md;
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.background = theme.colors.accent;
+                e.target.style.transform = 'translateY(0)';
+                e.target.style.boxShadow = theme.shadows.sm;
+              }}
+              title="Insert into draft"
+            >
+              <InsertIcon size={theme.iconSize.sm} color="white" style={{ marginRight: theme.spacing.xs }} />
+              Insert
+            </button>
+            
+            <button
+              onClick={() => deleteHistoryEntry(index)} // ✅ Removed confirm() for sandbox
+              style={{
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                padding: theme.spacing.xs,
+                borderRadius: theme.borderRadius.sm,
+                color: theme.colors.tertiary,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
+              onMouseEnter={(e) => e.target.style.color = theme.colors.error}
+              onMouseLeave={(e) => e.target.style.color = theme.colors.tertiary}
+              title="Delete this entry"
+            >
+              <Icon name="Trash" size={theme.iconSize.md} />
+            </button>
+          </div>
+        </div>
+
+        {/* Expanded Content */}
+        {expandedHistory.has(index) && (
+          <div style={{ 
+            paddingLeft: theme.spacing.lg,
+            animation: 'fadeIn 0.2s ease-out'
+          }}>
+            <div style={{
+              background: theme.colors.surface,
+              border: `1px solid ${theme.colors.border}`,
+              borderRadius: theme.borderRadius.md,
+              padding: theme.spacing.lg,
+              fontSize: theme.fontSize.base,
+              lineHeight: '1.5',
+              color: theme.colors.secondary
+            }}>
+              {entry.result ? (
+                <div dangerouslySetInnerHTML={{ __html: entry.result }} />
+              ) : (
+                entry.text
+              )}
+            </div>
+            
+            {/* ✅ ENHANCED: Prominent expanded insert button */}
+            <div style={{ 
+              display: 'flex', 
+              gap: theme.spacing.sm,
+              marginTop: theme.spacing.sm,
+              flexWrap: 'wrap'
+            }}>
+              <button
+                onClick={() => copyToClipboard(entry.result || entry.text)}
+                style={{
+                  padding: `${theme.spacing.sm} ${theme.spacing.lg}`,
+                  fontSize: theme.fontSize.sm,
+                  minHeight: 'auto',
+                  display: 'flex',
+                  alignItems: 'center',
+                  background: theme.colors.background,
+                  border: `1px solid ${theme.colors.border}`,
+                  borderRadius: theme.borderRadius.sm,
+                  cursor: 'pointer',
+                  color: theme.colors.secondary,
+                  transition: 'all 0.2s ease'
+                }}
+                onMouseEnter={(e) => {
+                  e.target.style.borderColor = theme.colors.borderHover;
+                  e.target.style.backgroundColor = theme.colors.surface;
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.borderColor = theme.colors.border;
+                  e.target.style.backgroundColor = theme.colors.background;
+                }}
+              >
+                <CopyIcon size={theme.iconSize.sm} style={{ marginRight: theme.spacing.xs }} />
+                Copy
+              </button>
+              
+              {/* ✅ SUPER PROMINENT EXPANDED INSERT BUTTON */}
+              <button
+                onClick={() => insertIntoDraft(entry.result || entry.text)}
+                style={{
+                  padding: `${theme.spacing.md} ${theme.spacing.xl}`,
+                  fontSize: theme.fontSize.base,
+                  fontWeight: '600',
+                  minHeight: 'auto',
+                  display: 'flex',
+                  alignItems: 'center',
+                  background: theme.colors.accent,
+                  border: `2px solid ${theme.colors.accent}`,
+                  borderRadius: theme.borderRadius.md,
+                  cursor: 'pointer',
+                  color: 'white',
+                  transition: 'all 0.2s ease',
+                  boxShadow: theme.shadows.md,
+                  flex: 1,
+                  minWidth: '120px',
+                  maxWidth: '180px'
+                }}
+                onMouseEnter={(e) => {
+                  e.target.style.background = '#5855eb';
+                  e.target.style.borderColor = '#5855eb';
+                  e.target.style.transform = 'translateY(-2px)';
+                  e.target.style.boxShadow = theme.shadows.lg;
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.background = theme.colors.accent;
+                  e.target.style.borderColor = theme.colors.accent;
+                  e.target.style.transform = 'translateY(0)';
+                  e.target.style.boxShadow = theme.shadows.md;
+                }}
+              >
+                <InsertIcon size={theme.iconSize.md} color="white" style={{ marginRight: theme.spacing.sm }} />
+                Insert into Draft
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  })}
+</div>
+                </div>
+              </AccordionSection>
+            )}
           </Accordion>
         )}
       </div>
