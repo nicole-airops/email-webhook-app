@@ -404,7 +404,7 @@ function App() {
   };
 
   // ✅ FIXED: Enhanced UnifiedRequestCard with hierarchical toggles
-  const UnifiedRequestCard = ({ request, onDelete, onCopy, onInsert, onView }) => {
+  const UnifiedRequestCard = ({ request, onDelete, onInsert, onView }) => {
     const isExpanded = expandedRequests.has(request.id);
     const isInputExpanded = expandedInputs.has(request.id);
     const isOutputExpanded = expandedOutputs.has(request.id);
@@ -693,29 +693,6 @@ function App() {
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        onCopy(request.result);
-                      }}
-                      style={{
-                        background: 'none',
-                        border: 'none',
-                        cursor: 'pointer',
-                        padding: theme.spacing.xs,
-                        borderRadius: theme.borderRadius.sm,
-                        color: theme.colors.tertiary,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center'
-                      }}
-                      onMouseEnter={(e) => e.target.style.color = theme.colors.secondary}
-                      onMouseLeave={(e) => e.target.style.color = theme.colors.tertiary}
-                      title="Copy result"
-                    >
-                      <CopyIcon size={theme.iconSize.sm} />
-                    </button>
-                    
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
                         onInsert(request.result);
                       }}
                       style={{
@@ -997,49 +974,6 @@ function App() {
     const content = request.result || request.text || request.comment;
     const title = getRequestDisplayName(request);
     
-    // ✅ FIXED: Better HTML to clean format conversion for viewing
-    const formatContentForViewing = (htmlContent) => {
-      const tempDiv = document.createElement('div');
-      tempDiv.innerHTML = htmlContent;
-      
-      // ✅ FIXED: Preserve table structure properly
-      tempDiv.querySelectorAll('table').forEach(table => {
-        // Add responsive table wrapper
-        const wrapper = document.createElement('div');
-        wrapper.style.overflowX = 'auto';
-        wrapper.style.marginBottom = '20px';
-        
-        // Style the table
-        table.style.width = '100%';
-        table.style.borderCollapse = 'collapse';
-        table.style.fontFamily = 'monospace';
-        table.style.fontSize = '14px';
-        
-        // Style all cells
-        table.querySelectorAll('td, th').forEach(cell => {
-          cell.style.border = '1px solid #ddd';
-          cell.style.padding = '8px 12px';
-          cell.style.textAlign = 'left';
-          cell.style.verticalAlign = 'top';
-          cell.style.whiteSpace = 'nowrap';
-        });
-        
-        // Style headers
-        table.querySelectorAll('th').forEach(header => {
-          header.style.backgroundColor = '#f5f5f5';
-          header.style.fontWeight = 'bold';
-        });
-        
-        // Wrap table
-        table.parentNode.insertBefore(wrapper, table);
-        wrapper.appendChild(table);
-      });
-      
-      return tempDiv.innerHTML;
-    };
-    
-    const formattedContent = formatContentForViewing(content);
-    
     const newWindow = window.open('', '_blank');
     newWindow.document.write(`
       <html>
@@ -1068,7 +1002,9 @@ function App() {
               color: white;
               padding: 24px;
             }
-            .content { padding: 24px; }
+            .content { 
+              padding: 24px; 
+            }
             .meta { 
               color: #64748b; 
               font-size: 14px; 
@@ -1076,6 +1012,7 @@ function App() {
               padding-bottom: 16px;
               border-bottom: 1px solid #e2e8f0;
             }
+            /* Simple table styling */
             table {
               width: 100% !important;
               border-collapse: collapse !important;
@@ -1091,25 +1028,9 @@ function App() {
             th {
               background-color: #f8f9fa !important;
               font-weight: bold !important;
-              color: #495057 !important;
             }
             tr:nth-child(even) {
               background-color: #f8f9fa;
-            }
-            pre {
-              background: #f1f5f9;
-              padding: 16px;
-              border-radius: 8px;
-              overflow-x: auto;
-              font-family: 'Courier New', monospace;
-              font-size: 13px;
-            }
-            code {
-              background: #e2e8f0;
-              padding: 2px 6px;
-              border-radius: 4px;
-              font-family: 'Courier New', monospace;
-              font-size: 13px;
             }
           </style>
         </head>
@@ -1123,7 +1044,7 @@ function App() {
                 Requested by ${request.user} on ${formatDate(request.timestamp)}
                 ${request.completedAt ? ` • Completed on ${formatDate(request.completedAt)}` : ''}
               </div>
-              ${formattedContent}
+              ${content}
             </div>
           </div>
         </body>
@@ -2415,15 +2336,80 @@ function App() {
     setStatus('📋 Copied to clipboard');
   };
 
-  // ✅ SIMPLIFIED: Copy HTML content directly
+  // ✅ FIXED: Modern clipboard API with improved HTML to Markdown conversion
   const copyToClipboard = async (content) => {
     console.log('📋 COPY: Starting clipboard operation');
-    console.log('📋 COPY: Content length:', content.length);
+    
+    // ✅ ENHANCED: Better HTML to Markdown conversion
+    const htmlToMarkdown = (html) => {
+      const tempDiv = document.createElement('div');
+      tempDiv.innerHTML = html;
+      
+      // ✅ FIXED: Better table conversion - preserve structure
+      tempDiv.querySelectorAll('table').forEach(table => {
+        let markdownTable = '\n';
+        const rows = Array.from(table.querySelectorAll('tr'));
+        
+        if (rows.length > 0) {
+          rows.forEach((row, rowIndex) => {
+            const cells = Array.from(row.querySelectorAll('td, th')).map(cell => {
+              // Better cell content cleaning
+              return cell.textContent.trim().replace(/\s+/g, ' ').replace(/\|/g, '\\|');
+            });
+            
+            if (cells.length > 0) {
+              // Ensure minimum width for readability
+              const paddedCells = cells.map(cell => cell.padEnd(15, ' ').substring(0, 30));
+              markdownTable += '| ' + paddedCells.join(' | ') + ' |\n';
+              
+              // Add header separator after first row
+              if (rowIndex === 0) {
+                markdownTable += '| ' + paddedCells.map(() => '---').join(' | ') + ' |\n';
+              }
+            }
+          });
+        }
+        
+        markdownTable += '\n';
+        table.replaceWith(markdownTable);
+      });
+      
+      // Convert other HTML elements to markdown
+      tempDiv.querySelectorAll('h1').forEach(h => h.replaceWith('# ' + h.textContent + '\n\n'));
+      tempDiv.querySelectorAll('h2').forEach(h => h.replaceWith('## ' + h.textContent + '\n\n'));
+      tempDiv.querySelectorAll('h3').forEach(h => h.replaceWith('### ' + h.textContent + '\n\n'));
+      tempDiv.querySelectorAll('h4').forEach(h => h.replaceWith('#### ' + h.textContent + '\n\n'));
+      tempDiv.querySelectorAll('h5').forEach(h => h.replaceWith('##### ' + h.textContent + '\n\n'));
+      tempDiv.querySelectorAll('h6').forEach(h => h.replaceWith('###### ' + h.textContent + '\n\n'));
+      
+      // Convert paragraphs with proper spacing
+      tempDiv.querySelectorAll('p').forEach(p => p.replaceWith(p.textContent + '\n\n'));
+      
+      // Convert line breaks
+      tempDiv.querySelectorAll('br').forEach(br => br.replaceWith('\n'));
+      
+      // Convert formatting
+      tempDiv.querySelectorAll('strong, b').forEach(b => b.replaceWith('**' + b.textContent + '**'));
+      tempDiv.querySelectorAll('em, i').forEach(i => i.replaceWith('*' + i.textContent + '*'));
+      
+      // Convert lists with proper formatting
+      tempDiv.querySelectorAll('li').forEach(li => li.replaceWith('• ' + li.textContent + '\n'));
+      tempDiv.querySelectorAll('ul, ol').forEach(list => list.replaceWith(list.textContent + '\n'));
+      
+      // Clean up extra whitespace
+      let result = tempDiv.textContent || tempDiv.innerText || html.replace(/<[^>]*>/g, '');
+      result = result.replace(/\n{3,}/g, '\n\n').trim();
+      
+      return result;
+    };
+    
+    const markdownContent = htmlToMarkdown(content);
+    console.log('📋 COPY: Converted to markdown, length:', markdownContent.length);
     
     // ✅ MODERN: Try modern Clipboard API first
     if (navigator.clipboard && navigator.clipboard.writeText) {
       try {
-        await navigator.clipboard.writeText(content);
+        await navigator.clipboard.writeText(markdownContent);
         console.log('✅ COPY: Modern clipboard API success');
         setStatus('✅ Copied to clipboard!');
         return;
@@ -2435,7 +2421,7 @@ function App() {
     // ✅ FALLBACK: Traditional method with better implementation
     try {
       const textArea = document.createElement('textarea');
-      textArea.value = content;
+      textArea.value = markdownContent;
       
       // Better positioning - avoid visual glitches
       textArea.style.position = 'fixed';
@@ -2456,7 +2442,7 @@ function App() {
       // Better selection method
       textArea.focus();
       textArea.select();
-      textArea.setSelectionRange(0, content.length);
+      textArea.setSelectionRange(0, markdownContent.length);
       
       const successful = document.execCommand('copy');
       document.body.removeChild(textArea);
@@ -2509,7 +2495,7 @@ function App() {
       instructions.style.fontSize = '14px';
       
       const textArea = document.createElement('textarea');
-      textArea.value = content;
+      textArea.value = markdownContent;
       textArea.style.width = '100%';
       textArea.style.height = '300px';
       textArea.style.padding = '12px';
@@ -2560,7 +2546,7 @@ function App() {
     } catch (error) {
       console.error('❌ COPY: All methods failed:', error);
       setStatus('❌ Copy failed - content logged to console');
-      console.log('📋 COPY CONTENT:\n', content);
+      console.log('📋 COPY CONTENT:\n', markdownContent);
     }
   };
 
@@ -3198,7 +3184,6 @@ function App() {
                       key={request.id}
                       request={request}
                       onDelete={deleteRequest}
-                      onCopy={copyToClipboard}
                       onInsert={insertIntoDraft}
                       onView={viewRequestInNewWindow}
                     />
