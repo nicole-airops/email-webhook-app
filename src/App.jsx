@@ -2748,42 +2748,42 @@ const checkTaskStatus = async (taskId) => {
         }
 
         // ⭐ ENHANCED: Create and save task with taskName if in task mode
-if (mode === 'task' && taskId) {
-  const newTask = {
-    id: taskId,
-    comment: comment,
-    outputFormat: outputFormat,
-    selectedFormat: selectedFormat,
-    taskName: taskName, // ⭐ ADD TASK NAME
-    displayName: taskName, // ⭐ ADD DISPLAY NAME  
-    hasFile: !!uploadedFile,
-    fileName: uploadedFile?.name,
-    status: 'pending',
-    createdAt: new Date().toISOString(),
-    user: context.teammate ? context.teammate.name : 'Unknown user'
-  };
-  
-  console.log('📝 COMPLETE TASK OBJECT WITH NAME:', newTask); // ⭐ DEBUG LOG
-  
-  const updatedTasks = [newTask, ...taskResults];
-  setTaskResults(updatedTasks);
-  
-  // Save to storage
-  try {
-    await fetch('/.netlify/functions/store-task', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ taskId, task: newTask })
-    });
-    
-    await saveTaskResultsToNetlify(conversationId, updatedTasks);
-  } catch (storageError) {
-    console.error('❌ AIROPS: Storage error:', storageError);
-  }
-  
-  // Start polling
-  setPollingTasks(prev => new Set([...prev, taskId]));
-}
+        if (mode === 'task' && taskId) {
+          const newTask = {
+            id: taskId,
+            comment: comment,
+            outputFormat: outputFormat,
+            selectedFormat: selectedFormat,
+            taskName: taskName, // ⭐ ADD TASK NAME
+            displayName: taskName, // ⭐ ADD DISPLAY NAME
+            hasFile: !!uploadedFile,
+            fileName: uploadedFile?.name,
+            status: 'pending',
+            createdAt: new Date().toISOString(),
+            user: context.teammate ? context.teammate.name : 'Unknown user'
+          };
+          
+          console.log('📝 COMPLETE TASK OBJECT WITH NAME:', newTask); // ⭐ DEBUG LOG
+          
+          const updatedTasks = [newTask, ...taskResults];
+          setTaskResults(updatedTasks);
+          
+          // Save to storage
+          try {
+            await fetch('/.netlify/functions/store-task', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ taskId, task: newTask })
+            });
+            
+            await saveTaskResultsToNetlify(conversationId, updatedTasks);
+          } catch (storageError) {
+            console.error('❌ AIROPS: Storage error:', storageError);
+          }
+          
+          // Start polling
+          setPollingTasks(prev => new Set([...prev, taskId]));
+        }
       }
       
       const webhookUrl = mode === 'email' ? EMAIL_WEBHOOK_URL : TASK_WEBHOOK_URL;
