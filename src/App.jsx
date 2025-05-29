@@ -772,120 +772,7 @@ const UnifiedRequestCard = ({ request, onDelete, onInsert, onView }) => {
   );
 };
 
-  // ✅ Action handlers
-  const clearAllRequests = async () => {
-    if (!confirm('Delete all requests? This cannot be undone.')) return;
-    
-    try {
-      // Clear both tasks and history
-      await Promise.all([
-        clearAllTasks(),
-        clearHistory()
-      ]);
-      
-      // Clear all expansion states
-      setExpandedRequests(new Set());
-      setExpandedInputs(new Set());
-      setExpandedOutputs(new Set());
-      setStatus('All requests cleared');
-    } catch (error) {
-      console.error('❌ Error clearing requests:', error);
-      setStatus('Clear failed');
-    }
-  };
-
-  // ✅ ENHANCED: Test deletion without actually deleting (for debugging)
-  const testDeletion = async (request) => {
-    console.log('🧪 TEST DELETION (NO ACTUAL DELETE)');
-    console.log('=====================================');
-    console.log('🗑️ REQUEST TO DELETE:', {
-      id: request.id,
-      type: request.type,
-      hasOriginalIndex: request.originalIndex !== undefined,
-      originalIndex: request.originalIndex,
-      timestamp: request.timestamp,
-      user: request.user,
-      textPreview: request.text?.substring(0, 50)
-    });
-
-    if (request.type === 'task') {
-      console.log('🗑️ TASK DELETION TEST:');
-      const taskExists = taskResults.find(task => task.id === request.id);
-      console.log('   - Task exists in taskResults:', !!taskExists);
-      console.log('   - Task index in array:', taskResults.findIndex(task => task.id === request.id));
-      if (taskExists) {
-        console.log('   - Task details:', taskExists);
-        console.log('   - ✅ Task deletion would succeed');
-      } else {
-        console.log('   - ❌ Task not found - deletion would fail');
-      }
-    } else {
-      console.log('🗑️ HISTORY DELETION TEST:');
-      console.log('   - Current history length:', commentHistory.length);
-      
-      let historyIndex = -1;
-      
-      if (request.originalIndex !== undefined) {
-        historyIndex = request.originalIndex;
-        console.log('   - Using originalIndex:', historyIndex);
-        console.log('   - Index valid:', historyIndex >= 0 && historyIndex < commentHistory.length);
-        
-        if (historyIndex >= 0 && historyIndex < commentHistory.length) {
-          const entry = commentHistory[historyIndex];
-          console.log('   - Entry at originalIndex:', {
-            timestamp: entry.timestamp,
-            user: entry.user,
-            textPreview: entry.text?.substring(0, 50)
-          });
-          console.log('   - ✅ Original index deletion would succeed');
-        } else {
-          console.log('   - ❌ Original index out of bounds');
-        }
-      } else {
-        console.log('   - No originalIndex, searching...');
-        historyIndex = commentHistory.findIndex((entry, index) => {
-          const timestampMatch = entry.timestamp === request.timestamp;
-          const userMatch = entry.user === request.user;
-          const textMatch = entry.text === request.text;
-          const overallMatch = timestampMatch && userMatch && textMatch;
-          
-          console.log(`   - Checking index ${index}:`, {
-            timestampMatch,
-            userMatch,
-            textMatch,
-            overallMatch,
-            entryTimestamp: entry.timestamp,
-            requestTimestamp: request.timestamp,
-            entryUser: entry.user,
-            requestUser: request.user
-          });
-          
-          return overallMatch;
-        });
-        
-        console.log('   - Search result index:', historyIndex);
-        
-        if (historyIndex >= 0) {
-          console.log('   - ✅ Search-based deletion would succeed');
-        } else {
-          console.log('   - ❌ No matching entry found - deletion would fail');
-          
-          // Extra debugging - show all history entries for comparison
-          console.log('   - ALL HISTORY ENTRIES FOR COMPARISON:');
-          commentHistory.forEach((entry, index) => {
-            console.log(`     [${index}]`, {
-              timestamp: entry.timestamp,
-              user: entry.user,
-              textPreview: entry.text?.substring(0, 30)
-            });
-          });
-        }
-      }
-    }
-    
-    setStatus('🧪 Deletion test complete - check console');
-  };
-
+// ✅ MAIN DELETE FUNCTION - Routes to correct deletion method
 const deleteRequest = async (request) => {
   console.log('🗑️ DELETING REQUEST:', {
     id: request.id,
@@ -897,51 +784,77 @@ const deleteRequest = async (request) => {
   try {
     let deleteSuccess = false;
 
-    // ✅ SIMPLE: Try to delete as task first (check if it exists in taskResults)
+    // ✅ STRATEGY 1: Try to delete as task first (regardless of type field)
     const taskIndex = taskResults.findIndex(task => task.id === request.id);
     if (taskIndex !== -1) {
-      console.log('🗑️ Found as task, deleting...');
+      console.log('🗑️ Found in taskResults, deleting as task...');
       await deleteTask(request.id);
       deleteSuccess = true;
+      console.log('✅ Task deletion completed');
     } 
-    // ✅ SIMPLE: Otherwise try to delete as history
+    // ✅ STRATEGY 2: Try to delete as history (regardless of type field)
     else {
-      console.log('🗑️ Not found as task, trying as history...');
-      let historyIndex = -1;
+      console.log('🗑️ Not in taskResults, trying as history...');
       
-      if (request.originalIndex !== undefined) {
-        // Use originalIndex if available
-        historyIndex = request.originalIndex;
-        console.log('🗑️ Using originalIndex:', historyIndex);
-      } else {
-        // Fallback: Find by matching properties
-        historyIndex = commentHistory.findIndex((entry, index) => {
-          const match = entry.timestamp === request.timestamp && 
-                       entry.user === request.user &&
-                       entry.text === request.text;
-          return match;
+      // Try originalIndex first
+      if (request.originalIndex !== undefined && 
+          request.originalIndex >= 0 && 
+          request.originalIndex < commentHistory.length) {
+        
+        console.log(`🗑️ Using originalIndex ${request.originalIndex} of ${commentHistory.length} entries`);
+        const entryToDelete = commentHistory[request.originalIndex];
+        console.log('🗑️ Entry to delete:', {
+          timestamp: entryToDelete.timestamp,
+          user: entryToDelete.user,
+          textPreview: entryToDelete.text?.substring(0, 30)
         });
-        console.log('🗑️ Found historyIndex via search:', historyIndex);
-      }
-      
-      if (historyIndex !== -1 && historyIndex < commentHistory.length) {
-        console.log('🗑️ Deleting history entry at index:', historyIndex);
-        await deleteHistoryEntry(historyIndex);
+        
+        await deleteHistoryEntry(request.originalIndex);
         deleteSuccess = true;
+        console.log('✅ History deletion via originalIndex completed');
+      } 
+      // Fallback: search by properties
+      else {
+        console.log('🗑️ Searching by properties...');
+        const historyIndex = commentHistory.findIndex((entry, index) => {
+          console.log(`🔍 Checking entry ${index}:`, {
+            entryTimestamp: entry.timestamp,
+            requestTimestamp: request.timestamp,
+            timestampMatch: entry.timestamp === request.timestamp,
+            userMatch: entry.user === request.user,
+            textMatch: entry.text === request.text
+          });
+          
+          return entry.timestamp === request.timestamp && 
+                 entry.user === request.user &&
+                 entry.text === request.text;
+        });
+        
+        if (historyIndex !== -1) {
+          console.log(`🗑️ Found via search at index ${historyIndex}, deleting...`);
+          await deleteHistoryEntry(historyIndex);
+          deleteSuccess = true;
+          console.log('✅ History deletion via search completed');
+        } else {
+          console.error('❌ Not found in history via search');
+        }
       }
     }
 
     if (!deleteSuccess) {
-      console.error('🗑️ Could not find entry to delete:', {
+      console.error('❌ DELETION FAILED - Item not found anywhere:', {
         requestId: request.id,
-        taskResultsLength: taskResults.length,
-        historyLength: commentHistory.length
+        requestType: request.type,
+        requestTimestamp: request.timestamp,
+        taskResultsIds: taskResults.map(t => t.id),
+        historyLength: commentHistory.length,
+        historyTimestamps: commentHistory.map(h => h.timestamp)
       });
       setStatus('❌ Could not locate entry to delete');
       return;
     }
     
-    // Remove from all expansion states
+    // Remove from all expansion states only if delete was successful
     setExpandedRequests(prev => {
       const newSet = new Set(prev);
       newSet.delete(request.id);
@@ -960,12 +873,299 @@ const deleteRequest = async (request) => {
       return newSet;
     });
     
-    console.log('✅ Request deleted successfully');
+    console.log('✅ Request deleted successfully and UI state updated');
     setStatus('✅ Request deleted');
     
   } catch (error) {
-    console.error('❌ Error deleting request:', error);
+    console.error('❌ Error during deletion:', error);
+    setStatus('❌ Delete failed - error occurred');
+  }
+};
+
+// ✅ DELETE HISTORY ENTRY - Persists to Netlify
+const deleteHistoryEntry = async (entryIndex) => {
+  console.log(`🗑️ AIROPS DELETE: Starting deletion process`);
+  console.log(`🗑️ AIROPS DELETE: Entry index: ${entryIndex}`);
+  console.log(`🗑️ AIROPS DELETE: Current history length: ${commentHistory.length}`);
+  console.log(`🗑️ AIROPS DELETE: Conversation ID: ${context?.conversation?.id}`);
+  
+  if (!context?.conversation?.id) {
+    console.error('❌ AIROPS DELETE: No conversation ID available');
+    setStatus('❌ No conversation context');
+    return;
+  }
+  
+  if (entryIndex < 0 || entryIndex >= commentHistory.length) {
+    console.error(`❌ AIROPS DELETE: Invalid index ${entryIndex} for array length ${commentHistory.length}`);
+    setStatus('❌ Invalid entry index');
+    return;
+  }
+  
+  const entryToDelete = commentHistory[entryIndex];
+  console.log(`🗑️ AIROPS DELETE: Entry to delete:`, {
+    index: entryIndex,
+    timestamp: entryToDelete.timestamp,
+    user: entryToDelete.user,
+    mode: entryToDelete.mode,
+    textLength: entryToDelete.text?.length || 0
+  });
+  
+  try {
+    // Create updated history array
+    const updatedHistory = commentHistory.filter((_, index) => index !== entryIndex);
+    console.log(`🗑️ AIROPS DELETE: Updated history length: ${updatedHistory.length}`);
+    
+    const payload = { 
+      conversationId: context.conversation.id, 
+      history: updatedHistory 
+    };
+    
+    console.log(`🗑️ AIROPS DELETE: API payload:`, {
+      conversationId: payload.conversationId,
+      historyLength: payload.history.length,
+      url: '/.netlify/functions/save-conversation-history'
+    });
+    
+    // Make API call
+    const response = await fetch('/.netlify/functions/save-conversation-history', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    
+    console.log(`🗑️ AIROPS DELETE: API response status: ${response.status}`);
+    console.log(`🗑️ AIROPS DELETE: API response ok: ${response.ok}`);
+    
+    if (response.ok) {
+      const result = await response.json();
+      console.log(`✅ AIROPS DELETE: API success response:`, result);
+      
+      // ✅ Update local state
+      setCommentHistory(updatedHistory);
+      console.log(`✅ AIROPS DELETE: Local state updated to ${updatedHistory.length} entries`);
+      
+      setStatus(`✅ Entry deleted (${updatedHistory.length} remain)`);
+      
+    } else {
+      const errorText = await response.text();
+      console.error(`❌ AIROPS DELETE: API failed - Status: ${response.status}`);
+      console.error(`❌ AIROPS DELETE: Error response:`, errorText);
+      
+      // Try to parse error details
+      try {
+        const errorJson = JSON.parse(errorText);
+        console.error(`❌ AIROPS DELETE: Error details:`, errorJson);
+      } catch (e) {
+        console.error(`❌ AIROPS DELETE: Raw error text:`, errorText);
+      }
+      
+      setStatus(`❌ Delete failed (${response.status})`);
+    }
+    
+  } catch (error) {
+    console.error('❌ AIROPS DELETE: Network/JS error:', error);
+    console.error('❌ AIROPS DELETE: Error stack:', error.stack);
+    setStatus('❌ Delete failed - network error');
+  }
+};
+
+// ✅ DELETE TASK - Persists to Netlify
+const deleteTask = async (taskId) => {
+  console.log(`🗑️ DELETING TASK: ${taskId}`);
+  
+  if (!context?.conversation?.id) {
+    console.error('❌ No conversation ID');
+    setStatus('❌ No conversation context');
+    return;
+  }
+  
+  try {
+    const updatedTasks = taskResults.filter(task => task.id !== taskId);
+    console.log(`🗑️ New tasks length: ${updatedTasks.length}`);
+    
+    const response = await fetch('/.netlify/functions/save-conversation-tasks', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        conversationId: context.conversation.id, 
+        tasks: updatedTasks 
+      })
+    });
+    
+    if (response.ok) {
+      setTaskResults(updatedTasks);
+      setPollingTasks(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(taskId);
+        return newSet;
+      });
+      
+      // Clear from all expansion states
+      setExpandedRequests(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(taskId);
+        return newSet;
+      });
+      setExpandedInputs(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(taskId);
+        return newSet;
+      });
+      setExpandedOutputs(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(taskId);
+        return newSet;
+      });
+      
+      console.log(`✅ Task deleted and persisted`);
+      setStatus('Task deleted');
+    } else {
+      const errorText = await response.text();
+      console.error(`❌ Failed to persist task deletion:`, errorText);
+      setStatus(`❌ Delete failed (${response.status})`);
+    }
+  } catch (error) {
+    console.error('❌ AIROPS: Error deleting task:', error);
     setStatus('Delete failed');
+  }
+};
+
+// ✅ CLEAR ALL REQUESTS - Clears both tasks and history
+const clearAllRequests = async () => {
+  if (!confirm('Delete all requests? This cannot be undone.')) return;
+  
+  try {
+    // Clear both tasks and history
+    await Promise.all([
+      clearAllTasks(),
+      clearHistory()
+    ]);
+    
+    // Clear all expansion states
+    setExpandedRequests(new Set());
+    setExpandedInputs(new Set());
+    setExpandedOutputs(new Set());
+    setStatus('All requests cleared');
+  } catch (error) {
+    console.error('❌ Error clearing requests:', error);
+    setStatus('Clear failed');
+  }
+};
+
+// ✅ CLEAR ALL TASKS - Persists to Netlify
+const clearAllTasks = async () => {
+  if (!context?.conversation?.id) return;
+  
+  try {
+    const response = await fetch('/.netlify/functions/save-conversation-tasks', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        conversationId: context.conversation.id, 
+        tasks: [] 
+      })
+    });
+    
+    if (response.ok) {
+      setTaskResults([]);
+      setPollingTasks(new Set());
+      
+      // Clear all expansion states for tasks
+      const taskIds = taskResults.map(task => task.id);
+      setExpandedRequests(prev => {
+        const newSet = new Set(prev);
+        taskIds.forEach(id => newSet.delete(id));
+        return newSet;
+      });
+      setExpandedInputs(prev => {
+        const newSet = new Set(prev);
+        taskIds.forEach(id => newSet.delete(id));
+        return newSet;
+      });
+      setExpandedOutputs(prev => {
+        const newSet = new Set(prev);
+        taskIds.forEach(id => newSet.delete(id));
+        return newSet;
+      });
+      
+      console.log('✅ All tasks cleared and persisted');
+      setStatus('Tasks cleared');
+    } else {
+      const errorText = await response.text();
+      console.error('❌ Failed to clear tasks:', errorText);
+      setStatus('Clear failed');
+    }
+  } catch (error) {
+    console.error('❌ AIROPS: Error clearing tasks:', error);
+    setStatus('Clear failed');
+  }
+};
+
+// ✅ CLEAR HISTORY - Persists to Netlify
+const clearHistory = async () => {
+  console.log(`🗑️ AIROPS CLEAR ALL: Starting clear all process`);
+  console.log(`🗑️ AIROPS CLEAR ALL: Current history length: ${commentHistory.length}`);
+  console.log(`🗑️ AIROPS CLEAR ALL: Conversation ID: ${context?.conversation?.id}`);
+  
+  if (!context?.conversation?.id) {
+    console.error('❌ AIROPS CLEAR ALL: No conversation ID');
+    setStatus('❌ No conversation context');
+    return;
+  }
+  
+  try {
+    const payload = { 
+      conversationId: context.conversation.id, 
+      history: [],
+      clearAll: true // Explicit flag for clearing
+    };
+    
+    console.log(`🗑️ AIROPS CLEAR ALL: API payload:`, payload);
+    
+    const response = await fetch('/.netlify/functions/save-conversation-history', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    
+    console.log(`🗑️ AIROPS CLEAR ALL: API response status: ${response.status}`);
+    
+    if (response.ok) {
+      const result = await response.json();
+      console.log(`✅ AIROPS CLEAR ALL: API success:`, result);
+      
+      setCommentHistory([]);
+      
+      // Clear all expansion states for history entries
+      const historyIds = commentHistory.map((_, index) => `history_${commentHistory[index].timestamp}_${index}`);
+      setExpandedRequests(prev => {
+        const newSet = new Set(prev);
+        historyIds.forEach(id => newSet.delete(id));
+        return newSet;
+      });
+      setExpandedInputs(prev => {
+        const newSet = new Set(prev);
+        historyIds.forEach(id => newSet.delete(id));
+        return newSet;
+      });
+      setExpandedOutputs(prev => {
+        const newSet = new Set(prev);
+        historyIds.forEach(id => newSet.delete(id));
+        return newSet;
+      });
+      
+      console.log(`✅ AIROPS CLEAR ALL: Local state cleared`);
+      setStatus('✅ All history cleared');
+      
+    } else {
+      const errorText = await response.text();
+      console.error(`❌ AIROPS CLEAR ALL: API failed:`, response.status, errorText);
+      setStatus(`❌ Clear failed (${response.status})`);
+    }
+    
+  } catch (error) {
+    console.error('❌ AIROPS CLEAR ALL: Error:', error);
+    setStatus('❌ Clear failed - network error');
   }
 };
 
@@ -1716,260 +1916,6 @@ const viewRequestInNewWindow = (request) => {
     await manualRefresh();
     
     setStatus('History debug complete - check console');
-  };
-
-  // ✅ Clear functions
-  const clearAllTasks = async () => {
-    if (!context?.conversation?.id) return;
-    
-    if (!confirm('Delete all tasks? This cannot be undone.')) return;
-    
-    try {
-      const response = await fetch('/.netlify/functions/save-conversation-tasks', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          conversationId: context.conversation.id, 
-          tasks: [] 
-        })
-      });
-      
-      if (response.ok) {
-        setTaskResults([]);
-        setPollingTasks(new Set());
-        
-        // Clear all expansion states for tasks
-        const taskIds = taskResults.map(task => task.id);
-        setExpandedRequests(prev => {
-          const newSet = new Set(prev);
-          taskIds.forEach(id => newSet.delete(id));
-          return newSet;
-        });
-        setExpandedInputs(prev => {
-          const newSet = new Set(prev);
-          taskIds.forEach(id => newSet.delete(id));
-          return newSet;
-        });
-        setExpandedOutputs(prev => {
-          const newSet = new Set(prev);
-          taskIds.forEach(id => newSet.delete(id));
-          return newSet;
-        });
-        
-        setStatus('Tasks cleared');
-      }
-    } catch (error) {
-      console.error('❌ AIROPS: Error clearing tasks:', error);
-      setStatus('Clear failed');
-    }
-  };
-
-  // ✅ ENHANCED: Better history deletion with comprehensive debugging
-  const deleteHistoryEntry = async (entryIndex) => {
-    console.log(`🗑️ AIROPS DELETE: Starting deletion process`);
-    console.log(`🗑️ AIROPS DELETE: Entry index: ${entryIndex}`);
-    console.log(`🗑️ AIROPS DELETE: Current history length: ${commentHistory.length}`);
-    console.log(`🗑️ AIROPS DELETE: Conversation ID: ${context?.conversation?.id}`);
-    
-    if (!context?.conversation?.id) {
-      console.error('❌ AIROPS DELETE: No conversation ID available');
-      setStatus('❌ No conversation context');
-      return;
-    }
-    
-    if (entryIndex < 0 || entryIndex >= commentHistory.length) {
-      console.error(`❌ AIROPS DELETE: Invalid index ${entryIndex} for array length ${commentHistory.length}`);
-      setStatus('❌ Invalid entry index');
-      return;
-    }
-    
-    const entryToDelete = commentHistory[entryIndex];
-    console.log(`🗑️ AIROPS DELETE: Entry to delete:`, {
-      index: entryIndex,
-      timestamp: entryToDelete.timestamp,
-      user: entryToDelete.user,
-      mode: entryToDelete.mode,
-      textLength: entryToDelete.text?.length || 0
-    });
-    
-    try {
-      // Create updated history array
-      const updatedHistory = commentHistory.filter((_, index) => index !== entryIndex);
-      console.log(`🗑️ AIROPS DELETE: Updated history length: ${updatedHistory.length}`);
-      
-      const payload = { 
-        conversationId: context.conversation.id, 
-        history: updatedHistory 
-      };
-      
-      console.log(`🗑️ AIROPS DELETE: API payload:`, {
-        conversationId: payload.conversationId,
-        historyLength: payload.history.length,
-        url: '/.netlify/functions/save-conversation-history'
-      });
-      
-      // Make API call
-      const response = await fetch('/.netlify/functions/save-conversation-history', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      
-      console.log(`🗑️ AIROPS DELETE: API response status: ${response.status}`);
-      console.log(`🗑️ AIROPS DELETE: API response ok: ${response.ok}`);
-      
-      if (response.ok) {
-        const result = await response.json();
-        console.log(`✅ AIROPS DELETE: API success response:`, result);
-        
-        // ✅ Update local state
-        setCommentHistory(updatedHistory);
-        console.log(`✅ AIROPS DELETE: Local state updated to ${updatedHistory.length} entries`);
-        
-        setStatus(`✅ Entry deleted (${updatedHistory.length} remain)`);
-        
-      } else {
-        const errorText = await response.text();
-        console.error(`❌ AIROPS DELETE: API failed - Status: ${response.status}`);
-        console.error(`❌ AIROPS DELETE: Error response:`, errorText);
-        
-        // Try to parse error details
-        try {
-          const errorJson = JSON.parse(errorText);
-          console.error(`❌ AIROPS DELETE: Error details:`, errorJson);
-        } catch (e) {
-          console.error(`❌ AIROPS DELETE: Raw error text:`, errorText);
-        }
-        
-        setStatus(`❌ Delete failed (${response.status})`);
-      }
-      
-    } catch (error) {
-      console.error('❌ AIROPS DELETE: Network/JS error:', error);
-      console.error('❌ AIROPS DELETE: Error stack:', error.stack);
-      setStatus('❌ Delete failed - network error');
-    }
-  };
-
-  // ✅ ENHANCED: Clear all history with better debugging
-  const clearHistory = async () => {
-    console.log(`🗑️ AIROPS CLEAR ALL: Starting clear all process`);
-    console.log(`🗑️ AIROPS CLEAR ALL: Current history length: ${commentHistory.length}`);
-    console.log(`🗑️ AIROPS CLEAR ALL: Conversation ID: ${context?.conversation?.id}`);
-    
-    if (!context?.conversation?.id) {
-      console.error('❌ AIROPS CLEAR ALL: No conversation ID');
-      setStatus('❌ No conversation context');
-      return;
-    }
-    
-    if (!confirm(`Delete all ${commentHistory.length} history entries? This cannot be undone.`)) {
-      console.log('🗑️ AIROPS CLEAR ALL: User cancelled');
-      return;
-    }
-    
-    try {
-      const payload = { 
-        conversationId: context.conversation.id, 
-        history: [],
-        clearAll: true // Explicit flag for clearing
-      };
-      
-      console.log(`🗑️ AIROPS CLEAR ALL: API payload:`, payload);
-      
-      const response = await fetch('/.netlify/functions/save-conversation-history', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      
-      console.log(`🗑️ AIROPS CLEAR ALL: API response status: ${response.status}`);
-      
-      if (response.ok) {
-        const result = await response.json();
-        console.log(`✅ AIROPS CLEAR ALL: API success:`, result);
-        
-        setCommentHistory([]);
-        
-        // Clear all expansion states for history entries
-        const historyIds = commentHistory.map((_, index) => `history_${commentHistory[index].timestamp}_${index}`);
-        setExpandedRequests(prev => {
-          const newSet = new Set(prev);
-          historyIds.forEach(id => newSet.delete(id));
-          return newSet;
-        });
-        setExpandedInputs(prev => {
-          const newSet = new Set(prev);
-          historyIds.forEach(id => newSet.delete(id));
-          return newSet;
-        });
-        setExpandedOutputs(prev => {
-          const newSet = new Set(prev);
-          historyIds.forEach(id => newSet.delete(id));
-          return newSet;
-        });
-        
-        setStatus('✅ All history cleared');
-        console.log(`✅ AIROPS CLEAR ALL: Local state cleared`);
-        
-      } else {
-        const errorText = await response.text();
-        console.error(`❌ AIROPS CLEAR ALL: API failed:`, response.status, errorText);
-        setStatus(`❌ Clear failed (${response.status})`);
-      }
-      
-    } catch (error) {
-      console.error('❌ AIROPS CLEAR ALL: Error:', error);
-      setStatus('❌ Clear failed - network error');
-    }
-  };
-
-  const deleteTask = async (taskId) => {
-    if (!context?.conversation?.id) return;
-    
-    try {
-      const updatedTasks = taskResults.filter(task => task.id !== taskId);
-      
-      const response = await fetch('/.netlify/functions/save-conversation-tasks', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          conversationId: context.conversation.id, 
-          tasks: updatedTasks 
-        })
-      });
-      
-      if (response.ok) {
-        setTaskResults(updatedTasks);
-        setPollingTasks(prev => {
-          const newSet = new Set(prev);
-          newSet.delete(taskId);
-          return newSet;
-        });
-        
-        // Clear from all expansion states
-        setExpandedRequests(prev => {
-          const newSet = new Set(prev);
-          newSet.delete(taskId);
-          return newSet;
-        });
-        setExpandedInputs(prev => {
-          const newSet = new Set(prev);
-          newSet.delete(taskId);
-          return newSet;
-        });
-        setExpandedOutputs(prev => {
-          const newSet = new Set(prev);
-          newSet.delete(taskId);
-          return newSet;
-        });
-        
-        setStatus('Task deleted');
-      }
-    } catch (error) {
-      console.error('❌ AIROPS: Error deleting task:', error);
-      setStatus('Delete failed');
-    }
   };
 
   // ✅ Save/load functions
