@@ -3090,29 +3090,35 @@ const checkTaskStatus = async (taskId) => {
       }}>
         {/* Instructions Input */}
         <div ref={textareaContainerRef} style={{ position: 'relative', marginBottom: theme.spacing.sm }}>
-          <textarea
-            value={comment}
-            onChange={(e) => setComment(e.target.value)}
-            placeholder={
-              mode === 'email' ? "How should we respond?" : "What do you need created?"
-            }
-            style={{
-              width: '100%',
-              height: `${textareaHeight}px`,
-              padding: theme.spacing.sm,
-              border: `1px solid ${theme.colors.border}`,
-              borderRadius: theme.borderRadius.md,
-              fontSize: theme.fontSize.base,
-              fontFamily: 'inherit',
-              resize: 'none',
-              paddingBottom: theme.spacing.lg,
-              background: theme.colors.surface,
-              color: theme.colors.primary,
-              transition: 'border-color 0.2s ease'
-            }}
-            onFocus={(e) => e.target.style.borderColor = theme.colors.accent}
-            onBlur={(e) => e.target.style.borderColor = theme.colors.border}
-          />
+<textarea
+  value={comment}
+  onChange={(e) => setComment(e.target.value)}
+  placeholder={
+    mode === 'email' ? "How should we respond?" : "What do you need created?"
+  }
+  style={{
+    width: '100%',
+    height: `${textareaHeight}px`,
+    padding: theme.spacing.sm,
+    border: `1px solid ${theme.colors.border}`,
+    borderRadius: theme.borderRadius.md,
+    fontSize: theme.fontSize.lg, // ✅ LARGER: Increased from base to lg
+    fontFamily: 'inherit',
+    resize: 'none',
+    paddingBottom: theme.spacing.lg,
+    background: theme.colors.surface,
+    color: theme.colors.primary,
+    transition: 'border-color 0.2s ease',
+    // ✅ ENHANCED: Better placeholder styling
+    '::placeholder': {
+      fontSize: theme.fontSize.lg,
+      color: theme.colors.tertiary,
+      fontWeight: '400'
+    }
+  }}
+  onFocus={(e) => e.target.style.borderColor = theme.colors.accent}
+  onBlur={(e) => e.target.style.borderColor = theme.colors.border}
+/>
           
           {/* Textarea resize handle */}
           <div
