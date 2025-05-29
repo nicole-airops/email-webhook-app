@@ -403,7 +403,6 @@ function App() {
     return 'General Request';
   };
 
-  // ✅ FIXED: Enhanced UnifiedRequestCard with hierarchical toggles
 const UnifiedRequestCard = ({ request, onDelete, onInsert, onView }) => {
   const isExpanded = expandedRequests.has(request.id);
   
@@ -500,6 +499,34 @@ const UnifiedRequestCard = ({ request, onDelete, onInsert, onView }) => {
           style={{ display: 'flex', alignItems: 'center', gap: theme.spacing.sm }}
           onClick={(e) => e.stopPropagation()}
         >
+          {/* Delete Button - Always visible */}
+          <button
+            onClick={() => onDelete(request)}
+            style={{
+              background: 'none',
+              border: `1px solid ${theme.colors.border}`,
+              cursor: 'pointer',
+              padding: theme.spacing.sm,
+              borderRadius: theme.borderRadius.md,
+              color: theme.colors.tertiary,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              transition: 'all 0.2s ease'
+            }}
+            onMouseEnter={(e) => {
+              e.target.style.color = theme.colors.error;
+              e.target.style.borderColor = theme.colors.error;
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.color = theme.colors.tertiary;
+              e.target.style.borderColor = theme.colors.border;
+            }}
+            title="Delete request"
+          >
+            <TrashIcon size={theme.iconSize.sm} />
+          </button>
+
           {(request.result && state.status === 'completed') && (
             <>
               <button
@@ -611,6 +638,35 @@ const UnifiedRequestCard = ({ request, onDelete, onInsert, onView }) => {
                 
                 <div style={{ display: 'flex', gap: theme.spacing.sm }}>
                   <button
+                    onClick={() => onDelete(request)}
+                    style={{
+                      background: 'none',
+                      border: `1px solid ${theme.colors.border}`,
+                      cursor: 'pointer',
+                      padding: `${theme.spacing.xs} ${theme.spacing.sm}`,
+                      borderRadius: theme.borderRadius.sm,
+                      color: theme.colors.tertiary,
+                      display: 'flex',
+                      alignItems: 'center',
+                      fontSize: theme.fontSize.xs,
+                      fontWeight: '500',
+                      transition: 'all 0.2s ease'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.target.style.color = theme.colors.error;
+                      e.target.style.borderColor = theme.colors.error;
+                    }}
+                    onMouseLeave={(e) => {
+                      e.target.style.color = theme.colors.tertiary;
+                      e.target.style.borderColor = theme.colors.border;
+                    }}
+                    title="Delete request"
+                  >
+                    <TrashIcon size={theme.iconSize.sm} style={{ marginRight: theme.spacing.xs }} />
+                    Delete
+                  </button>
+
+                  <button
                     onClick={() => onView(request)}
                     style={{
                       background: theme.colors.info,
@@ -663,14 +719,12 @@ const UnifiedRequestCard = ({ request, onDelete, onInsert, onView }) => {
                 fontSize: theme.fontSize.base,
                 lineHeight: '1.6'
               }}>
-<div 
-  dangerouslySetInnerHTML={{ __html: request.result }}
-  style={{ 
-    fontSize: theme.fontSize.base,
-    lineHeight: '1.6',
-    color: theme.colors.primary
-  }}
-/>
+                <div 
+                  dangerouslySetInnerHTML={{ __html: request.result }}
+                  style={{ 
+                    color: theme.colors.primary
+                  }}
+                />
               </div>
             </div>
           )}
