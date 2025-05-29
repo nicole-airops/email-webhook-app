@@ -404,376 +404,321 @@ function App() {
   };
 
   // ✅ FIXED: Enhanced UnifiedRequestCard with hierarchical toggles
-  const UnifiedRequestCard = ({ request, onDelete, onInsert, onView }) => {
-    const isExpanded = expandedRequests.has(request.id);
-    const isInputExpanded = expandedInputs.has(request.id);
-    const isOutputExpanded = expandedOutputs.has(request.id);
-    
-    const toggleMainExpansion = () => {
-      setExpandedRequests(prev => {
-        const newSet = new Set(prev);
-        if (newSet.has(request.id)) {
-          newSet.delete(request.id);
-          // Also collapse sub-sections when main card collapses
-          setExpandedInputs(prev => {
-            const newInputSet = new Set(prev);
-            newInputSet.delete(request.id);
-            return newInputSet;
-          });
-          setExpandedOutputs(prev => {
-            const newOutputSet = new Set(prev);
-            newOutputSet.delete(request.id);
-            return newOutputSet;
-          });
-        } else {
-          newSet.add(request.id);
-        }
-        return newSet;
-      });
-    };
-
-    const toggleInputExpansion = (e) => {
-      e.stopPropagation();
-      setExpandedInputs(prev => {
-        const newSet = new Set(prev);
-        if (newSet.has(request.id)) {
-          newSet.delete(request.id);
-        } else {
-          newSet.add(request.id);
-        }
-        return newSet;
-      });
-    };
-
-    const toggleOutputExpansion = (e) => {
-      e.stopPropagation();
-      setExpandedOutputs(prev => {
-        const newSet = new Set(prev);
-        if (newSet.has(request.id)) {
-          newSet.delete(request.id);
-        } else {
-          newSet.add(request.id);
-        }
-        return newSet;
-      });
-    };
-    
-    const state = getRequestState(request);
-    
-    return (
-      <div style={{
-        background: theme.colors.background,
-        border: `1px solid ${state.color}`,
-        borderRadius: theme.borderRadius.md,
-        padding: theme.spacing.sm,
-        marginBottom: theme.spacing.xs
-      }}>
-        {/* Request Header */}
-        <div 
-          onClick={toggleMainExpansion}
-          style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            cursor: 'pointer',
-            marginBottom: theme.spacing.xs
-          }}
-        >
+const UnifiedRequestCard = ({ request, onDelete, onInsert, onView }) => {
+  const isExpanded = expandedRequests.has(request.id);
+  
+  const toggleMainExpansion = () => {
+    setExpandedRequests(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(request.id)) {
+        newSet.delete(request.id);
+      } else {
+        newSet.add(request.id);
+      }
+      return newSet;
+    });
+  };
+  
+  const state = getRequestState(request);
+  
+  return (
+    <div style={{
+      background: theme.colors.surface,
+      border: `1px solid ${state.color}`,
+      borderRadius: theme.borderRadius.lg,
+      padding: theme.spacing.lg,
+      marginBottom: theme.spacing.md,
+      boxShadow: theme.shadows.sm
+    }}>
+      {/* Header */}
+      <div 
+        onClick={toggleMainExpansion}
+        style={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          cursor: 'pointer',
+          marginBottom: isExpanded ? theme.spacing.md : 0
+        }}
+      >
+        <div style={{ 
+          marginRight: theme.spacing.md,
+          transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)',
+          transition: 'transform 0.2s ease',
+          fontSize: theme.fontSize.sm,
+          color: theme.colors.tertiary
+        }}>
+          ▶
+        </div>
+        
+        {/* Status Icon */}
+        {state.showSpinner ? (
           <div style={{ 
-            marginRight: theme.spacing.sm,
-            transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)',
-            transition: 'transform 0.2s ease',
-            fontSize: theme.fontSize.xs,
-            color: theme.colors.tertiary
+            width: `${theme.iconSize.lg}px`, 
+            height: `${theme.iconSize.lg}px`, 
+            marginRight: theme.spacing.md,
+            border: `2px solid ${state.color}`,
+            borderTop: '2px solid transparent',
+            borderRadius: '50%',
+            animation: 'spin 1s linear infinite'
+          }} />
+        ) : state.status === 'completed' ? (
+          <CheckmarkIcon size={theme.iconSize.lg} color={state.color} style={{ marginRight: theme.spacing.md }} />
+        ) : state.status === 'sent' ? (
+          <EmailIcon size={theme.iconSize.lg} color={state.color} style={{ marginRight: theme.spacing.md }} />
+        ) : (
+          <WarningIcon size={theme.iconSize.lg} color={state.color} style={{ marginRight: theme.spacing.md }} />
+        )}
+        
+        {/* Request Info */}
+        <div style={{ flex: 1 }}>
+          <div style={{ 
+            color: theme.colors.primary,
+            fontWeight: '600',
+            fontSize: theme.fontSize.base,
+            marginBottom: theme.spacing.xs
           }}>
-            ▶
+            {getRequestDisplayName(request)}
+            {request.hasFile && (
+              <AttachmentIcon 
+                size={theme.iconSize.sm} 
+                color={theme.colors.tertiary} 
+                style={{ marginLeft: theme.spacing.sm }} 
+              />
+            )}
           </div>
           
-          {/* Status Icon */}
-          {state.showSpinner ? (
-            <div style={{ 
-              width: `${theme.iconSize.md}px`, 
-              height: `${theme.iconSize.md}px`, 
-              marginRight: theme.spacing.sm,
-              border: `2px solid ${state.color}`,
-              borderTop: '2px solid transparent',
-              borderRadius: '50%',
-              animation: 'spin 1s linear infinite'
-            }} />
-          ) : state.status === 'completed' ? (
-            <CheckmarkIcon size={theme.iconSize.md} color={state.color} style={{ marginRight: theme.spacing.sm }} />
-          ) : state.status === 'sent' ? (
-            <EmailIcon size={theme.iconSize.md} color={state.color} style={{ marginRight: theme.spacing.sm }} />
-          ) : (
-            <WarningIcon size={theme.iconSize.md} color={state.color} style={{ marginRight: theme.spacing.sm }} />
-          )}
-          
-          {/* Request Summary */}
-          <div style={{ flex: 1 }}>
-            <div style={{ 
-              color: theme.colors.primary,
-              fontWeight: '600',
-              fontSize: theme.fontSize.sm,
-              marginBottom: '2px'
-            }}>
-              {getRequestDisplayName(request)}
-              {request.hasFile && (
-                <AttachmentIcon 
-                  size={theme.iconSize.sm} 
-                  color={theme.colors.tertiary} 
-                  style={{ marginLeft: theme.spacing.sm }} 
-                />
-              )}
-            </div>
-            
-            {/* Request Preview */}
-            <div style={{ 
-              color: theme.colors.tertiary, 
-              fontSize: theme.fontSize.xs
-            }}>
-              {formatDate(request.timestamp)} • {request.user}
-            </div>
+          <div style={{ 
+            color: theme.colors.tertiary, 
+            fontSize: theme.fontSize.sm
+          }}>
+            {formatDate(request.timestamp)} • {request.user}
           </div>
-          
-          {/* Header action buttons */}
-          <div 
-            style={{ display: 'flex', alignItems: 'center', gap: theme.spacing.xs }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Quick Insert Button for completed requests */}
-            {(request.result && state.status === 'completed') && (
+        </div>
+        
+        {/* Quick Actions */}
+        <div 
+          style={{ display: 'flex', alignItems: 'center', gap: theme.spacing.sm }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {(request.result && state.status === 'completed') && (
+            <>
+              <button
+                onClick={() => onView(request)}
+                style={{
+                  background: theme.colors.info,
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: `${theme.spacing.sm} ${theme.spacing.md}`,
+                  borderRadius: theme.borderRadius.md,
+                  color: 'white',
+                  display: 'flex',
+                  alignItems: 'center',
+                  fontSize: theme.fontSize.sm,
+                  fontWeight: '500',
+                  transition: 'all 0.2s ease'
+                }}
+                onMouseEnter={(e) => e.target.style.background = '#2563eb'}
+                onMouseLeave={(e) => e.target.style.background = theme.colors.info}
+                title="View result"
+              >
+                <ViewIcon size={theme.iconSize.sm} color="white" style={{ marginRight: theme.spacing.xs }} />
+                View
+              </button>
+              
               <button
                 onClick={() => onInsert(request.result)}
                 style={{
                   background: theme.colors.accent,
-                  border: `1px solid ${theme.colors.accent}`,
+                  border: 'none',
                   cursor: 'pointer',
-                  padding: `${theme.spacing.xs} ${theme.spacing.sm}`,
-                  borderRadius: theme.borderRadius.sm,
+                  padding: `${theme.spacing.sm} ${theme.spacing.md}`,
+                  borderRadius: theme.borderRadius.md,
                   color: 'white',
                   display: 'flex',
                   alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: theme.fontSize.xs,
+                  fontSize: theme.fontSize.sm,
                   fontWeight: '500',
-                  transition: 'all 0.2s ease',
-                  boxShadow: theme.shadows.sm,
-                  minWidth: '50px'
+                  transition: 'all 0.2s ease'
                 }}
-                onMouseEnter={(e) => {
-                  e.target.style.background = '#5855eb';
-                  e.target.style.transform = 'translateY(-1px)';
-                }}
-                onMouseLeave={(e) => {
-                  e.target.style.background = theme.colors.accent;
-                  e.target.style.transform = 'translateY(0)';
-                }}
+                onMouseEnter={(e) => e.target.style.background = '#5855eb'}
+                onMouseLeave={(e) => e.target.style.background = theme.colors.accent}
                 title="Insert into draft"
               >
                 <InsertIcon size={theme.iconSize.sm} color="white" style={{ marginRight: theme.spacing.xs }} />
                 Insert
               </button>
-            )}
-          </div>
+            </>
+          )}
         </div>
+      </div>
 
-        {/* Expanded Content with Sub-toggles */}
-        {isExpanded && (
-          <div style={{ 
-            paddingLeft: theme.spacing.lg,
-            animation: 'fadeIn 0.2s ease-out'
-          }}>
-            {/* Original Request Section */}
-            <div style={{ marginBottom: theme.spacing.sm }}>
-              <div 
-                onClick={toggleInputExpansion}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  cursor: 'pointer',
-                  padding: `${theme.spacing.xs} 0`,
-                  marginBottom: theme.spacing.xs
-                }}
-              >
+      {/* Expanded Content */}
+      {isExpanded && (
+        <div style={{ 
+          paddingLeft: theme.spacing.xl,
+          animation: 'fadeIn 0.3s ease-out'
+        }}>
+          {/* Original Request */}
+          <div style={{ marginBottom: theme.spacing.lg }}>
+            <h4 style={{ 
+              fontSize: theme.fontSize.base, 
+              color: theme.colors.secondary, 
+              fontWeight: '600',
+              margin: `0 0 ${theme.spacing.sm} 0`
+            }}>
+              Original Request
+            </h4>
+            <div style={{
+              background: theme.colors.background,
+              border: `1px solid ${theme.colors.border}`,
+              borderRadius: theme.borderRadius.md,
+              padding: theme.spacing.md,
+              fontSize: theme.fontSize.sm,
+              color: theme.colors.secondary,
+              lineHeight: '1.5'
+            }}>
+              {request.text || request.comment}
+              {request.outputFormat && (
                 <div style={{ 
-                  marginRight: theme.spacing.sm,
-                  transform: isInputExpanded ? 'rotate(90deg)' : 'rotate(0deg)',
-                  transition: 'transform 0.2s ease',
+                  marginTop: theme.spacing.sm,
                   fontSize: theme.fontSize.xs,
-                  color: theme.colors.tertiary
+                  color: theme.colors.tertiary,
+                  fontStyle: 'italic'
                 }}>
-                  ▶
-                </div>
-                <div style={{ 
-                  fontSize: theme.fontSize.sm, 
-                  color: theme.colors.secondary, 
-                  fontWeight: '600'
-                }}>
-                  Original Request
-                </div>
-              </div>
-
-              {isInputExpanded && (
-                <div style={{
-                  background: theme.colors.surface,
-                  border: `1px solid ${theme.colors.border}`,
-                  borderRadius: theme.borderRadius.sm,
-                  padding: theme.spacing.sm,
-                  marginLeft: theme.spacing.lg
-                }}>
-                  <div style={{ color: theme.colors.secondary, fontSize: theme.fontSize.sm }}>
-                    {request.text || request.comment}
-                  </div>
-                  {request.outputFormat && (
-                    <div style={{ 
-                      marginTop: theme.spacing.xs,
-                      fontSize: theme.fontSize.xs,
-                      color: theme.colors.tertiary 
-                    }}>
-                      Format: {request.outputFormat}
-                    </div>
-                  )}
+                  Format: {request.outputFormat}
                 </div>
               )}
             </div>
-
-            {/* Result Section */}
-            {(request.result && state.status === 'completed') && (
-              <div>
-                <div 
-                  onClick={toggleOutputExpansion}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    cursor: 'pointer',
-                    padding: `${theme.spacing.xs} 0`,
-                    marginBottom: theme.spacing.xs
-                  }}
-                >
-                  <div style={{ 
-                    marginRight: theme.spacing.sm,
-                    transform: isOutputExpanded ? 'rotate(90deg)' : 'rotate(0deg)',
-                    transition: 'transform 0.2s ease',
-                    fontSize: theme.fontSize.xs,
-                    color: theme.colors.tertiary
-                  }}>
-                    ▶
-                  </div>
-                  <div style={{ 
-                    fontSize: theme.fontSize.sm, 
-                    color: state.color, 
-                    fontWeight: '600'
-                  }}>
-                    Result
-                  </div>
-                  {/* Quick action buttons next to Result header */}
-                  <div style={{ marginLeft: 'auto', display: 'flex', gap: theme.spacing.xs }}>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onView(request);
-                      }}
-                      style={{
-                        background: 'none',
-                        border: 'none',
-                        cursor: 'pointer',
-                        padding: theme.spacing.xs,
-                        borderRadius: theme.borderRadius.sm,
-                        color: theme.colors.tertiary,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center'
-                      }}
-                      onMouseEnter={(e) => e.target.style.color = theme.colors.info}
-                      onMouseLeave={(e) => e.target.style.color = theme.colors.tertiary}
-                      title="View in new window"
-                    >
-                      <ViewIcon size={theme.iconSize.sm} />
-                    </button>
-                    
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onInsert(request.result);
-                      }}
-                      style={{
-                        background: theme.colors.accent,
-                        border: 'none',
-                        cursor: 'pointer',
-                        padding: `${theme.spacing.xs} ${theme.spacing.sm}`,
-                        borderRadius: theme.borderRadius.sm,
-                        color: 'white',
-                        display: 'flex',
-                        alignItems: 'center',
-                        fontSize: theme.fontSize.xs,
-                        fontWeight: '500'
-                      }}
-                      onMouseEnter={(e) => e.target.style.background = '#5855eb'}
-                      onMouseLeave={(e) => e.target.style.background = theme.colors.accent}
-                      title="Insert into draft"
-                    >
-                      <InsertIcon size={theme.iconSize.sm} color="white" style={{ marginRight: theme.spacing.xs }} />
-                      Insert
-                    </button>
-                  </div>
-                </div>
-
-                {isOutputExpanded && (
-                  <div style={{
-                    background: theme.colors.surface,
-                    border: `1px solid ${state.color}`,
-                    borderRadius: theme.borderRadius.sm,
-                    padding: theme.spacing.sm,
-                    marginLeft: theme.spacing.lg,
-                    maxHeight: '300px',
-                    overflowY: 'auto'
-                  }}>
-                    <div 
-                      dangerouslySetInnerHTML={{ __html: request.result }}
-                      style={{ 
-                        color: theme.colors.primary,
-                        fontSize: theme.fontSize.result,
-                        lineHeight: '1.5'
-                      }}
-                    />
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Processing Message */}
-            {state.status === 'processing' && (
-              <div style={{
-                background: `${theme.colors.accent}15`,
-                border: `1px solid ${theme.colors.accent}`,
-                borderRadius: theme.borderRadius.sm,
-                padding: theme.spacing.sm,
-                color: theme.colors.accent,
-                fontSize: theme.fontSize.sm,
-                fontWeight: '500'
-              }}>
-                ⏳ Processing your request...
-              </div>
-            )}
-
-            {/* Error Message */}
-            {state.status === 'failed' && (
-              <div style={{
-                background: `${theme.colors.error}15`,
-                border: `1px solid ${theme.colors.error}`,
-                borderRadius: theme.borderRadius.sm,
-                padding: theme.spacing.sm,
-                color: theme.colors.error,
-                fontSize: theme.fontSize.sm,
-                fontWeight: '500'
-              }}>
-                ❌ Request failed: {request.error || 'Unknown error'}
-              </div>
-            )}
           </div>
-        )}
-      </div>
-    );
-  };
+
+          {/* Result Section */}
+          {(request.result && state.status === 'completed') && (
+            <div>
+              <div style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'space-between',
+                marginBottom: theme.spacing.sm
+              }}>
+                <h4 style={{ 
+                  fontSize: theme.fontSize.base, 
+                  color: state.color, 
+                  fontWeight: '600',
+                  margin: 0
+                }}>
+                  Result
+                </h4>
+                
+                <div style={{ display: 'flex', gap: theme.spacing.sm }}>
+                  <button
+                    onClick={() => onView(request)}
+                    style={{
+                      background: theme.colors.info,
+                      border: 'none',
+                      cursor: 'pointer',
+                      padding: `${theme.spacing.xs} ${theme.spacing.sm}`,
+                      borderRadius: theme.borderRadius.sm,
+                      color: 'white',
+                      display: 'flex',
+                      alignItems: 'center',
+                      fontSize: theme.fontSize.xs,
+                      fontWeight: '500'
+                    }}
+                    title="View in new window"
+                  >
+                    <ViewIcon size={theme.iconSize.sm} color="white" style={{ marginRight: theme.spacing.xs }} />
+                    View
+                  </button>
+                  
+                  <button
+                    onClick={() => onInsert(request.result)}
+                    style={{
+                      background: theme.colors.accent,
+                      border: 'none',
+                      cursor: 'pointer',
+                      padding: `${theme.spacing.xs} ${theme.spacing.sm}`,
+                      borderRadius: theme.borderRadius.sm,
+                      color: 'white',
+                      display: 'flex',
+                      alignItems: 'center',
+                      fontSize: theme.fontSize.xs,
+                      fontWeight: '500'
+                    }}
+                    title="Insert into draft"
+                  >
+                    <InsertIcon size={theme.iconSize.sm} color="white" style={{ marginRight: theme.spacing.xs }} />
+                    Insert
+                  </button>
+                </div>
+              </div>
+
+              {/* HTML Content Display */}
+              <div style={{
+                background: theme.colors.surface,
+                border: `1px solid ${state.color}`,
+                borderRadius: theme.borderRadius.md,
+                padding: theme.spacing.md,
+                maxHeight: '400px',
+                overflowY: 'auto',
+                fontSize: theme.fontSize.base,
+                lineHeight: '1.6'
+              }}>
+<div 
+  dangerouslySetInnerHTML={{ __html: request.result }}
+  style={{ 
+    fontSize: theme.fontSize.base,
+    lineHeight: '1.6',
+    color: theme.colors.primary
+  }}
+/>
+              </div>
+            </div>
+          )}
+
+          {/* Status Messages */}
+          {state.status === 'processing' && (
+            <div style={{
+              background: `${theme.colors.accent}15`,
+              border: `1px solid ${theme.colors.accent}`,
+              borderRadius: theme.borderRadius.md,
+              padding: theme.spacing.md,
+              color: theme.colors.accent,
+              fontSize: theme.fontSize.sm,
+              fontWeight: '500',
+              display: 'flex',
+              alignItems: 'center'
+            }}>
+              <div style={{ 
+                width: '16px', 
+                height: '16px', 
+                marginRight: theme.spacing.sm,
+                border: `2px solid ${theme.colors.accent}`,
+                borderTop: '2px solid transparent',
+                borderRadius: '50%',
+                animation: 'spin 1s linear infinite'
+              }} />
+              Processing your request...
+            </div>
+          )}
+
+          {state.status === 'failed' && (
+            <div style={{
+              background: `${theme.colors.error}15`,
+              border: `1px solid ${theme.colors.error}`,
+              borderRadius: theme.borderRadius.md,
+              padding: theme.spacing.md,
+              color: theme.colors.error,
+              fontSize: theme.fontSize.sm,
+              fontWeight: '500'
+            }}>
+              ❌ Request failed: {request.error || 'Unknown error'}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
 
   // ✅ Action handlers
   const clearAllRequests = async () => {
@@ -970,88 +915,214 @@ function App() {
     }
   };
 
-  const viewRequestInNewWindow = (request) => {
-    const content = request.result || request.text || request.comment;
-    const title = getRequestDisplayName(request);
-    
-    const newWindow = window.open('', '_blank');
-    newWindow.document.write(`
-      <html>
-        <head>
-          <title>AirOps Request: ${title}</title>
-          <meta charset="utf-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1">
-          <style>
-            body { 
-              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
-              max-width: 1200px; 
-              margin: 20px auto; 
-              padding: 20px; 
-              line-height: 1.6; 
-              color: #0f172a;
-              background: #f8fafc;
+// ✅ ENHANCED: Better HTML view window
+const viewRequestInNewWindow = (request) => {
+  const content = request.result || request.text || request.comment;
+  const title = getRequestDisplayName(request);
+  
+  const newWindow = window.open('', '_blank', 'width=1000,height=700,scrollbars=yes,resizable=yes');
+  
+  newWindow.document.write(`
+    <!DOCTYPE html>
+    <html lang="en">
+      <head>
+        <title>AirOps: ${title}</title>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <style>
+          * {
+            box-sizing: border-box;
+          }
+          
+          body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: #1f2937;
+            background: #f9fafb;
+            margin: 0;
+            padding: 0;
+          }
+          
+          .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            min-height: 100vh;
+            box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.05);
+          }
+          
+          .header { 
+            background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+            color: white;
+            padding: 2rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+          }
+          
+          .header h1 {
+            margin: 0;
+            font-size: 1.5rem;
+            font-weight: 600;
+          }
+          
+          .meta { 
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 0.875rem;
+            margin-top: 0.5rem;
+          }
+          
+          .content { 
+            padding: 2rem;
+          }
+          
+          /* Enhanced Table Styling */
+          table {
+            width: 100% !important;
+            border-collapse: collapse !important;
+            margin: 1.5rem 0 !important;
+            font-size: 0.875rem !important;
+            background: white !important;
+            border-radius: 0.5rem !important;
+            overflow: hidden !important;
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1) !important;
+          }
+          
+          th {
+            background: #f8fafc !important;
+            color: #374151 !important;
+            font-weight: 600 !important;
+            padding: 0.75rem 1rem !important;
+            text-align: left !important;
+            border-bottom: 2px solid #e5e7eb !important;
+            font-size: 0.8125rem !important;
+            text-transform: uppercase !important;
+            letter-spacing: 0.025em !important;
+          }
+          
+          td {
+            padding: 0.75rem 1rem !important;
+            border-bottom: 1px solid #f3f4f6 !important;
+            vertical-align: top !important;
+            color: #4b5563 !important;
+          }
+          
+          tr:nth-child(even) td {
+            background: #f9fafb !important;
+          }
+          
+          tr:hover td {
+            background: #f3f4f6 !important;
+          }
+          
+          /* List Styling */
+          ul, ol {
+            margin: 1rem 0;
+            padding-left: 1.5rem;
+          }
+          
+          li {
+            margin: 0.5rem 0;
+            color: #4b5563;
+          }
+          
+          /* Paragraph Styling */
+          p {
+            margin: 1rem 0;
+            color: #4b5563;
+          }
+          
+          /* Header Styling */
+          h1, h2, h3, h4, h5, h6 {
+            color: #1f2937;
+            font-weight: 600;
+            line-height: 1.25;
+            margin: 1.5rem 0 1rem 0;
+          }
+          
+          h1 { font-size: 1.875rem; }
+          h2 { font-size: 1.5rem; }
+          h3 { font-size: 1.25rem; }
+          h4 { font-size: 1.125rem; }
+          
+          /* Strong/Bold Styling */
+          strong, b {
+            font-weight: 600;
+            color: #1f2937;
+          }
+          
+          /* Code Styling */
+          code {
+            background: #f3f4f6;
+            padding: 0.125rem 0.25rem;
+            border-radius: 0.25rem;
+            font-size: 0.875em;
+            color: #d63384;
+          }
+          
+          pre {
+            background: #f8fafc;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            overflow-x: auto;
+            border: 1px solid #e5e7eb;
+          }
+          
+          /* Link Styling */
+          a {
+            color: #6366f1;
+            text-decoration: none;
+          }
+          
+          a:hover {
+            text-decoration: underline;
+          }
+          
+          /* Blockquote Styling */
+          blockquote {
+            border-left: 4px solid #6366f1;
+            margin: 1rem 0;
+            padding: 0.5rem 0 0.5rem 1rem;
+            background: #f8fafc;
+            color: #4b5563;
+            font-style: italic;
+          }
+          
+          /* Print Styles */
+          @media print {
+            .header {
+              background: #6366f1 !important;
+              -webkit-print-color-adjust: exact;
             }
-            .container {
-              background: white;
-              border-radius: 12px;
-              box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-              overflow: hidden;
-            }
-            .header { 
-              background: linear-gradient(135deg, #6366f1, #8b5cf6);
-              color: white;
-              padding: 24px;
-            }
-            .content { 
-              padding: 24px; 
-            }
-            .meta { 
-              color: #64748b; 
-              font-size: 14px; 
-              margin-bottom: 16px;
-              padding-bottom: 16px;
-              border-bottom: 1px solid #e2e8f0;
-            }
-            /* Simple table styling */
+            
             table {
-              width: 100% !important;
-              border-collapse: collapse !important;
-              margin: 20px 0 !important;
-              font-size: 14px !important;
+              break-inside: avoid;
             }
-            th, td {
-              border: 1px solid #ddd !important;
-              padding: 12px !important;
-              text-align: left !important;
-              vertical-align: top !important;
+            
+            tr {
+              break-inside: avoid;
             }
-            th {
-              background-color: #f8f9fa !important;
-              font-weight: bold !important;
-            }
-            tr:nth-child(even) {
-              background-color: #f8f9fa;
-            }
-          </style>
-        </head>
-        <body>
-          <div class="container">
-            <div class="header">
-              <h1>${title}</h1>
-            </div>
-            <div class="content">
-              <div class="meta">
-                Requested by ${request.user} on ${formatDate(request.timestamp)}
-                ${request.completedAt ? ` • Completed on ${formatDate(request.completedAt)}` : ''}
-              </div>
-              ${content}
+          }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>${title}</h1>
+            <div class="meta">
+              Generated by ${request.user} on ${formatDate(request.timestamp)}
+              ${request.completedAt ? ` • Completed ${formatDate(request.completedAt)}` : ''}
             </div>
           </div>
-        </body>
-      </html>
-    `);
-    newWindow.document.close();
-  };
+          <div class="content">
+            ${content}
+          </div>
+        </div>
+      </body>
+    </html>
+  `);
+  
+  newWindow.document.close();
+  newWindow.focus();
+};
 
   // ✅ ENHANCED: Front context debugging based on the API definitions
   const comprehensiveContextDebug = async () => {
