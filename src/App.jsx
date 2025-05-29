@@ -342,66 +342,71 @@ function App() {
     });
   };
 
-  const getRequestDisplayName = (request) => {
-    // ⭐ Enhanced priority logic
-    if (request.taskName && request.taskName.trim()) {
-      return request.taskName.trim();
+const getRequestDisplayName = (request) => {
+  // ✅ FIXED: Handle undefined values properly
+  if (request?.taskName && request.taskName.trim()) {
+    return request.taskName.trim();
+  }
+  
+  if (request?.displayName && request.displayName.trim()) {
+    return request.displayName.trim();
+  }
+  
+  // Generate from format selection
+  if (request?.selectedFormat) {
+    const formatOption = formatOptions.find(f => f.value === request.selectedFormat);
+    if (formatOption && formatOption.label !== 'Select format...') {
+      return `${formatOption.label} Request`;
     }
+  }
+  
+  // Generate from output format
+  if (request?.outputFormat && request.outputFormat.trim() && request.outputFormat !== 'Select format...') {
+    return request.outputFormat.trim();
+  }
+  
+  // ✅ ENHANCED: Generate from comment text
+  const text = request?.text || request?.comment;
+  if (text && text.trim()) {
+    const cleanText = text.trim();
     
-    if (request.displayName && request.displayName.trim()) {
-      return request.displayName.trim();
-    }
+    // Look for action words at the start
+    const actionPatterns = [
+      /^(create|write|generate|make|build|draft|compose)\s+(.+)/i,
+      /^(analyze|review|check|examine|evaluate)\s+(.+)/i,
+      /^(summarize|summary of|sum up)\s+(.+)/i,
+      /^(list|show|display)\s+(.+)/i
+    ];
     
-    // Generate from format selection
-    if (request.selectedFormat) {
-      const formatOption = formatOptions.find(f => f.value === request.selectedFormat);
-      if (formatOption && formatOption.label !== 'Select format...') {
-        return `${formatOption.label} Request`;
+    for (const pattern of actionPatterns) {
+      const match = cleanText.match(pattern);
+      if (match) {
+        const action = match[1].toLowerCase();
+        const object = match[2].split(/[.,!?]/)[0].trim(); // Stop at punctuation
+        const shortObject = object.length > 25 ? object.substring(0, 25) + '...' : object;
+        
+        // Capitalize first letter of action
+        const capitalizedAction = action.charAt(0).toUpperCase() + action.slice(1);
+        return `${capitalizedAction} ${shortObject}`;
       }
     }
     
-    // Generate from output format
-    if (request.outputFormat && request.outputFormat.trim() && request.outputFormat !== 'Select format...') {
-      return request.outputFormat.trim();
-    }
-    
-    // ⭐ SMARTER: Generate from comment text
-    if (request.text || request.comment) {
-      const text = (request.text || request.comment).trim();
-      
-      // Look for action words at the start
-      const actionPatterns = [
-        /^(create|write|generate|make|build|draft|compose)\s+(.+)/i,
-        /^(analyze|review|check|examine|evaluate)\s+(.+)/i,
-        /^(summarize|summary of|sum up)\s+(.+)/i,
-        /^(list|show|display)\s+(.+)/i
-      ];
-      
-      for (const pattern of actionPatterns) {
-        const match = text.match(pattern);
-        if (match) {
-          const action = match[1].toLowerCase();
-          const object = match[2].split(/[.,!?]/)[0].trim(); // Stop at punctuation
-          const shortObject = object.length > 25 ? object.substring(0, 25) + '...' : object;
-          
-          // Capitalize first letter of action
-          const capitalizedAction = action.charAt(0).toUpperCase() + action.slice(1);
-          return `${capitalizedAction} ${shortObject}`;
-        }
-      }
-      
-      // Fallback: First few words
-      const words = text.split(' ').slice(0, 4).join(' ');
-      return words.length > 30 ? words.substring(0, 30) + '...' : words;
-    }
-    
-    // Final fallbacks
-    if (request.mode === 'email' || request.type === 'email') {
-      return 'Email Request';
-    }
-    
-    return 'General Request';
-  };
+    // Fallback: First few words
+    const words = cleanText.split(' ').slice(0, 4).join(' ');
+    return words.length > 30 ? words.substring(0, 30) + '...' : words;
+  }
+  
+  // Final fallbacks based on request type/mode
+  if (request?.mode === 'email' || request?.type === 'email') {
+    return 'Email Request';
+  }
+  
+  if (request?.mode === 'task' || request?.type === 'task') {
+    return 'Task Request';
+  }
+  
+  return 'Request';
+};
 
 const UnifiedRequestCard = ({ request, onDelete, onInsert, onView }) => {
   const isExpanded = expandedRequests.has(request.id);
@@ -1991,69 +1996,77 @@ const viewRequestInNewWindow = (request) => {
     }
   };
 
-  const checkTaskStatus = async (taskId) => {
-    try {
-      const response = await fetch(`/.netlify/functions/task-status?taskId=${taskId}`);
+const checkTaskStatus = async (taskId) => {
+  try {
+    const response = await fetch(`/.netlify/functions/task-status?taskId=${taskId}`);
+    
+    if (response.ok) {
+      const result = await response.json();
       
-      if (response.ok) {
-        const result = await response.json();
-        
-        console.log(`🔍 TASK STATUS CHECK: Task ${taskId}`, {
-          status: result.status,
-          hasResult: !!result.data,
-          taskName: result.metadata?.taskName || result.metadata?.task_name,
-          metadata: result.metadata
+      console.log(`🔍 TASK STATUS CHECK: Task ${taskId}`, {
+        status: result.status,
+        hasResult: !!result.data,
+        taskName: result.taskName || result.metadata?.taskName || result.metadata?.task_name,
+        metadata: result.metadata,
+        fullResult: result
+      });
+      
+      if (result.status === 'completed' || result.status === 'failed') {
+        const updatedTasks = taskResults.map(task => {
+          if (task.id === taskId) {
+            const updatedTask = { 
+              ...task, 
+              status: result.status, 
+              result: result.data, 
+              completedAt: result.completedAt,
+              error: result.error,
+            };
+            
+            // ✅ ENHANCED: Extract task name from multiple possible locations
+            const taskName = result.taskName || 
+                            result.metadata?.taskName || 
+                            result.metadata?.task_name ||
+                            task.taskName; // Keep existing if no new one
+            
+            if (taskName) {
+              updatedTask.taskName = taskName;
+              updatedTask.displayName = taskName;
+              console.log(`🏷️ TASK NAME UPDATED: ${taskId} -> "${taskName}"`);
+            } else {
+              console.log(`⚠️ NO TASK NAME FOUND for ${taskId}`, {
+                resultTaskName: result.taskName,
+                metadataTaskName: result.metadata?.taskName,
+                metadataTaskNameAlt: result.metadata?.task_name
+              });
+            }
+            
+            return updatedTask;
+          }
+          return task;
         });
         
-        if (result.status === 'completed' || result.status === 'failed') {
-          const updatedTasks = taskResults.map(task => {
-            if (task.id === taskId) {
-              const updatedTask = { 
-                ...task, 
-                status: result.status, 
-                result: result.data, 
-                completedAt: result.completedAt,
-                error: result.error,
-              };
-              
-              // ✅ ENHANCED: Update task name from webhook metadata
-              if (result.metadata?.taskName || result.metadata?.task_name) {
-                const newTaskName = result.metadata.taskName || result.metadata.task_name;
-                updatedTask.taskName = newTaskName;
-                updatedTask.displayName = newTaskName;
-                console.log(`🏷️ TASK NAME UPDATED: ${taskId} -> "${newTaskName}"`);
-              }
-              
-              return updatedTask;
-            }
-            return task;
-          });
-          
-          console.log(`✅ TASK UPDATED: ${taskId} status=${result.status}`);
-          setTaskResults(updatedTasks);
-          
-          // ✅ REMOVED: Auto-expansion for completed tasks
-          // Tasks stay minimized by default
-          
-          if (context?.conversation?.id) {
-            await saveTaskResultsToNetlify(context.conversation.id, updatedTasks);
-          }
-          
-          setPollingTasks(prev => {
-            const newSet = new Set(prev);
-            newSet.delete(taskId);
-            return newSet;
-          });
-          
-          setStatus(`Task ${result.status}!`);
-          return true;
+        console.log(`✅ TASK UPDATED: ${taskId} status=${result.status}`);
+        setTaskResults(updatedTasks);
+        
+        if (context?.conversation?.id) {
+          await saveTaskResultsToNetlify(context.conversation.id, updatedTasks);
         }
+        
+        setPollingTasks(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(taskId);
+          return newSet;
+        });
+        
+        setStatus(`Task ${result.status}!`);
+        return true;
       }
-    } catch (error) {
-      console.error(`❌ AIROPS POLLING: Error checking task ${taskId}:`, error);
     }
-    return false;
-  };
+  } catch (error) {
+    console.error(`❌ AIROPS POLLING: Error checking task ${taskId}:`, error);
+  }
+  return false;
+};
 
   // ✅ Polling system
   useEffect(() => {
@@ -2735,42 +2748,42 @@ const viewRequestInNewWindow = (request) => {
         }
 
         // ⭐ ENHANCED: Create and save task with taskName if in task mode
-        if (mode === 'task' && taskId) {
-          const newTask = {
-            id: taskId,
-            comment: comment,
-            outputFormat: outputFormat,
-            selectedFormat: selectedFormat,
-            taskName: taskName, // ⭐ ADD TASK NAME
-            displayName: taskName, // ⭐ ADD DISPLAY NAME
-            hasFile: !!uploadedFile,
-            fileName: uploadedFile?.name,
-            status: 'pending',
-            createdAt: new Date().toISOString(),
-            user: context.teammate ? context.teammate.name : 'Unknown user'
-          };
-          
-          console.log('📝 COMPLETE TASK OBJECT WITH NAME:', newTask); // ⭐ DEBUG LOG
-          
-          const updatedTasks = [newTask, ...taskResults];
-          setTaskResults(updatedTasks);
-          
-          // Save to storage
-          try {
-            await fetch('/.netlify/functions/store-task', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ taskId, task: newTask })
-            });
-            
-            await saveTaskResultsToNetlify(conversationId, updatedTasks);
-          } catch (storageError) {
-            console.error('❌ AIROPS: Storage error:', storageError);
-          }
-          
-          // Start polling
-          setPollingTasks(prev => new Set([...prev, taskId]));
-        }
+if (mode === 'task' && taskId) {
+  const newTask = {
+    id: taskId,
+    comment: comment,
+    outputFormat: outputFormat,
+    selectedFormat: selectedFormat,
+    taskName: taskName, // ⭐ ADD TASK NAME
+    displayName: taskName, // ⭐ ADD DISPLAY NAME  
+    hasFile: !!uploadedFile,
+    fileName: uploadedFile?.name,
+    status: 'pending',
+    createdAt: new Date().toISOString(),
+    user: context.teammate ? context.teammate.name : 'Unknown user'
+  };
+  
+  console.log('📝 COMPLETE TASK OBJECT WITH NAME:', newTask); // ⭐ DEBUG LOG
+  
+  const updatedTasks = [newTask, ...taskResults];
+  setTaskResults(updatedTasks);
+  
+  // Save to storage
+  try {
+    await fetch('/.netlify/functions/store-task', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ taskId, task: newTask })
+    });
+    
+    await saveTaskResultsToNetlify(conversationId, updatedTasks);
+  } catch (storageError) {
+    console.error('❌ AIROPS: Storage error:', storageError);
+  }
+  
+  // Start polling
+  setPollingTasks(prev => new Set([...prev, taskId]));
+}
       }
       
       const webhookUrl = mode === 'email' ? EMAIL_WEBHOOK_URL : TASK_WEBHOOK_URL;
